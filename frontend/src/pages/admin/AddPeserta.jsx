@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom"
 import { useState } from "react"
+import { addUser } from "../../utils/storage"
 
 function AddPeserta() {
   const navigate = useNavigate()
@@ -26,16 +27,17 @@ function AddPeserta() {
   }
 
   const handleSave = () => {
-    const saved = JSON.parse(localStorage.getItem("users")) || []
 
     const newUser = {
       ...form,
+      role: "peserta",
+      status: form.status ? "aktif" : "nonaktif", // 🔥 konsisten
       initials: form.name
         ? form.name.substring(0, 2).toUpperCase()
         : "NA",
     }
 
-    localStorage.setItem("users", JSON.stringify([...saved, newUser]))
+    addUser(newUser) // 🔥 pakai helper (bukan localStorage langsung)
 
     navigate("/admin/users")
   }

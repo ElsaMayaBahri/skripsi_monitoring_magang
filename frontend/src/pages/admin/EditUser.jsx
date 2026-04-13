@@ -1,11 +1,11 @@
 import { useParams, useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
+import { getUsers, updateUser } from "../../utils/storage"
 
 function EditUser() {
   const { id } = useParams()
   const navigate = useNavigate()
 
-  const [users, setUsers] = useState([])
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -14,25 +14,27 @@ function EditUser() {
     mentor: "",
     kampus: "",
     prodi: "",
-    status: true,
+    status: "aktif",
   })
 
+  // 🔥 LOAD DATA DARI STORAGE
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("users")) || []
-    setUsers(saved)
+    const users = getUsers()
 
-    if (saved[id]) {
+    if (users[id]) {
       setForm({
-        ...saved[id],
-        phone: saved[id].phone || "",
-        kampus: saved[id].kampus || "",
-        prodi: saved[id].prodi || "",
-        divisi: saved[id].divisi || "",
-        mentor: saved[id].mentor || "",
+        ...users[id],
+        phone: users[id].phone || "",
+        kampus: users[id].kampus || "",
+        prodi: users[id].prodi || "",
+        divisi: users[id].divisi || "",
+        mentor: users[id].mentor || "",
+        status: users[id].status || "aktif",
       })
     }
   }, [id])
 
+  // 🔥 HANDLE INPUT
   const handleChange = (e) => {
     setForm({
       ...form,
@@ -40,12 +42,9 @@ function EditUser() {
     })
   }
 
+  // 🔥 SAVE FIX
   const handleSave = () => {
-    const updated = [...users]
-    updated[id] = form
-
-    localStorage.setItem("users", JSON.stringify(updated))
-
+    updateUser(id, form)
     alert("Perubahan berhasil disimpan")
     navigate("/admin/users")
   }
@@ -55,9 +54,9 @@ function EditUser() {
 
       {/* HEADER */}
       <div className="mb-6">
-        <h1 className="text-xl font-semibold">Edit Data Peserta</h1>
+        <h1 className="text-xl font-semibold">Edit Data User</h1>
         <p className="text-sm text-gray-500">
-          Perbarui informasi akun dan data magang peserta.
+          Perbarui informasi akun pengguna.
         </p>
       </div>
 
@@ -81,10 +80,18 @@ function EditUser() {
               <span className="text-sm">Status</span>
               <button
                 onClick={() =>
-                  setForm({ ...form, status: !form.status })
+                  setForm({
+                    ...form,
+                    status:
+                      form.status === "aktif"
+                        ? "nonaktif"
+                        : "aktif",
+                  })
                 }
                 className={`w-10 h-5 flex items-center rounded-full p-1 ${
-                  form.status ? "bg-blue-600" : "bg-gray-300"
+                  form.status === "aktif"
+                    ? "bg-blue-600"
+                    : "bg-gray-300"
                 }`}
               >
                 <div className="bg-white w-4 h-4 rounded-full"></div>
@@ -92,12 +99,11 @@ function EditUser() {
             </div>
 
             <input
-              value="Peserta"
+              value={form.role || "peserta"}
               disabled
               className="border p-2 rounded bg-gray-100"
             />
 
-            {/* 🔥 PASSWORD DISABLED */}
             <input
               type="password"
               value="********"
@@ -110,7 +116,7 @@ function EditUser() {
 
         {/* IDENTITAS */}
         <div className="bg-white p-6 rounded-xl shadow-sm">
-          <h2 className="font-semibold mb-4">Identitas Peserta</h2>
+          <h2 className="font-semibold mb-4">Identitas</h2>
 
           <input
             name="name"
@@ -150,7 +156,6 @@ function EditUser() {
         <div className="bg-white p-6 rounded-xl shadow-sm">
           <h2 className="font-semibold mb-4">Informasi Magang</h2>
 
-          {/* 🔥 DIVISI DROPDOWN */}
           <select
             name="divisi"
             value={form.divisi || ""}
@@ -163,7 +168,6 @@ function EditUser() {
             <option value="Marketing">Marketing</option>
           </select>
 
-          {/* 🔥 MENTOR DROPDOWN */}
           <select
             name="mentor"
             value={form.mentor || ""}

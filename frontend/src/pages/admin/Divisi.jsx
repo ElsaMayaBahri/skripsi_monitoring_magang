@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { getUsers, getDivisi, saveDivisi } from "../../utils/storage"
 
 function Divisi() {
   const [search, setSearch] = useState("")
@@ -14,13 +15,10 @@ function Divisi() {
 
   const [editIndex, setEditIndex] = useState(null)
 
-  // 🔥 LOAD DATA
+  // 🔥 LOAD DATA (PAKAI STORAGE.JS)
   useEffect(() => {
-    const savedDivisi = JSON.parse(localStorage.getItem("divisi")) || []
-    const savedUsers = JSON.parse(localStorage.getItem("users")) || []
-
-    setDivisi(savedDivisi)
-    setUsers(savedUsers)
+    setDivisi(getDivisi())
+    setUsers(getUsers())
   }, [])
 
   // 🔥 HITUNG PESERTA & MENTOR
@@ -48,7 +46,7 @@ function Divisi() {
       updated.push(form)
     }
 
-    localStorage.setItem("divisi", JSON.stringify(updated))
+    saveDivisi(updated) // 🔥 pake helper
     setDivisi(updated)
 
     setForm({ name: "", desc: "" })
@@ -66,7 +64,7 @@ function Divisi() {
   // 🔥 DELETE
   const handleDelete = (index) => {
     const updated = divisi.filter((_, i) => i !== index)
-    localStorage.setItem("divisi", JSON.stringify(updated))
+    saveDivisi(updated) // 🔥 pake helper
     setDivisi(updated)
   }
 
@@ -170,7 +168,7 @@ function Divisi() {
         </table>
       </div>
 
-      {/* 🔥 MODAL POPUP */}
+      {/* MODAL */}
       {showForm && (
         <div
           className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"

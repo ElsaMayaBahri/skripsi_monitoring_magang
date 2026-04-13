@@ -1,5 +1,6 @@
-import { Link, useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
+import { getUsers, deleteUser, updateUser } from "../../utils/storage"
 
 function Users() {
   const navigate = useNavigate()
@@ -9,46 +10,58 @@ function Users() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [divisiFilter, setDivisiFilter] = useState("all")
 
-  const [data, setData] = useState(() => {
-    const saved = localStorage.getItem("users")
-    return saved ? JSON.parse(saved) : []
-  })
+  const [data, setData] = useState([])
 
+  // 🔥 LOAD DATA
   useEffect(() => {
-    localStorage.setItem("users", JSON.stringify(data))
-  }, [data])
+    setData(getUsers())
+  }, [])
 
+  // 🔥 FILTER
   const filtered = data
     .filter((d) => d.role === tab)
     .filter((d) =>
-      d.name.toLowerCase().includes(search.toLowerCase())
+      d.name?.toLowerCase().includes(search.toLowerCase())
     )
     .filter((d) =>
       divisiFilter === "all" ? true : d.divisi === divisiFilter
     )
     .filter((d) => {
       if (statusFilter === "all") return true
-      if (statusFilter === "aktif") return d.status === true
-      if (statusFilter === "nonaktif") return d.status === false
+      if (statusFilter === "aktif") return d.status === "aktif"
+      if (statusFilter === "nonaktif") return d.status === "nonaktif"
     })
 
+  // 🔥 STATS
   const total = filtered.length
-  const aktif = filtered.filter((d) => d.status).length
-  const nonaktif = filtered.filter((d) => !d.status).length
+  const aktif = filtered.filter((d) => d.status === "aktif").length
+  const nonaktif = filtered.filter((d) => d.status === "nonaktif").length
 
+  // 🔥 TOGGLE STATUS
   const toggleStatus = (index) => {
-    const realIndex = data.findIndex((d) => d === filtered[index])
+    const user = filtered[index]
+    const realIndex = data.findIndex((d) => d === user)
+
     const updated = [...data]
-    updated[realIndex].status = !updated[realIndex].status
-    setData(updated)
+    updated[realIndex].status =
+      updated[realIndex].status === "aktif"
+        ? "nonaktif"
+        : "aktif"
+
+    updateUser(realIndex, updated[realIndex])
+    setData(getUsers())
   }
 
+  // 🔥 DELETE
   const handleDelete = (index) => {
-    const realIndex = data.findIndex((d) => d === filtered[index])
-    const updated = data.filter((_, i) => i !== realIndex)
-    setData(updated)
+    const user = filtered[index]
+    const realIndex = data.findIndex((d) => d === user)
+
+    deleteUser(realIndex)
+    setData(getUsers())
   }
 
+  // 🔥 ADD
   const handleAdd = () => {
     if (tab === "mentor") {
       navigate("/admin/add-mentor")
@@ -60,9 +73,6 @@ function Users() {
   return (
     <div className="min-h-screen flex bg-[#f5f7fb]">
 
-    
-
-      {/* MAIN */}
       <div className="flex-1 p-8">
 
         {/* HEADER */}
@@ -84,7 +94,7 @@ function Users() {
           </button>
         </div>
 
-        {/* 🔥 FILTER */}
+        {/* FILTER */}
         <div className="bg-white p-4 rounded-xl shadow-sm mb-6">
           <div className="grid grid-cols-4 gap-4">
 
@@ -195,7 +205,7 @@ function Users() {
                   </td>
 
                   <td>
-                    {item.status ? (
+                    {item.status === "aktif" ? (
                       <span className="text-green-600 text-xs">
                         ● Aktif
                       </span>

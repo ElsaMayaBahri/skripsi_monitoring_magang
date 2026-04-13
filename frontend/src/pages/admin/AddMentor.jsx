@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { addUser } from "../../utils/storage" // 🔥 pakai helper
 
 function AddMentor() {
   const navigate = useNavigate()
@@ -26,11 +27,11 @@ function AddMentor() {
   }
 
   const handleSubmit = () => {
-    const users = JSON.parse(localStorage.getItem("users")) || []
 
     const newUser = {
       ...form,
       role: "mentor",
+      status: form.status ? "aktif" : "nonaktif", // 🔥 biar konsisten
       initials: form.name
         ? form.name
             .split(" ")
@@ -40,8 +41,7 @@ function AddMentor() {
         : "M",
     }
 
-    users.push(newUser)
-    localStorage.setItem("users", JSON.stringify(users))
+    addUser(newUser) // 🔥 pakai helper (bukan localStorage langsung)
 
     alert("Mentor berhasil ditambahkan")
     navigate("/admin/users")
