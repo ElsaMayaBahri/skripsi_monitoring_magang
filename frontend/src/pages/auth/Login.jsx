@@ -1,22 +1,57 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
+import axios from "axios"
 import logo from "../../assets/logo.png"
 import illustration from "../../assets/login.png"
+
+// 🔥 CONFIG API (sesuaikan nanti dengan backend)
+const API_URL = "http://localhost:8000/api"
+
+axios.defaults.baseURL = API_URL
+axios.defaults.withCredentials = true
 
 function Login() {
   const navigate = useNavigate()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  const handleLogin = () => {
-    // 🔥 DUMMY ROLE LOGIN
-    if (email === "admin@gmail.com") {
-      navigate("/admin/dashboard")
-    } else if (email === "coo@gmail.com") {
-      navigate("/coo/dashboard")
-    } else {
-      alert("Akun tidak dikenali")
+  const handleLogin = async () => {
+    setLoading(true)
+    setError("")
+
+    try {
+      const response = await axios.post("/login", {
+        email,
+        password
+      })
+
+      // 🔥 kalau login berhasil
+      if (response.data.success) {
+        // simpan data ke localStorage
+        localStorage.setItem("token", response.data.token)
+        localStorage.setItem("user", JSON.stringify(response.data.user))
+        localStorage.setItem("role", response.data.role)
+
+        // set header untuk request berikutnya
+        axios.defaults.headers.common["Authorization"] = `Bearer ${response.data.token}`
+
+        // redirect dari backend
+        navigate(response.data.redirect)
+      }
+
+    } catch (err) {
+      if (err.response) {
+        setError(err.response.data.message || "Login gagal")
+      } else if (err.request) {
+        setError("Tidak dapat terhubung ke server")
+      } else {
+        setError("Terjadi kesalahan")
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -58,6 +93,13 @@ function Login() {
             Gunakan akun terdaftar untuk masuk ke sistem.
           </p>
 
+          {/* ERROR */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
+
           {/* EMAIL */}
           <div className="mb-5">
             <label className="text-sm text-gray-600">
@@ -69,6 +111,7 @@ function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full mt-2 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
             />
           </div>
 
@@ -85,15 +128,17 @@ function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full mt-2 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
             />
           </div>
 
           {/* BUTTON */}
           <button
             onClick={handleLogin}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium transition"
+            disabled={loading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium transition disabled:opacity-50"
           >
-            Masuk ke Sistem
+            {loading ? "Memproses..." : "Masuk ke Sistem"}
           </button>
 
           <p className="text-xs text-gray-400 mt-6 text-center">
