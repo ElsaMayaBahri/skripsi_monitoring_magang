@@ -3,19 +3,49 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        User::create(['nama' => 'admin', 'email' => 'admin@gmail.com', 'status_akun' => 'aktif', 'role' => 'admin', 'password' => 'admin']);
-        User::create(['nama' => 'coo', 'email' => 'coo@gmail.com', 'status_akun' => 'aktif', 'role' => 'coo', 'password' => 'coo']);
-        User::create(['nama' => 'mentor', 'email' => 'mentor@gmail.com', 'status_akun' => 'aktif', 'role' => 'mentor', 'password' => 'mentor']);
-        User::create(['nama' => 'peserta', 'email' => 'peserta@gmail.com', 'status_akun' => 'aktif', 'role' => 'peserta', 'password' => 'peserta']);
+        $users = [
+            [
+                'nama' => 'Admin Sistem',
+                'email' => 'admin@gmail.com',
+                'password' => Hash::make('password'),
+                'role' => 'admin',
+                'status_akun' => 'aktif',
+            ],
+            [
+                'nama' => 'COO Perusahaan',
+                'email' => 'coo@gmail.com',
+                'password' => Hash::make('password'),
+                'role' => 'coo',
+                'status_akun' => 'aktif',
+            ],
+            [
+                'nama' => 'Mentor Lapangan',
+                'email' => 'mentor@gmail.com',
+                'password' => Hash::make('password'),
+                'role' => 'mentor',
+                'status_akun' => 'aktif',
+            ],
+            [
+                'nama' => 'Peserta Magang',
+                'email' => 'peserta@gmail.com',
+                'password' => Hash::make('password'),
+                'role' => 'peserta',
+                'status_akun' => 'aktif',
+            ],
+        ];
+
+        foreach ($users as $user) {
+            User::updateOrCreate(
+                ['email' => $user['email']],
+                $user
+            );
+        }
     }
 }
