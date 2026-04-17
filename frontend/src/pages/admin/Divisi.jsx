@@ -1,75 +1,168 @@
 import { useState, useEffect } from "react"
-import { getUsers, getDivisi, saveDivisi } from "../../utils/storage"
+import { api } from "../../utils/api"
 
 function Divisi() {
   const [search, setSearch] = useState("")
   const [showForm, setShowForm] = useState(false)
-
   const [divisi, setDivisi] = useState([])
-  const [users, setUsers] = useState([])
+  const [mentors, setMentors] = useState([])
+  const [peserta, setPeserta] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
   const [form, setForm] = useState({
-    name: "",
-    desc: "",
+    nama_divisi: "",
+    deskripsi: "",
   })
 
-  const [editIndex, setEditIndex] = useState(null)
+  const [editId, setEditId] = useState(null)
 
-  // 🔥 LOAD DATA (PAKAI STORAGE.JS)
+  // LOAD DATA DARI API
   useEffect(() => {
-    setDivisi(getDivisi())
-    setUsers(getUsers())
+    loadData()
   }, [])
 
-  // 🔥 HITUNG PESERTA & MENTOR
-  const getStats = (namaDivisi) => {
-    const peserta = users.filter(
-      (u) => u.divisi === namaDivisi && u.role === "peserta"
-    ).length
-
-    const mentor = users.filter(
-      (u) => u.divisi === namaDivisi && u.role === "mentor"
-    ).length
-
-    return { peserta, mentor }
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      // Load divisi dari API
+      const divisiResponse = await api.getDivisi()
+      setDivisi(divisiResponse.data || [])
+      
+      // Load mentors & peserta from API
+      const [mentorsRes, pesertaRes] = await Promise.all([
+        api.getMentors(),
+        api.getPeserta()
+      ])
+      
+      setMentors(mentorsRes.data || [])
+      setPeserta(pesertaRes.data || [])
+      
+    } catch (err) {
+      console.error("Error loading data:", err)
+      setError(err.message || "Failed to load data")
+      
+      // Handle unauthorized
+      if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+        window.location.href = '/login'
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // 🔥 SAVE
-  const handleSave = () => {
-    if (!form.name) return
+  // HITUNG PESERTA & MENTOR
+  const getStats = (namaDivisi) => {
+    // Count peserta in this divisi
+    // Check if peserta has divisi property with nama_divisi
+    const pesertaCount = peserta.filter((p) => {
+      // Check different possible structures
+      if (p.divisi && p.divisi.nama_divisi === namaDivisi) return true
+      if (p.nama_divisi === namaDivisi) return true
+      if (p.divisi_name === namaDivisi) return true
+      return false
+    }).length
 
-    let updated = [...divisi]
+    // Count mentors in this divisi
+    const mentorCount = mentors.filter((m) => {
+      // Check different possible structures
+      if (m.divisi && typeof m.divisi === 'object' && m.divisi.nama_divisi === namaDivisi) return true
+      if (m.divisi === namaDivisi) return true
+      if (m.nama_divisi === namaDivisi) return true
+      return false
+    }).length
 
-    if (editIndex !== null) {
-      updated[editIndex] = form
-    } else {
-      updated.push(form)
+    return { peserta: pesertaCount, mentor: mentorCount }
+  }
+
+  // SAVE DIVISI (CREATE/UPDATE)
+  const handleSave = async () => {
+    if (!form.nama_divisi) {
+      setError("Nama divisi wajib diisi")
+      return
     }
 
-    saveDivisi(updated) // 🔥 pake helper
-    setDivisi(updated)
+    setLoading(true)
+    setError("")
 
-    setForm({ name: "", desc: "" })
-    setEditIndex(null)
-    setShowForm(false)
+    try {
+      if (editId !== null) {
+        await api.updateDivisi(editId, form)
+      } else {
+        await api.addDivisi(form)
+      }
+      
+      await loadData()
+      
+      setForm({ nama_divisi: "", deskripsi: "" })
+      setEditId(null)
+      setShowForm(false)
+      
+    } catch (err) {
+      console.error("Error saving divisi:", err)
+      if (err.message.includes('Validation failed')) {
+        setError("Validation error. Please check your input.")
+      } else {
+        setError(err.message || "Failed to save divisi")
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // 🔥 EDIT
-  const handleEdit = (index) => {
-    setForm(divisi[index])
-    setEditIndex(index)
+  // EDIT DIVISI
+  const handleEdit = (item) => {
+    setForm({
+      nama_divisi: item.nama_divisi,
+      deskripsi: item.deskripsi || "",
+    })
+    setEditId(item.id_divisi)
     setShowForm(true)
   }
 
-  // 🔥 DELETE
-  const handleDelete = (index) => {
-    const updated = divisi.filter((_, i) => i !== index)
-    saveDivisi(updated) // 🔥 pake helper
-    setDivisi(updated)
+  // DELETE DIVISI
+  const handleDelete = async (id, namaDivisi) => {
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus divisi "${namaDivisi}"?`)) {
+      return
+    }
+
+    setLoading(true)
+    setError("")
+
+    try {
+      await api.deleteDivisi(id)
+      await loadData()
+    } catch (err) {
+      console.error("Error deleting divisi:", err)
+      setError(err.message || "Failed to delete divisi")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading && divisi.length === 0) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    )
   }
 
   return (
     <div>
+
+      {/* ERROR MESSAGE */}
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+          <button 
+            onClick={() => setError("")}
+            className="float-right font-bold"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* HEADER */}
       <div className="flex justify-between items-center mb-6">
@@ -83,8 +176,13 @@ function Divisi() {
         </div>
 
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => {
+            setForm({ nama_divisi: "", deskripsi: "" })
+            setEditId(null)
+            setShowForm(true)
+          }}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
+          disabled={loading}
         >
           + Tambah Divisi
         </button>
@@ -115,66 +213,77 @@ function Divisi() {
           </thead>
 
           <tbody>
-            {divisi
-              .filter((d) =>
-                d.name.toLowerCase().includes(search.toLowerCase())
-              )
-              .map((d, i) => {
-                const stats = getStats(d.name)
-
-                return (
-                  <tr key={i} className="border-t hover:bg-gray-50">
-                    <td className="px-6 py-3 font-medium">
-                      {d.name}
-                    </td>
-
-                    <td className="text-gray-500">
-                      {d.desc}
-                    </td>
-
-                    <td className="text-center">
-                      <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs">
-                        {stats.peserta}
-                      </span>
-                    </td>
-
-                    <td className="text-center">
-                      <span className="bg-green-50 text-green-600 px-2 py-1 rounded text-xs">
-                        {stats.mentor}
-                      </span>
-                    </td>
-
-                    <td className="text-center">
-                      <div className="flex justify-center gap-3">
-                        <button
-                          onClick={() => handleEdit(i)}
-                          className="text-blue-500 hover:underline"
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          onClick={() => handleDelete(i)}
-                          className="text-red-500 hover:underline"
-                        >
-                          Hapus
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+            {divisi.length === 0 ? (
+              <tr>
+                <td colSpan="5" className="text-center py-8 text-gray-500">
+                  Belum ada data divisi
+                </td>
+              </tr>
+            ) : (
+              divisi
+                .filter((d) =>
+                  d.nama_divisi.toLowerCase().includes(search.toLowerCase())
                 )
-              })}
+                .map((d) => {
+                  const stats = getStats(d.nama_divisi)
+
+                  return (
+                    <tr key={d.id_divisi} className="border-t hover:bg-gray-50">
+                      <td className="px-6 py-3 font-medium">
+                        {d.nama_divisi}
+                      </td>
+
+                      <td className="text-gray-500">
+                        {d.deskripsi || "-"}
+                      </td>
+
+                      <td className="text-center">
+                        <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs">
+                          {stats.peserta}
+                        </span>
+                      </td>
+
+                      <td className="text-center">
+                        <span className="bg-green-50 text-green-600 px-2 py-1 rounded text-xs">
+                          {stats.mentor}
+                        </span>
+                      </td>
+
+                      <td className="text-center">
+                        <div className="flex justify-center gap-3">
+                          <button
+                            onClick={() => handleEdit(d)}
+                            className="text-blue-500 hover:underline"
+                            disabled={loading}
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            onClick={() => handleDelete(d.id_divisi, d.nama_divisi)}
+                            className="text-red-500 hover:underline"
+                            disabled={loading}
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* MODAL */}
+      {/* MODAL FORM */}
       {showForm && (
         <div
           className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
           onClick={() => {
             setShowForm(false)
-            setEditIndex(null)
+            setEditId(null)
+            setError("")
           }}
         >
           <div
@@ -182,41 +291,39 @@ function Divisi() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold mb-4">
-              {editIndex !== null
-                ? "Edit Divisi"
-                : "Tambah Divisi Baru"}
+              {editId !== null ? "Edit Divisi" : "Tambah Divisi Baru"}
             </h3>
 
             <div className="space-y-3">
-
               <input
                 type="text"
-                placeholder="Nama Divisi"
-                value={form.name}
+                placeholder="Nama Divisi *"
+                value={form.nama_divisi}
                 onChange={(e) =>
-                  setForm({ ...form, name: e.target.value })
+                  setForm({ ...form, nama_divisi: e.target.value })
                 }
                 className="w-full border px-3 py-2 rounded-lg text-sm"
               />
 
               <textarea
                 placeholder="Deskripsi"
-                value={form.desc}
+                value={form.deskripsi}
                 onChange={(e) =>
-                  setForm({ ...form, desc: e.target.value })
+                  setForm({ ...form, deskripsi: e.target.value })
                 }
                 className="w-full border px-3 py-2 rounded-lg text-sm h-24"
               />
-
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={() => {
                   setShowForm(false)
-                  setEditIndex(null)
+                  setEditId(null)
+                  setError("")
                 }}
                 className="px-4 py-2 text-sm text-gray-500"
+                disabled={loading}
               >
                 Batal
               </button>
@@ -224,8 +331,9 @@ function Divisi() {
               <button
                 onClick={handleSave}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
+                disabled={loading}
               >
-                Simpan Divisi
+                {loading ? "Menyimpan..." : "Simpan Divisi"}
               </button>
             </div>
           </div>

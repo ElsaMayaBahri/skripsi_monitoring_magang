@@ -19,6 +19,7 @@ class User extends Authenticatable
         'id_mentor',
         'nama',
         'email',
+        'no_telepon',
         'password',
         'role',
         'status_akun',
@@ -45,7 +46,7 @@ class User extends Authenticatable
 
     public function mentor()
     {
-        return $this->belongsTo(Mentor::class, 'id_mentor', 'id_mentor');
+        return $this->hasOne(Mentor::class, 'id_user', 'id_user');
     }
 
     // Role check methods

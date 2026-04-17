@@ -16,6 +16,7 @@ return new class extends Migration
             $table->unsignedBigInteger('id_nilai')->nullable();
             $table->unsignedBigInteger('id_divisi')->nullable();
             $table->string('asal_kampus', 150)->nullable();
+            $table->string('prodi', 150)->nullable(); // Tambahkan ini
             $table->date('tanggal_mulai')->nullable();
             $table->date('tanggal_selesai')->nullable();
             $table->enum('status_magang', ['aktif', 'selesai', 'berhenti'])->default('aktif');
@@ -24,7 +25,6 @@ return new class extends Migration
             $table->foreign('id_user')->references('id_user')->on('users')->onDelete('cascade');
             $table->foreign('id_mentor')->references('id_mentor')->on('mentors')->onDelete('set null');
             $table->foreign('id_divisi')->references('id_divisi')->on('divisis')->onDelete('set null');
-            // Foreign key ke sertifikats dan nilai_pesertas akan ditambahkan di migration terakhir
         });
     }
 

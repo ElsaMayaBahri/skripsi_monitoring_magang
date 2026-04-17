@@ -68,9 +68,9 @@ function Login() {
       // 🔥 Kalau login berhasil
       if (response.data.success) {
         // Simpan data ke localStorage
-        localStorage.setItem("token", response.data.token)
-        localStorage.setItem("user", JSON.stringify(response.data.user))
-        localStorage.setItem("role", response.data.role)
+        localStorage.setItem("auth_token", response.data.token)  // ← ganti dari "token" ke "auth_token"
+  localStorage.setItem("user", JSON.stringify(response.data.user))
+  localStorage.setItem("role", response.data.role)
         
         // Simpan email jika remember me dicentang
         if (rememberMe) {
@@ -80,7 +80,7 @@ function Login() {
         }
 
         // Set header untuk request berikutnya
-        axios.defaults.headers.common["Authorization"] = `Bearer ${response.data.token}`
+      axios.defaults.headers.common["Authorization"] = `Bearer ${response.data.token}`
 
         // Redirect berdasarkan role dari backend
         const redirectPath = response.data.redirect

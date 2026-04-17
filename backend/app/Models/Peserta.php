@@ -19,6 +19,7 @@ class Peserta extends Model
         'id_nilai',
         'id_divisi',
         'asal_kampus',
+        'prodi', // Tambahkan ini
         'tanggal_mulai',
         'tanggal_selesai',
         'status_magang',
