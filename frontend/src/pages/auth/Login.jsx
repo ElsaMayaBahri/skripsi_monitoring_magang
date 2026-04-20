@@ -7,7 +7,17 @@ import illustration from "../../assets/login.png"
 // 🔥 CONFIG API
 const API_URL = "http://localhost:8000/api"
 
-// Setup axios default config
+// 🔥 BUAT AXIOS INSTANCE (INI YANG KURANG!)
+const axiosInstance = axios.create({
+  baseURL: API_URL,
+  withCredentials: true,
+  headers: {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+  },
+})
+
+// Setup axios default config (optional)
 axios.defaults.baseURL = API_URL
 axios.defaults.withCredentials = true
 axios.defaults.headers.common["Accept"] = "application/json"
@@ -34,6 +44,8 @@ function Login() {
         navigate("/admin/dashboard")
       } else if (role === "coo" || role === "mentor") {
         navigate("/coo/dashboard")
+      } else if (role === "peserta") {
+        navigate("/peserta/dashboard")
       }
     }
     
@@ -46,11 +58,12 @@ function Login() {
   }, [navigate])
 
   const handleLogin = async () => {
-    // Validasi input
+    // ✅ Validasi input
     if (!email.trim()) {
       setError("Email harus diisi")
       return
     }
+
     if (!password) {
       setError("Password harus diisi")
       return
@@ -60,63 +73,83 @@ function Login() {
     setError("")
 
     try {
-      const response = await axios.post("/login", {
+      // ✅ PAKAI axiosInstance (SEKARANG UDAH ADA!)
+      const response = await axiosInstance.post("/login", {
         email: email.trim(),
-        password
+        password,
       })
 
-      // 🔥 Kalau login berhasil
-      if (response.data.success) {
-        // Simpan data ke localStorage
-        localStorage.setItem("auth_token", response.data.token)  // ← ganti dari "token" ke "auth_token"
-  localStorage.setItem("user", JSON.stringify(response.data.user))
-  localStorage.setItem("role", response.data.role)
-        
-        // Simpan email jika remember me dicentang
-        if (rememberMe) {
-          localStorage.setItem("rememberedEmail", email.trim())
-        } else {
-          localStorage.removeItem("rememberedEmail")
-        }
+      console.log("LOGIN RESPONSE:", response.data)
 
-        // Set header untuk request berikutnya
-      axios.defaults.headers.common["Authorization"] = `Bearer ${response.data.token}`
+      // ✅ Ambil data fleksibel (jaga2 struktur beda)
+      const token = response.data.token || response.data.data?.token
+      const user = response.data.user || response.data.data?.user
+      const role = response.data.role || response.data.data?.role
 
-        // Redirect berdasarkan role dari backend
-        const redirectPath = response.data.redirect
-        navigate(redirectPath)
+      if (!token) {
+        throw new Error("Token tidak ditemukan dari backend")
       }
 
-    } catch (err) {
-      console.error("Login error:", err)
+      // ✅ Simpan ke localStorage
+      localStorage.setItem("token", token)
+      localStorage.setItem("user", JSON.stringify(user))
+      localStorage.setItem("role", role)
+
+      // ✅ Remember me
+      if (rememberMe) {
+        localStorage.setItem("rememberedEmail", email.trim())
+      } else {
+        localStorage.removeItem("rememberedEmail")
+      }
+
+      // ✅ Set header global (optional, interceptor sudah handle)
+      axiosInstance.defaults.headers.Authorization = `Bearer ${token}`
+      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
+
+      // ✅ Redirect berdasarkan role
+      let redirectPath = "/admin/dashboard"
+      if (role === "admin") {
+        redirectPath = "/admin/dashboard"
+      } else if (role === "coo" || role === "mentor") {
+        redirectPath = "/coo/dashboard"
+      } else if (role === "peserta") {
+        redirectPath = "/peserta/dashboard"
+      }
       
+      // Bisa juga pake dari response
+      const responseRedirect = response.data.redirect
+      if (responseRedirect) {
+        redirectPath = responseRedirect
+      }
+
+      navigate(redirectPath)
+
+    } catch (err) {
+      console.error("LOGIN ERROR:", err)
+
       if (err.response) {
-        // Server merespon dengan error
         const status = err.response.status
-        const message = err.response.data.message
-        
+        const message = err.response.data?.message
+
         if (status === 401) {
           setError("Email atau password salah")
         } else if (status === 403) {
-          setError("Akun Anda tidak aktif. Silakan hubungi administrator.")
+          setError("Akun tidak aktif")
         } else if (status === 422) {
-          // Validation error
-          const errors = err.response.data.errors
+          const errors = err.response.data?.errors
           if (errors) {
             const firstError = Object.values(errors)[0]
-            setError(firstError[0])
+            setError(Array.isArray(firstError) ? firstError[0] : firstError)
           } else {
             setError(message || "Validasi gagal")
           }
         } else {
-          setError(message || "Login gagal, silakan coba lagi")
+          setError(message || "Login gagal")
         }
       } else if (err.request) {
-        // Request dibuat tapi tidak ada response
-        setError("Tidak dapat terhubung ke server. Pastikan backend berjalan.")
+        setError("Tidak bisa connect ke server. Pastikan backend berjalan.")
       } else {
-        // Error lain
-        setError("Terjadi kesalahan. Silakan coba lagi.")
+        setError("Terjadi kesalahan: " + err.message)
       }
     } finally {
       setLoading(false)
@@ -248,7 +281,7 @@ function Login() {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
               >
-                {showPassword ? "👁️" : "👁️‍🗨️"}
+                {showPassword ? "🙈" : "👁️"}
               </button>
             </div>
           </div>

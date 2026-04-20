@@ -6,11 +6,13 @@ function AddPeserta() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [validationErrors, setValidationErrors] = useState({})
   
   const [form, setForm] = useState({
     nama: "",
     email: "",
     password: "",
+    password_confirmation: "",
     no_telepon: "",
     asal_kampus: "",
     prodi: "",
@@ -28,48 +30,82 @@ function AddPeserta() {
 
   const fetchDropdownData = async () => {
     try {
-      // Fetch divisi list
-      const divisiResponse = await api.getDivisiList()
-      if (divisiResponse.success) {
-        setDivisiList(divisiResponse.data)
+      // ✅ ambil divisi - sekarang langsung mendapatkan array
+      const divisiData = await api.getDivisi()
+      console.log("Divisi data:", divisiData)
+      
+      if (Array.isArray(divisiData)) {
+        setDivisiList(divisiData)
+      } else if (divisiData && divisiData.data && Array.isArray(divisiData.data)) {
+        setDivisiList(divisiData.data)
+      } else {
+        setDivisiList([])
       }
 
-      // Fetch mentor list
-      const mentorResponse = await api.getMentorList()
-      if (mentorResponse.success) {
-        setMentorList(mentorResponse.data)
+      // ✅ ambil mentor - sekarang langsung mendapatkan array
+      const mentorData = await api.getMentors()
+      console.log("Mentor data:", mentorData)
+      
+      if (Array.isArray(mentorData)) {
+        setMentorList(mentorData)
+      } else if (mentorData && mentorData.data && Array.isArray(mentorData.data)) {
+        setMentorList(mentorData.data)
+      } else {
+        setMentorList([])
       }
+
     } catch (error) {
       console.error("Error fetching dropdown data:", error)
+      setError("Gagal load dropdown: " + error.message)
     }
   }
 
   const handleChange = (e) => {
+    const { name, value } = e.target
     setForm({
       ...form,
-      [e.target.name]: e.target.value,
+      [name]: value,
     })
     // Clear error when user starts typing
     if (error) setError("")
+    if (validationErrors[name]) {
+      setValidationErrors({ ...validationErrors, [name]: "" })
+    }
+  }
+
+  const validateForm = () => {
+    const errors = {}
+    
+    if (!form.nama || form.nama.trim() === "") {
+      errors.nama = "Nama lengkap wajib diisi"
+    }
+    
+    if (!form.email) {
+      errors.email = "Email wajib diisi"
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(form.email)) {
+        errors.email = "Format email tidak valid"
+      }
+    }
+    
+    if (!form.password) {
+      errors.password = "Password wajib diisi"
+    } else if (form.password.length < 6) {
+      errors.password = "Password minimal 6 karakter"
+    }
+    
+    if (form.password !== form.password_confirmation) {
+      errors.password_confirmation = "Konfirmasi password tidak cocok"
+    }
+    
+    setValidationErrors(errors)
+    return Object.keys(errors).length === 0
   }
 
   const handleSave = async () => {
-    // Validasi required fields
-    if (!form.nama || !form.email || !form.password) {
-      setError("Nama, Email, dan Password wajib diisi")
-      return
-    }
-
-    // Validasi email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(form.email)) {
-      setError("Format email tidak valid")
-      return
-    }
-
-    // Validasi password length
-    if (form.password.length < 6) {
-      setError("Password minimal 6 karakter")
+    // Validasi form
+    if (!validateForm()) {
       return
     }
 
@@ -77,19 +113,39 @@ function AddPeserta() {
     setError("")
 
     try {
+      // Pastikan id_divisi dan id_mentor dalam format yang benar
+      const idDivisi = form.id_divisi && form.id_divisi !== "" ? parseInt(form.id_divisi) : null
+      const idMentor = form.id_mentor && form.id_mentor !== "" ? parseInt(form.id_mentor) : null
+      
+      // Validasi: pastikan id_mentor valid (ada di list)
+      if (idMentor && mentorList.length > 0) {
+        const mentorExists = mentorList.some(mentor => {
+          const mentorId = mentor.id_mentor || mentor.id || mentor.id_user
+          return mentorId === idMentor
+        })
+        
+        if (!mentorExists) {
+          setError("ID Mentor tidak valid. Silakan pilih mentor dari daftar.")
+          setLoading(false)
+          return
+        }
+      }
+      
       // Siapkan data sesuai yang diharapkan backend
       const pesertaData = {
-        nama: form.nama,
+        nama: form.nama.trim(),
         email: form.email,
         password: form.password,
         no_telepon: form.no_telepon || null,
         asal_kampus: form.asal_kampus || null,
         prodi: form.prodi || null,
-        id_divisi: form.id_divisi || null,
-        id_mentor: form.id_mentor || null,
+        id_divisi: idDivisi,
+        id_mentor: idMentor,
       }
 
       console.log("Sending data:", pesertaData)
+      console.log("ID Divisi:", idDivisi, "Type:", typeof idDivisi)
+      console.log("ID Mentor:", idMentor, "Type:", typeof idMentor)
       
       const response = await api.addPeserta(pesertaData)
       
@@ -105,10 +161,15 @@ function AddPeserta() {
       console.error("Error adding peserta:", error)
       
       // Handle validation errors from backend
-      if (error.message.includes("validation") || error.errors) {
-        setError("Validasi gagal: " + error.message)
+      if (error.errors) {
+        // Tampilkan detail error validasi
+        const errorMessages = Object.values(error.errors).flat().join("\n")
+        setError(`Validasi gagal:\n${errorMessages}`)
+        setValidationErrors(error.errors)
+      } else if (error.message) {
+        setError(error.message)
       } else {
-        setError(error.message || "Terjadi kesalahan saat menambahkan peserta")
+        setError("Terjadi kesalahan saat menambahkan peserta")
       }
     } finally {
       setLoading(false)
@@ -129,12 +190,12 @@ function AddPeserta() {
 
       {/* Error Message */}
       {error && (
-        <div className="mb-6 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+        <div className="mb-6 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg whitespace-pre-wrap">
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* LEFT COLUMN */}
         <div className="space-y-6">
           {/* INFORMASI AKUN */}
@@ -154,9 +215,14 @@ function AddPeserta() {
                   type="email"
                   value={form.email}
                   placeholder="contoh@email.com"
-                  className="w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    validationErrors.email ? "border-red-500" : ""
+                  }`}
                   required
                 />
+                {validationErrors.email && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>
+                )}
               </div>
 
               <div>
@@ -169,9 +235,34 @@ function AddPeserta() {
                   type="password"
                   value={form.password}
                   placeholder="Minimal 6 karakter"
-                  className="w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    validationErrors.password ? "border-red-500" : ""
+                  }`}
                   required
                 />
+                {validationErrors.password && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.password}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Konfirmasi Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  name="password_confirmation"
+                  onChange={handleChange}
+                  type="password"
+                  value={form.password_confirmation}
+                  placeholder="Konfirmasi password"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    validationErrors.password_confirmation ? "border-red-500" : ""
+                  }`}
+                  required
+                />
+                {validationErrors.password_confirmation && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.password_confirmation}</p>
+                )}
               </div>
             </div>
           </div>
@@ -195,7 +286,10 @@ function AddPeserta() {
                 >
                   <option value="">Pilih Divisi</option>
                   {divisiList.map((divisi) => (
-                    <option key={divisi.id_divisi} value={divisi.id_divisi}>
+                    <option 
+                      key={divisi.id_divisi} 
+                      value={divisi.id_divisi}
+                    >
                       {divisi.nama_divisi}
                     </option>
                   ))}
@@ -213,11 +307,20 @@ function AddPeserta() {
                   className="w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Pilih Mentor</option>
-                  {mentorList.map((mentor) => (
-                    <option key={mentor.id_mentor} value={mentor.id_mentor}>
-                      {mentor.user?.nama || mentor.nama}
-                    </option>
-                  ))}
+                  {mentorList.map((mentor) => {
+                    // Dapatkan ID mentor dari berbagai kemungkinan struktur data
+                    const mentorId = mentor.id_mentor || mentor.id
+                    const mentorName = mentor.user?.nama || mentor.nama || mentor.name
+                    
+                    return (
+                      <option 
+                        key={mentorId} 
+                        value={mentorId}
+                      >
+                        {mentorName}
+                      </option>
+                    )
+                  })}
                 </select>
               </div>
             </div>
@@ -243,9 +346,14 @@ function AddPeserta() {
                   type="text"
                   value={form.nama}
                   placeholder="Masukkan nama lengkap"
-                  className="w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={`w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    validationErrors.nama ? "border-red-500" : ""
+                  }`}
                   required
                 />
+                {validationErrors.nama && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.nama}</p>
+                )}
               </div>
 
               <div>
@@ -255,7 +363,7 @@ function AddPeserta() {
                 <input
                   name="no_telepon"
                   onChange={handleChange}
-                  type="text"
+                  type="tel"
                   value={form.no_telepon}
                   placeholder="+628123456789"
                   className="w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"

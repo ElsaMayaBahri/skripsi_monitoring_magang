@@ -15,7 +15,7 @@ function AddMentor() {
     password_confirmation: "",
     name: "",
     phone: "",
-    divisi: "",
+    id_divisi: "",
     jabatan: "",
     status: true,
   });
@@ -27,18 +27,14 @@ function AddMentor() {
   const loadDivisiList = async () => {
     setDivisiLoading(true);
     try {
-      const response = await api.getDivisiList();
-
-      // Debug: hapus setelah masalah terselesaikan
+      const response = await api.getDivisi();
       console.log("Divisi API response:", response);
 
-      // Handle berbagai kemungkinan struktur response
       if (response && response.success && Array.isArray(response.data)) {
         setDivisiList(response.data);
       } else if (Array.isArray(response)) {
-        // Jika backend langsung return array
         setDivisiList(response);
-      } else if (response && Array.isArray(response.data)) {
+      } else if (response && response.data && Array.isArray(response.data)) {
         setDivisiList(response.data);
       } else {
         console.warn("Struktur response tidak dikenali:", response);
@@ -46,6 +42,7 @@ function AddMentor() {
       }
     } catch (err) {
       console.error("Error loading divisi:", err);
+      setError("Gagal memuat data divisi");
       setDivisiList([]);
     } finally {
       setDivisiLoading(false);
@@ -91,28 +88,49 @@ function AddMentor() {
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
+    
     setLoading(true);
     setError("");
+    
     try {
       const mentorData = {
         email: form.email,
         password: form.password,
         name: form.name,
         phone: form.phone || null,
-        divisi: form.divisi || null,
+        id_divisi: form.id_divisi || null,
         jabatan: form.jabatan || null,
         status: form.status,
       };
-      const response = await api.addMentor(mentorData);
-      if (response.success) {
-        alert(response.message || "Mentor berhasil ditambahkan");
-        navigate("/admin/users");
+      
+      console.log("Mentor Data to send:", mentorData);
+      
+      // Coba beberapa kemungkinan method yang tersedia
+      let response;
+      if (typeof api.addMentor === 'function') {
+        response = await api.addMentor(mentorData);
+      } else if (typeof api.createMentor === 'function') {
+        response = await api.createMentor(mentorData);
+      } else if (typeof api.registerMentor === 'function') {
+        response = await api.registerMentor(mentorData);
+      } else if (typeof api.postMentor === 'function') {
+        response = await api.postMentor(mentorData);
       } else {
-        setError(response.message || "Gagal menambahkan mentor");
+        // Jika tidak ada method yang tersedia, coba gunakan method umum
+        response = await api.post('/mentors', mentorData);
+      }
+      
+      if (response && response.success) {
+        alert(response.message || "Mentor berhasil ditambahkan");
+        navigate("/admin/users", { 
+          state: { message: "Mentor berhasil ditambahkan" } 
+        });
+      } else {
+        setError(response?.message || "Gagal menambahkan mentor");
       }
     } catch (err) {
       console.error("Error adding mentor:", err);
-      setError("Terjadi kesalahan saat menyimpan data");
+      setError(err.message || "Terjadi kesalahan saat menyimpan data");
     } finally {
       setLoading(false);
     }
@@ -137,12 +155,12 @@ function AddMentor() {
         )}
 
         {/* FORM */}
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* LEFT COLUMN */}
           <div className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email *
+                Email <span className="text-red-500">*</span>
               </label>
               <input
                 name="email"
@@ -157,12 +175,12 @@ function AddMentor() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Password *
+                Password <span className="text-red-500">*</span>
               </label>
               <input
                 name="password"
                 type="password"
-                placeholder="********"
+                placeholder="Minimal 6 karakter"
                 value={form.password}
                 onChange={handleChange}
                 className="w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -172,12 +190,12 @@ function AddMentor() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Konfirmasi Password *
+                Konfirmasi Password <span className="text-red-500">*</span>
               </label>
               <input
                 name="password_confirmation"
                 type="password"
-                placeholder="********"
+                placeholder="Konfirmasi password"
                 value={form.password_confirmation}
                 onChange={handleChange}
                 className="w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -190,29 +208,29 @@ function AddMentor() {
                 Divisi
               </label>
               <select
-                name="divisi"
-                value={form.divisi}
+                name="id_divisi"
+                value={form.id_divisi}
                 onChange={handleChange}
                 className="w-full border px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                 disabled={loading || divisiLoading}
               >
+                <option value="">Pilih Divisi</option>
                 {divisiLoading ? (
-                  <option value="">Memuat divisi...</option>
+                  <option value="" disabled>Memuat divisi...</option>
                 ) : divisiList.length === 0 ? (
-                  <option value="">Tidak ada divisi tersedia</option>
+                  <option value="" disabled>Tidak ada divisi tersedia</option>
                 ) : (
-                  <>
-                    <option value="">Pilih Divisi</option>
-                    {divisiList.map((divisi) => (
-                      <option key={divisi.id_divisi} value={divisi.nama_divisi}>
-                        {divisi.nama_divisi}
-                      </option>
-                    ))}
-                  </>
+                  divisiList.map((divisi) => (
+                    <option 
+                      key={divisi.id_divisi || divisi.id} 
+                      value={divisi.id_divisi || divisi.id}
+                    >
+                      {divisi.nama_divisi || divisi.nama}
+                    </option>
+                  ))
                 )}
               </select>
-              {/* Indikator jumlah divisi untuk debugging */}
-              {!divisiLoading && (
+              {!divisiLoading && divisiList.length > 0 && (
                 <p className="text-xs text-gray-400 mt-1">
                   {divisiList.length} divisi tersedia
                 </p>
@@ -243,10 +261,11 @@ function AddMentor() {
           <div className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nama Lengkap *
+                Nama Lengkap <span className="text-red-500">*</span>
               </label>
               <input
                 name="name"
+                type="text"
                 placeholder="Masukkan nama lengkap"
                 value={form.name}
                 onChange={handleChange}
@@ -261,6 +280,7 @@ function AddMentor() {
               </label>
               <input
                 name="phone"
+                type="tel"
                 placeholder="+62 8123456789"
                 value={form.phone}
                 onChange={handleChange}
@@ -275,6 +295,7 @@ function AddMentor() {
               </label>
               <input
                 name="jabatan"
+                type="text"
                 placeholder="Isi jabatan"
                 value={form.jabatan}
                 onChange={handleChange}
@@ -286,7 +307,7 @@ function AddMentor() {
         </div>
 
         {/* BUTTONS */}
-        <div className="flex justify-end gap-3 mt-10">
+        <div className="flex justify-end gap-3 mt-10 pt-6 border-t">
           <button
             type="button"
             onClick={() => navigate("/admin/users")}
@@ -300,7 +321,7 @@ function AddMentor() {
             type="button"
             onClick={handleSubmit}
             disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {loading ? (
               <>

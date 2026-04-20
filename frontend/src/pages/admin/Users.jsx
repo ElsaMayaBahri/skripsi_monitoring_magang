@@ -15,6 +15,41 @@ function Users() {
   const [error, setError] = useState(null);
   const [divisiList, setDivisiList] = useState([]);
 
+  // Get initials from name
+  const getInitials = (name) => {
+    if (!name) return "?";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // 🔥 LOAD DIVISI LIST
+  const loadDivisiList = async () => {
+    try {
+      // Perbaikan: Gunakan api.getDivisi() bukan api.getDivisiList()
+      const response = await api.getDivisi();
+      console.log("Divisi API response:", response);
+      
+      // Handle berbagai kemungkinan struktur response
+      let divisiData = [];
+      if (response && response.success && Array.isArray(response.data)) {
+        divisiData = response.data;
+      } else if (Array.isArray(response)) {
+        divisiData = response;
+      } else if (response && response.data && Array.isArray(response.data)) {
+        divisiData = response.data;
+      }
+      
+      setDivisiList(divisiData);
+    } catch (err) {
+      console.error("Error loading divisi list:", err);
+      setDivisiList([]);
+    }
+  };
+
   // 🔥 LOAD DATA DARI API
   const loadData = async () => {
     setLoading(true);
@@ -23,7 +58,7 @@ function Users() {
       let result;
       if (tab === "peserta") {
         result = await api.getPeserta();
-        console.log("Peserta API response:", result); // Debug log
+        console.log("Peserta API response:", result);
 
         // Check if result has data property
         const pesertaData = result.data || result;
@@ -35,8 +70,7 @@ function Users() {
               name: item.user?.nama || item.nama || "No Name",
               email: item.user?.email || item.email || "",
               divisi: item.divisi?.nama_divisi || "",
-              status:
-                item.user?.status_akun || item.status_magang || "non_aktif",
+              status: item.user?.status_akun === "aktif" ? "aktif" : "non_aktif",
               role: "peserta",
               initials: getInitials(item.user?.nama || item.nama),
               phone: item.user?.no_telepon || "",
@@ -50,7 +84,7 @@ function Users() {
         setData(formattedData);
       } else {
         result = await api.getMentors();
-        console.log("Mentor API response:", result); // Debug log
+        console.log("Mentor API response:", result);
 
         // Check if result has data property
         const mentorData = result.data || result;
@@ -62,12 +96,7 @@ function Users() {
               name: item.user?.nama || item.name || item.nama || "No Name",
               email: item.user?.email || item.email || "",
               divisi: item.divisi?.nama_divisi || item.divisi || "",
-              status:
-                item.user?.status_akun === "aktif"
-                  ? "aktif"
-                  : item.status === true || item.status === "aktif"
-                    ? "aktif"
-                    : "non_aktif",
+              status: item.user?.status_akun === "aktif" || item.status === true || item.status === "aktif" ? "aktif" : "non_aktif",
               role: "mentor",
               initials: getInitials(item.user?.nama || item.name || item.nama),
               phone: item.user?.no_telepon || item.phone || "",
@@ -77,31 +106,17 @@ function Users() {
 
         setData(formattedData);
       }
-
-      // Load divisi list
-      const divisiResult = await api.getDivisiList();
-      const divisiData = divisiResult.data || divisiResult;
-      setDivisiList(Array.isArray(divisiData) ? divisiData : []);
     } catch (err) {
       console.error("Error loading data:", err);
-      setError(`Gagal memuat data: ${err.message}. Silakan coba lagi.`);
+      setError(`Gagal memuat data: ${err.message || "Terjadi kesalahan"}. Silakan coba lagi.`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Get initials from name
-  const getInitials = (name) => {
-    if (!name) return "?";
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
+  // Load divisi list and data when tab changes
   useEffect(() => {
+    loadDivisiList();
     loadData();
   }, [tab]);
 
@@ -129,12 +144,12 @@ function Users() {
     try {
       if (tab === "peserta") {
         await api.updatePeserta(user.id, {
-          status_magang: newStatus,  
-          status_akun: newStatus,     
+          status_magang: newStatus,
+          status_akun: newStatus,
         });
       } else {
         await api.updateMentor(user.id, {
-          status: newStatus === "aktif", 
+          status: newStatus === "aktif",
         });
       }
       await loadData();
@@ -215,31 +230,31 @@ function Users() {
 
         {/* FILTER */}
         <div className="bg-white p-4 rounded-xl shadow-sm mb-6">
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <input
               type="text"
               placeholder="Cari nama..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="px-3 py-2 border rounded-lg text-sm"
+              className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
 
             <select
               onChange={(e) => setDivisiFilter(e.target.value)}
-              className="px-3 py-2 border rounded-lg text-sm"
+              className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={divisiFilter}
             >
               <option value="all">Semua Divisi</option>
               {divisiList.map((divisi) => (
-                <option key={divisi.id_divisi} value={divisi.nama_divisi}>
-                  {divisi.nama_divisi}
+                <option key={divisi.id_divisi || divisi.id} value={divisi.nama_divisi || divisi.nama}>
+                  {divisi.nama_divisi || divisi.nama}
                 </option>
               ))}
             </select>
 
             <select
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border rounded-lg text-sm"
+              className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={statusFilter}
             >
               <option value="all">Semua Status</option>
@@ -250,7 +265,7 @@ function Users() {
             <div className="flex gap-2">
               <button
                 onClick={() => setTab("peserta")}
-                className={`px-3 py-2 rounded transition ${
+                className={`flex-1 px-3 py-2 rounded transition ${
                   tab === "peserta"
                     ? "bg-blue-600 text-white"
                     : "bg-gray-200 hover:bg-gray-300"
@@ -261,7 +276,7 @@ function Users() {
 
               <button
                 onClick={() => setTab("mentor")}
-                className={`px-3 py-2 rounded transition ${
+                className={`flex-1 px-3 py-2 rounded transition ${
                   tab === "mentor"
                     ? "bg-blue-600 text-white"
                     : "bg-gray-200 hover:bg-gray-300"
@@ -274,25 +289,25 @@ function Users() {
         </div>
 
         {/* CARDS */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-white p-4 rounded-xl shadow-sm">
             <p className="text-sm text-gray-500">Total Akun</p>
-            <h2 className="text-xl font-bold">{total}</h2>
+            <h2 className="text-2xl font-bold">{total}</h2>
           </div>
 
           <div className="bg-white p-4 rounded-xl shadow-sm">
             <p className="text-sm text-gray-500">Akun Aktif</p>
-            <h2 className="text-xl font-bold">{aktif}</h2>
+            <h2 className="text-2xl font-bold text-green-600">{aktif}</h2>
           </div>
 
           <div className="bg-white p-4 rounded-xl shadow-sm">
             <p className="text-sm text-gray-500">Akun Nonaktif</p>
-            <h2 className="text-xl font-bold text-orange-500">{non_aktif}</h2>
+            <h2 className="text-2xl font-bold text-orange-500">{non_aktif}</h2>
           </div>
         </div>
 
         {/* TABLE */}
-        <div className="bg-white rounded-2xl shadow-sm p-6">
+        <div className="bg-white rounded-2xl shadow-sm p-6 overflow-x-auto">
           {error && (
             <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">
               {error}
@@ -303,10 +318,10 @@ function Users() {
             <thead>
               <tr className="text-gray-500 border-b">
                 <th className="text-left py-3">Nama</th>
-                <th>Email</th>
-                <th>Divisi</th>
-                <th>Status</th>
-                <th>Aksi</th>
+                <th className="text-left">Email</th>
+                <th className="text-left">Divisi</th>
+                <th className="text-left">Status</th>
+                <th className="text-left">Aksi</th>
               </tr>
             </thead>
 
@@ -319,17 +334,19 @@ function Users() {
                 </tr>
               ) : (
                 filtered.map((item, i) => (
-                  <tr key={item.id} className="border-b hover:bg-gray-50">
-                    <td className="py-3 flex items-center gap-3">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold">
-                        {item.initials}
+                  <tr key={item.id || i} className="border-b hover:bg-gray-50">
+                    <td className="py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
+                          {item.initials}
+                        </div>
+                        <span className="font-medium">{item.name}</span>
                       </div>
-                      {item.name}
                     </td>
 
-                    <td>{item.email}</td>
+                    <td className="py-3">{item.email}</td>
 
-                    <td>
+                    <td className="py-3">
                       {item.divisi && (
                         <span className="bg-blue-100 text-blue-600 px-2 py-1 rounded text-xs">
                           {item.divisi}
@@ -337,32 +354,40 @@ function Users() {
                       )}
                     </td>
 
-                    <td>
+                    <td className="py-3">
                       {item.status === "aktif" ? (
-                        <span className="text-green-600 text-xs">● Aktif</span>
+                        <span className="text-green-600 text-xs font-medium">● Aktif</span>
                       ) : (
-                        <span className="text-red-500 text-xs">● Nonaktif</span>
+                        <span className="text-red-500 text-xs font-medium">● Nonaktif</span>
                       )}
                     </td>
 
-                    <td className="flex gap-3 py-3">
-                    
+                    <td className="py-3">
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => toggleStatus(i)}
+                          className="text-blue-600 hover:text-blue-800 transition"
+                          title={item.status === "aktif" ? "Nonaktifkan" : "Aktifkan"}
+                        >
+                          {item.status === "aktif" ? "🔴" : "🟢"}
+                        </button>
 
-                      <button
-                        onClick={() => handleEdit(i)}
-                        className="hover:opacity-70 transition"
-                        title="Edit"
-                      >
-                        ✏️
-                      </button>
+                        <button
+                          onClick={() => handleEdit(i)}
+                          className="text-gray-600 hover:text-gray-800 transition"
+                          title="Edit"
+                        >
+                          ✏️
+                        </button>
 
-                      <button
-                        onClick={() => handleDelete(i)}
-                        className="hover:opacity-70 transition"
-                        title="Hapus"
-                      >
-                        🗑️
-                      </button>
+                        <button
+                          onClick={() => handleDelete(i)}
+                          className="text-red-600 hover:text-red-800 transition"
+                          title="Hapus"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

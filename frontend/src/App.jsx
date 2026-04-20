@@ -1,70 +1,94 @@
-import { Routes, Route, Navigate } from "react-router-dom"
-import { useState, useEffect } from "react"
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 
-// 🔥 AUTH
-import Login from "./pages/auth/Login"
+// AUTH
+import Login from "./pages/auth/Login";
 
-// 🔥 ADMIN
-import AdminLayout from "./layouts/AdminLayout"
-import DashboardAdmin from "./pages/admin/Dashboard"
-import Users from "./pages/admin/Users"
-import AddMentor from "./pages/admin/AddMentor"
-import AddPeserta from "./pages/admin/AddPeserta"
-import EditUser from "./pages/admin/EditUser"
-import Divisi from "./pages/admin/Divisi"
+// ADMIN
+import AdminLayout from "./layouts/AdminLayout";
+import DashboardAdmin from "./pages/admin/Dashboard";
+import Users from "./pages/admin/Users";
+import AddMentor from "./pages/admin/AddMentor";
+import AddPeserta from "./pages/admin/AddPeserta";
+import EditUser from "./pages/admin/EditUser";
+import Divisi from "./pages/admin/Divisi";
 
-// 🔥 COO/MENTOR
-import CooLayout from "./layouts/CooLayout"
-import DashboardCOO from "./pages/coo/Dashboard"
-import Materi from "./pages/coo/Materi"
-import AddMateri from "./pages/coo/AddMateri"
-import EditMateri from "./pages/coo/EditMateri"
+// COO
+import CooLayout from "./layouts/CooLayout";
+import DashboardCOO from "./pages/coo/Dashboard";
+import Materi from "./pages/coo/Materi";
+import AddMateri from "./pages/coo/AddMateri";
+import EditMateri from "./pages/coo/EditMateri";
 
-// 🔥 QUIZ (COO/MENTOR)
-import Quiz from "./pages/coo/Quiz"
-import AddQuiz from "./pages/coo/AddQuiz"
-import AddQuestion from "./pages/coo/AddQuestion"
-import QuizDetail from "./pages/coo/QuizDetail"
+// QUIZ
+import Quiz from "./pages/coo/Quiz";
+import AddQuiz from "./pages/coo/AddQuiz";
+import AddQuestion from "./pages/coo/AddQuestion";
+import QuizDetail from "./pages/coo/QuizDetail";
+import EditQuiz from "./pages/coo/EditQuiz";  // <-- TAMBAH IMPORT
 
-// 🔥 COMPONENTS
-import ProtectedRoute from "./components/ProtectedRoute"
+// PRESENSI
+import Presensi from "./pages/coo/Presensi";
+import LaporanPresensi from "./pages/coo/LaporanPresensi";
+
+// SETTINGS
+import SettingsAttendance from "./pages/coo/SettingsAttendance";
+
+// COMPONENT
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
-  const [userRole, setUserRole] = useState(localStorage.getItem("role") || null)
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem("token"))
+  const [userRole, setUserRole] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const handleStorageChange = () => {
-      setIsAuthenticated(!!localStorage.getItem("token"))
-      setUserRole(localStorage.getItem("role"))
-    }
+    const token = localStorage.getItem("token");
+    const role = localStorage.getItem("role");
 
-    window.addEventListener("storage", handleStorageChange)
-    return () => window.removeEventListener("storage", handleStorageChange)
-  }, [])
+    setIsAuthenticated(!!token);
+    setUserRole(role);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const token = localStorage.getItem("token");
+      const role = localStorage.getItem("role");
+
+      setIsAuthenticated(!!token);
+      setUserRole(role);
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) return null;
 
   return (
     <Routes>
-      {/* LOGIN */}
       <Route path="/login" element={<Login />} />
 
-      {/* ROOT REDIRECT */}
-      <Route 
-        path="/" 
+      <Route
+        path="/"
         element={
           isAuthenticated ? (
-            userRole === "admin" ? <Navigate to="/admin/dashboard" replace /> :
-            userRole === "coo" || userRole === "mentor" ? <Navigate to="/coo/dashboard" replace /> :
-            <Navigate to="/login" replace />
+            userRole === "admin" ? (
+              <Navigate to="/admin/dashboard" replace />
+            ) : userRole === "coo" || userRole === "mentor" ? (
+              <Navigate to="/coo/dashboard" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
           ) : (
             <Navigate to="/login" replace />
           )
-        } 
+        }
       />
 
       {/* ADMIN */}
-      <Route 
-        path="/admin" 
+      <Route
+        path="/admin"
         element={
           <ProtectedRoute allowedRoles={["admin"]}>
             <AdminLayout />
@@ -81,8 +105,8 @@ function App() {
       </Route>
 
       {/* COO */}
-      <Route 
-        path="/coo" 
+      <Route
+        path="/coo"
         element={
           <ProtectedRoute allowedRoles={["coo", "mentor"]}>
             <CooLayout />
@@ -91,26 +115,32 @@ function App() {
       >
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<DashboardCOO />} />
-
-        {/* MATERI */}
+        
+        {/* Materi Routes */}
         <Route path="materi" element={<Materi />} />
         <Route path="add-materi" element={<AddMateri />} />
         <Route path="edit-materi/:id" element={<EditMateri />} />
-
-        {/* QUIZ */}
+        
+        {/* Quiz Routes */}
         <Route path="quiz" element={<Quiz />} />
+        <Route path="quiz/:id" element={<QuizDetail />} />
         <Route path="add-quiz" element={<AddQuiz />} />
         <Route path="add-question/:quizId" element={<AddQuestion />} />
-        <Route path="quiz/:id" element={<QuizDetail />} />
+        <Route path="edit-quiz/:id" element={<EditQuiz />} />  {/* <-- TAMBAH ROUTE INI */}
+        
+        {/* Presensi Routes */}
+        <Route path="presensi" element={<Presensi />} />
+        <Route path="laporan-presensi" element={<LaporanPresensi />} />
+        
+        {/* Settings Routes */}
+        <Route path="settings-attendance" element={<SettingsAttendance />} />
       </Route>
 
-      {/* 404 */}
       <Route path="*" element={<NotFound />} />
     </Routes>
-  )
+  );
 }
 
-// 404 COMPONENT
 function NotFound() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -122,7 +152,7 @@ function NotFound() {
         </a>
       </div>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
