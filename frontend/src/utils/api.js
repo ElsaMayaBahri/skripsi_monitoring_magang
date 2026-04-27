@@ -203,4 +203,98 @@ export const api = {
     });
     return handleResponse(response);
   },
+
+// ================= MATERI PELATIHAN =================
+async getMateri() {
+  const response = await fetch(`${API_URL}/materi`, {
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+},
+
+getMateriById: async (id) => {
+  try {
+    const token = localStorage.getItem("token")
+    const response = await fetch(`${API_BASE_URL}/materi/${id}`, {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      }
+    })
+    const data = await response.json()
+    return data
+  } catch (error) {
+    console.error("Error fetching materi by id:", error)
+    return { success: false, message: error.message }
+  }
+},
+
+async addMateri(formData) {
+  const token = getToken();
+
+  const response = await fetch(`${API_URL}/materi`, {
+    method: "POST",
+    headers: {
+      "Accept": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let errorMessage = `HTTP error! ${response.status}`;
+    try {
+      const errorData = await response.json();
+      if (errorData.errors) {
+        const firstError = Object.values(errorData.errors)[0];
+        errorMessage = Array.isArray(firstError) ? firstError[0] : firstError;
+      } else {
+        errorMessage = errorData.message || errorData.error || errorMessage;
+      }
+    } catch (e) {
+      errorMessage = `HTTP error! ${response.status}: ${response.statusText}`;
+    }
+    const error = new Error(errorMessage);
+    throw error;
+  }
+
+  const data = await response.json();
+  console.log("API Response success:", data);
+
+  // ✅ Selalu return dengan properti success
+  return { success: true, data };
+},
+
+async updateMateri(id, formData) {
+  const token = getToken();
+  
+  // Add _method for Laravel to handle as PUT
+  formData.append('_method', 'PUT');
+  
+  const response = await fetch(`${API_URL}/materi/${id}`, {
+    method: "POST", // Use POST with _method=PUT for file upload
+    headers: {
+      "Accept": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+    body: formData,
+  });
+  
+  return handleResponse(response);
+},
+
+async deleteMateri(id) {
+  const response = await fetch(`${API_URL}/materi/${id}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+},
+
+async getMateriByDivisi(divisi) {
+  const response = await fetch(`${API_URL}/materi-divisi/${divisi}`, {
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}, 
 };

@@ -35,14 +35,14 @@ function EditUser() {
       setError(null);
       try {
         // Load divisi list
-        const divisiResult = await api.getDivisiList();
+        const divisiResult = await api.getDivisi();
         const divisiData = divisiResult.data || divisiResult;
         setDivisiList(Array.isArray(divisiData) ? divisiData : []);
 
         // Load mentor list untuk peserta - PERBAIKAN: gunakan getMentorList()
         if (userRole === "peserta") {
           console.log("Loading mentor list...");
-          const mentorResult = await api.getMentorList();
+          const mentorResult = await api.getMentors();
           console.log("Mentor result:", mentorResult);
           const mentorData = mentorResult.data || mentorResult;
           setMentorList(Array.isArray(mentorData) ? mentorData : []);
@@ -378,39 +378,38 @@ function EditUser() {
 
           <div className="space-y-3">
             <select
-              name="divisi"
-              value={form.divisi || ""}
-              onChange={handleChange}
-              className="border p-2 rounded w-full"
-            >
-              <option value="">Pilih Divisi</option>
-              {divisiList.map((divisi) => (
-                <option key={divisi.id_divisi} value={divisi.nama_divisi}>
-                  {divisi.nama_divisi}
-                </option>
-              ))}
-            </select>
+  name="divisi"
+  value={form.divisi || ""}
+  onChange={handleChange}
+  className="border p-2 rounded w-full"
+>
+  <option key="divisi-default" value="">Pilih Divisi</option>
+  {divisiList.map((divisi) => (
+    <option key={divisi.id_divisi} value={divisi.nama_divisi}>
+      {divisi.nama_divisi}
+    </option>
+  ))}
+</select>
 
             {userRole === "peserta" && (
-              <select
-                name="mentor"
-                value={form.mentor || ""}
-                onChange={handleChange}
-                className="border p-2 rounded w-full"
-              >
-                <option value="">Pilih Mentor</option>
-                {mentorList.map((mentor) => {
-                  // Mendapatkan nama mentor dari struktur data yang benar
-                  const mentorName = mentor.user?.nama || mentor.nama || mentor.name;
-                  const mentorId = mentor.id_mentor || mentor.id;
-                  return (
-                    <option key={mentorId} value={mentorName}>
-                      {mentorName}
-                    </option>
-                  );
-                })}
-              </select>
-            )}
+  <select
+    name="mentor"
+    value={form.mentor || ""}
+    onChange={handleChange}
+    className="border p-2 rounded w-full"
+  >
+    <option key="mentor-default" value="">Pilih Mentor</option>
+    {mentorList.map((mentor) => {
+      const mentorName = mentor.user?.nama || mentor.nama || mentor.name;
+      const mentorId = mentor.id_mentor || mentor.id;
+      return (
+        <option key={mentorId} value={mentorName}>
+          {mentorName}
+        </option>
+      );
+    })}
+  </select>
+)}
           </div>
         </div>
       </div>

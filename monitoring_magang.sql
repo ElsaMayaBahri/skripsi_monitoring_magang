@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Apr 20, 2026 at 12:19 PM
+-- Generation Time: Apr 25, 2026 at 03:49 PM
 -- Server version: 8.0.42
 -- PHP Version: 8.3.16
 
@@ -33,14 +33,6 @@ CREATE TABLE `cache` (
   `expiration` int NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Dumping data for table `cache`
---
-
-INSERT INTO `cache` (`key`, `value`, `expiration`) VALUES
-('laravel-cache-a75f3f172bfb296f2e10cbfc6dfc1883', 'i:40;', 1776605774),
-('laravel-cache-a75f3f172bfb296f2e10cbfc6dfc1883:timer', 'i:1776605774;', 1776605774);
-
 -- --------------------------------------------------------
 
 --
@@ -67,19 +59,6 @@ CREATE TABLE `divisis` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `divisis`
---
-
-INSERT INTO `divisis` (`id_divisi`, `id_mentor`, `nama_divisi`, `deskripsi`, `created_at`, `updated_at`) VALUES
-(1, NULL, 'Engineering', 'Software Engineering & Development', '2026-04-17 02:53:46', '2026-04-17 02:53:46'),
-(2, NULL, 'Product Design', 'UI/UX Design & Product Development', '2026-04-17 02:53:46', '2026-04-17 02:53:46'),
-(3, NULL, 'Marketing', 'Digital Marketing & Branding', '2026-04-17 02:53:46', '2026-04-17 02:53:46'),
-(4, NULL, 'Human Resources', 'HR & Recruitment', '2026-04-17 02:53:46', '2026-04-17 02:53:46'),
-(5, NULL, 'Finance', 'Accounting & Finance', '2026-04-17 02:53:46', '2026-04-17 02:53:46'),
-(6, NULL, 'Operations', 'Business Operations', '2026-04-17 02:53:46', '2026-04-17 02:53:46'),
-(8, NULL, 'divisiiya', 'in', '2026-04-17 03:37:00', '2026-04-17 03:38:21');
 
 -- --------------------------------------------------------
 
@@ -235,7 +214,11 @@ CREATE TABLE `materi_mentors` (
 CREATE TABLE `materi_pelatihans` (
   `id_materi_pelatihan` bigint UNSIGNED NOT NULL,
   `judul` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `deskripsi` text COLLATE utf8mb4_unicode_ci,
+  `divisi` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `kategori` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `file_materi` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `views` int NOT NULL DEFAULT '0',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -254,14 +237,6 @@ CREATE TABLE `mentors` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `mentors`
---
-
-INSERT INTO `mentors` (`id_mentor`, `id_user`, `id_divisi`, `jabatan`, `created_at`, `updated_at`) VALUES
-(1, 5, 4, 'Mentor', '2026-04-17 02:55:18', '2026-04-17 02:55:18'),
-(2, 9, 8, 'Mentor', '2026-04-17 03:37:27', '2026-04-17 03:37:27');
 
 -- --------------------------------------------------------
 
@@ -303,7 +278,8 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES
 (21, '2026_04_06_111731_create_pengumpulan_tugas_table', 1),
 (22, '2026_04_13_152417_create_personal_access_tokens_table', 1),
 (23, '2026_04_15_113126_add_phone_to_users_table', 1),
-(24, '2026_04_17_101405_add_foreign_key_to_divisis_table', 2);
+(24, '2026_04_17_101405_add_foreign_key_to_divisis_table', 1),
+(25, '2026_04_24_115301_add_columns_to_materi_pelatihans_table', 1);
 
 -- --------------------------------------------------------
 
@@ -388,13 +364,6 @@ CREATE TABLE `personal_access_tokens` (
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Dumping data for table `personal_access_tokens`
---
-
-INSERT INTO `personal_access_tokens` (`id`, `tokenable_type`, `tokenable_id`, `name`, `token`, `abilities`, `last_used_at`, `expires_at`, `created_at`, `updated_at`) VALUES
-(1, 'App\\Models\\User', 1, 'auth_token', '6e2839376f5fc815f30c2be3e0c7f30da09ed43b586103835df9cf4b04fb39f7', '[\"admin\"]', '2026-04-19 06:36:02', NULL, '2026-04-17 02:54:41', '2026-04-19 06:36:02');
-
 -- --------------------------------------------------------
 
 --
@@ -416,15 +385,6 @@ CREATE TABLE `pesertas` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `pesertas`
---
-
-INSERT INTO `pesertas` (`id_peserta`, `id_user`, `id_mentor`, `id_sertifikat`, `id_nilai`, `id_divisi`, `asal_kampus`, `prodi`, `tanggal_mulai`, `tanggal_selesai`, `status_magang`, `created_at`, `updated_at`) VALUES
-(2, 7, 1, NULL, NULL, 1, 'Telkom', 'Teknik', '2026-04-17', NULL, 'aktif', '2026-04-17 03:02:07', '2026-04-17 03:02:07'),
-(3, 8, 1, NULL, NULL, 4, 'UPN', 'Sistem Informasi', '2026-04-17', NULL, 'aktif', '2026-04-17 03:24:24', '2026-04-17 03:24:24'),
-(4, 10, 1, NULL, NULL, 6, 'Unair', 'DKV', '2026-04-19', NULL, 'aktif', '2026-04-19 04:35:02', '2026-04-19 04:35:02');
 
 -- --------------------------------------------------------
 
@@ -536,21 +496,6 @@ CREATE TABLE `users` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `users`
---
-
-INSERT INTO `users` (`id_user`, `id_peserta`, `id_mentor`, `nama`, `email`, `no_telepon`, `password`, `role`, `status_akun`, `foto_profil`, `remember_token`, `email_verified_at`, `created_at`, `updated_at`) VALUES
-(1, NULL, NULL, 'Admin Sistem', 'admin@gmail.com', NULL, '$2y$12$bOrhz8kQ/O2H2BJWCIxLh.Rqvy7Bqm22i1mTJyqBVivnq2fH7J2Na', 'admin', 'aktif', NULL, NULL, NULL, '2026-04-17 02:45:33', '2026-04-17 02:53:46'),
-(2, NULL, NULL, 'COO Perusahaan', 'coo@gmail.com', NULL, '$2y$12$n.87msNfMa9CbQsr5XeFxOq0U03RvGhQhbAgE0S/IiLp50HRxeMGO', 'coo', 'aktif', NULL, NULL, NULL, '2026-04-17 02:45:33', '2026-04-17 02:53:46'),
-(3, NULL, NULL, 'Mentor Lapangan', 'mentor@gmail.com', NULL, '$2y$12$jAuCIOlvw8Y0ZggqHHT1Mun3JUOImHHw2rGm0Cya.q1yrh1kPsDxq', 'mentor', 'aktif', NULL, NULL, NULL, '2026-04-17 02:45:33', '2026-04-17 02:53:46'),
-(4, NULL, NULL, 'Peserta Magang', 'peserta@gmail.com', NULL, '$2y$12$RI54XRVyimQ91QGM6K5zTuhf/O7cs13MP310siNYMgqLczMIjykNW', 'peserta', 'aktif', NULL, NULL, NULL, '2026-04-17 02:45:33', '2026-04-17 02:53:46'),
-(5, NULL, NULL, 'Udin', 'udin12@gmail.com', '0813316278901', '$2y$12$9Lpa81cmgx2bykpRm2qDB.DMDZ7LNfWp05A0IsqCD8FvV8xo.op7C', 'mentor', 'aktif', NULL, NULL, NULL, '2026-04-17 02:55:18', '2026-04-17 02:55:18'),
-(7, NULL, NULL, 'Elsa Maya Bahri', 'elsa@gmail.com', '098718438567', '$2y$12$H1Z4iNjbmgVj5.tjMnpgbu1qZBWTfEWdwOciW2GZPBYs9Lnc14Yje', 'peserta', 'aktif', NULL, NULL, NULL, '2026-04-17 03:02:07', '2026-04-17 03:02:07'),
-(8, NULL, NULL, 'Wila', 'Wila@gmail.com', '098718438567', '$2y$12$t9X9jrlBAoVXqMCqMhgIau2QtkbQvzibAwY9WW6FcjOrb8Vr6QeQW', 'peserta', 'aktif', NULL, NULL, NULL, '2026-04-17 03:24:24', '2026-04-17 03:24:24'),
-(9, NULL, NULL, 'Elsa Maya Bahri', 'elsabahri27@gmail.com', '0813316278901', '$2y$12$.ksqpVGpnJU6b.dseTeh9eWqbpyjZvsl1WX2Axw2LEyr.ZiRZ2C8y', 'mentor', 'aktif', NULL, NULL, NULL, '2026-04-17 03:37:27', '2026-04-17 03:37:27'),
-(10, NULL, NULL, 'Maya', 'maya@gmail.com', '87234632785248', '$2y$12$G0VY9oA1Dda0XX4ur1ugTOi6TMcYSCUdL6DT33rEkrePM4.vJVYKG', 'peserta', 'aktif', NULL, NULL, NULL, '2026-04-19 04:35:02', '2026-04-19 04:35:02');
 
 --
 -- Indexes for dumped tables
@@ -791,7 +736,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `divisis`
 --
 ALTER TABLE `divisis`
-  MODIFY `id_divisi` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id_divisi` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `failed_jobs`
@@ -851,13 +796,13 @@ ALTER TABLE `materi_pelatihans`
 -- AUTO_INCREMENT for table `mentors`
 --
 ALTER TABLE `mentors`
-  MODIFY `id_mentor` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id_mentor` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `migrations`
 --
 ALTER TABLE `migrations`
-  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT for table `nilai_pesertas`
@@ -881,13 +826,13 @@ ALTER TABLE `pengumpulan_tugas`
 -- AUTO_INCREMENT for table `personal_access_tokens`
 --
 ALTER TABLE `personal_access_tokens`
-  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `pesertas`
 --
 ALTER TABLE `pesertas`
-  MODIFY `id_peserta` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id_peserta` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `presensis`
@@ -917,7 +862,7 @@ ALTER TABLE `tugas`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id_user` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id_user` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- Constraints for dumped tables

@@ -4,22 +4,19 @@ import axios from "axios"
 import logo from "../../assets/logo.png"
 import illustration from "../../assets/login.png"
 
-// 🔥 CONFIG API
 const API_URL = "http://localhost:8000/api"
 
-// 🔥 BUAT AXIOS INSTANCE (INI YANG KURANG!)
 const axiosInstance = axios.create({
   baseURL: API_URL,
-  withCredentials: true,
+  withCredentials: false,
   headers: {
-    "Accept": "application/json",
+    Accept: "application/json",
     "Content-Type": "application/json",
   },
 })
 
-// Setup axios default config (optional)
 axios.defaults.baseURL = API_URL
-axios.defaults.withCredentials = true
+axios.defaults.withCredentials = false
 axios.defaults.headers.common["Accept"] = "application/json"
 axios.defaults.headers.common["Content-Type"] = "application/json"
 

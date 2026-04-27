@@ -1,70 +1,198 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
-  FileText, Video, File, Eye, Edit2, Trash2, Plus, Search, 
-  Calendar, HardDrive, BookOpen, Users, ChevronRight, 
-  Download, Share2, Clock, CheckCircle, Award, TrendingUp,
-  FolderOpen, Link2, MoreVertical, Sparkles, Star, Zap,
-  Grid3x3, List, ArrowUpRight, Globe, Lock, Play, FileCheck,
-  BarChart3, PieChart, Layers, Crown, Gem, Rocket, Target
+import { api } from "../../utils/api";
+
+import {
+  FileText, Video, File, Eye, Edit2, Trash2, Plus, Search,
+  Calendar, HardDrive, BookOpen, Users, ChevronRight,
+  Download, Share2, Award, Sparkles,
+  Grid3x3, List, ArrowUpRight, FolderOpen, X, AlertCircle
 } from "lucide-react";
 
 function Materi() {
   const navigate = useNavigate();
+  const [previewUrl, setPreviewUrl] = useState(null)
+
   const [materi, setMateri] = useState([]);
   const [preview, setPreview] = useState(null);
   const [activeTab, setActiveTab] = useState("materi");
   const [searchQuery, setSearchQuery] = useState("");
+  
   const [viewMode, setViewMode] = useState("grid");
+  const [loading, setLoading] = useState(false);
+  const [divisiList, setDivisiList] = useState([]);
 
   useEffect(() => {
-    const data = JSON.parse(localStorage.getItem("materi")) || [];
-    setMateri(data);
+    fetchMateri();
   }, []);
 
-  const handleDelete = (index) => {
-    if (!confirm("Yakin ingin menghapus materi ini?")) return;
-    const updated = [...materi];
-    updated.splice(index, 1);
-    localStorage.setItem("materi", JSON.stringify(updated));
-    setMateri(updated);
+  const fetchMateri = async () => {
+    setLoading(true);
+
+    try {
+      const response = await api.getMateri();
+
+      if (response.success && response.data) {
+        setMateri(response.data);
+      } else {
+        setMateri([]);
+        console.error("Gagal mengambil data materi:", response.message);
+      }
+    } catch (error) {
+      console.error("Error fetch materi:", error);
+      setMateri([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handlePreview = (item, index) => {
-    setPreview({ ...item, index });
+  const handleDelete = async (id, index) => {
+    if (!confirm("Yakin ingin menghapus materi ini?")) return;
+
+    try {
+      if (id) {
+        await api.deleteMateri(id);
+      }
+
+      const updated = [...materi];
+      updated.splice(index, 1);
+      setMateri(updated);
+    } catch (error) {
+      console.error("Gagal menghapus materi:", error);
+      alert("Gagal menghapus materi");
+    }
   };
+
+const handlePreview = async (item, index) => {
+  setLoading(true)
+  try {
+    let fileUrl = null
+    
+    // Cek apakah item memiliki file_url atau file path
+    if (item.file_url) {
+      fileUrl = item.file_url
+    } else if (item.file_path) {
+      fileUrl = item.file_path
+    } else if (item.id || item.id_materi) {
+      // Jika hanya punya ID, fetch detail materi untuk mendapatkan URL file
+      const materiId = item.id || item.id_materi
+      const response = await api.getMateriById(materiId)
+      if (response.success && response.data) {
+        fileUrl = response.data.file_url || response.data.file_path
+        // Update item dengan data lengkap
+        item = { ...item, ...response.data }
+      }
+    }
+    
+    setPreview({
+      ...item,
+      index,
+      fileUrl: fileUrl
+    })
+  } catch (error) {
+    console.error("Error fetching file preview:", error)
+    setPreview({
+      ...item,
+      index,
+      fileUrl: null
+    })
+  } finally {
+    setLoading(false)
+  }
+}
 
   const getFileIcon = (type) => {
-    if (!type) return { icon: File, bg: "from-slate-100 to-slate-200", color: "text-slate-500", label: "File", gradient: "from-slate-500 to-slate-600" };
-    if (type.includes("pdf")) return { icon: FileText, bg: "from-red-50 to-red-100", color: "text-red-500", label: "PDF", gradient: "from-red-500 to-rose-500" };
-    if (type.includes("video")) return { icon: Video, bg: "from-blue-50 to-blue-100", color: "text-blue-500", label: "Video", gradient: "from-blue-500 to-indigo-500" };
-    if (type.includes("ppt")) return { icon: File, bg: "from-amber-50 to-amber-100", color: "text-amber-600", label: "PPT", gradient: "from-amber-500 to-orange-500" };
-    return { icon: File, bg: "from-slate-100 to-slate-200", color: "text-slate-500", label: "File", gradient: "from-slate-500 to-slate-600" };
+    if (!type) {
+      return {
+        icon: File,
+        bg: "from-slate-100 to-slate-200",
+        color: "text-slate-500",
+        label: "File",
+        gradient: "from-slate-500 to-slate-600"
+      };
+    }
+
+    const lowerType = type.toLowerCase();
+
+    if (lowerType.includes("pdf")) {
+      return {
+        icon: FileText,
+        bg: "from-red-50 to-red-100",
+        color: "text-red-500",
+        label: "PDF",
+        gradient: "from-red-500 to-rose-500"
+      };
+    }
+
+    if (lowerType.includes("video") || lowerType.includes("mp4")) {
+      return {
+        icon: Video,
+        bg: "from-blue-50 to-blue-100",
+        color: "text-blue-500",
+        label: "Video",
+        gradient: "from-blue-500 to-indigo-500"
+      };
+    }
+
+    if (
+      lowerType.includes("ppt") ||
+      lowerType.includes("pptx") ||
+      lowerType.includes("presentasi")
+    ) {
+      return {
+        icon: File,
+        bg: "from-amber-50 to-amber-100",
+        color: "text-amber-600",
+        label: "PPT",
+        gradient: "from-amber-500 to-orange-500"
+      };
+    }
+
+    if (
+      lowerType.includes("doc") ||
+      lowerType.includes("docx") ||
+      lowerType.includes("dokumen")
+    ) {
+      return {
+        icon: FileText,
+        bg: "from-emerald-50 to-emerald-100",
+        color: "text-emerald-600",
+        label: "DOC",
+        gradient: "from-emerald-500 to-teal-500"
+      };
+    }
+
+    return {
+      icon: File,
+      bg: "from-slate-100 to-slate-200",
+      color: "text-slate-500",
+      label: "File",
+      gradient: "from-slate-500 to-slate-600"
+    };
   };
 
-  const sampleMateri = [
-    { title: "Desain UX UI dan Komposisi Visual", divisi: "CREATIVE TECHNOLOGY", date: "12 Okt 2023", size: "2.4 MB", type: "pdf", author: "Budi Santoso", views: 45 },
-    { title: "Pelaporan Keuangan & Audit", divisi: "FRAMES", date: "10 Okt 2023", size: "14.20 MB", type: "video", author: "Sarah Wijaya", views: 128 },
-    { title: "Strategi Pemasaran Digital", divisi: "PPTX", date: "05 Okt 2023", size: "5.1 MB", type: "ppt", author: "Andi Saputra", views: 32 },
-    { title: "Manajemen Proyek Konstruksi", divisi: "ENGINEERING", date: "01 Okt 2023", size: "8.2 MB", type: "pdf", author: "Rizky Darmawan", views: 67 },
-  ];
+  const displayMateri = materi;
 
-  const displayMateri = materi.length > 0 ? materi : sampleMateri;
-  const filteredMateri = displayMateri.filter(m => 
-    m.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.divisi?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredMateri = displayMateri.filter((m) => {
+    const title = m.title || m.judul || "";
+    const divisi = m.divisi || "";
+
+    return (
+      title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      divisi.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
 
   const stats = {
     total: displayMateri.length,
-    divisi: [...new Set(displayMateri.map(m => m.divisi))].length,
+    divisi: [...new Set(displayMateri.map((m) => m.divisi))].length,
     totalViews: displayMateri.reduce((acc, m) => acc + (m.views || 0), 0)
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-[1400px] mx-auto">
-        
+
         {/* ===== HEADER SECTION ===== */}
         <div className="mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -84,7 +212,7 @@ function Materi() {
                 </div>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
@@ -96,7 +224,7 @@ function Materi() {
                   className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 w-60 text-sm text-slate-700 shadow-sm"
                 />
               </div>
-              
+
               <button
                 onClick={() => navigate("/coo/add-materi")}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
@@ -164,43 +292,39 @@ function Materi() {
           <div className="flex gap-1 p-1 bg-slate-100 rounded-xl w-fit">
             <button
               onClick={() => setActiveTab("materi")}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
-                activeTab === "materi"
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${activeTab === "materi"
                   ? "bg-white text-blue-600 shadow-md"
                   : "text-slate-500 hover:text-slate-700"
-              }`}
+                }`}
             >
               <FileText size={14} />
               Materi Pelatihan
             </button>
             <button
               onClick={() => setActiveTab("kuis")}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
-                activeTab === "kuis"
+              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${activeTab === "kuis"
                   ? "bg-white text-blue-600 shadow-md"
                   : "text-slate-500 hover:text-slate-700"
-              }`}
+                }`}
             >
               <Award size={14} />
               Kuis Pelatihan
             </button>
           </div>
-          
+
           {activeTab === "materi" && (
             <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
               <button
                 onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded-lg transition-all duration-200 ${
-                  viewMode === "grid" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500"
-                }`}
+                className={`p-1.5 rounded-lg transition-all duration-200 ${viewMode === "grid" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500"
+                  }`}
               >
                 <Grid3x3 size={16} />
               </button>
               <button
                 onClick={() => setViewMode("list")}
-                className={`p-1.5 rounded-lg transition-all duration-200 ${
-                  viewMode === "list" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500"
-                }`}
+                className={`p-1.5 rounded-lg transition-all duration-200 ${viewMode === "list" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500"
+                  }`}
               >
                 <List size={16} />
               </button>
@@ -211,7 +335,11 @@ function Materi() {
         {/* ===== MATERI GRID/LIST VIEW ===== */}
         {activeTab === "materi" && (
           <>
-            {filteredMateri.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                <p className="text-slate-500">Memuat data materi...</p>
+              </div>
+            ) : filteredMateri.length === 0 ? (
               <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 shadow-sm">
                 <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <FolderOpen size="32" className="text-slate-400" />
@@ -228,9 +356,18 @@ function Materi() {
             ) : viewMode === "grid" ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {filteredMateri.map((item, idx) => {
-                  const fileInfo = getFileIcon(item.type || item.file?.type);
+                  const fileInfo = getFileIcon(
+                    item.type ||
+                    item.tipe_file ||
+                    item.file_type ||
+                    item.kategori ||
+                    item.file?.type
+                  );
+
                   const FileIcon = fileInfo.icon;
-                  
+                  const title = item.title || item.judul || "Tanpa Judul";
+                  const id = item.id || item.id_materi;
+
                   return (
                     <div
                       key={idx}
@@ -247,7 +384,7 @@ function Materi() {
                           {fileInfo.label}
                         </span>
                       </div>
-                      
+
                       {/* Content */}
                       <div className="p-4">
                         <div className="flex items-start justify-between mb-2">
@@ -275,21 +412,24 @@ function Materi() {
                             </button>
                           </div>
                         </div>
-                        
+
                         <h3 className="font-semibold text-slate-800 text-sm mb-1 line-clamp-2 leading-snug">
-                          {item.title}
+                          {item.title || item.judul}
                         </h3>
-                        
+
                         <p className="text-[10px] text-slate-400 mb-2">{item.author || "Admin"}</p>
-                        
+
                         <div className="flex items-center gap-3 text-[10px] text-slate-400">
                           <span className="flex items-center gap-1">
                             <Calendar size={10} />
-                            {item.date || (item.createdAt ? new Date(item.createdAt).toLocaleDateString("id-ID") : "-")}
+                            {item.date || item.created_at || item.createdAt
+                              ? new Date(item.date || item.created_at || item.createdAt).toLocaleDateString("id-ID")
+                              : "-"
+                            }
                           </span>
                           <span className="flex items-center gap-1">
                             <HardDrive size={10} />
-                            {item.size || (item.file?.size ? `${(item.file.size / 1024).toFixed(1)} KB` : "-")}
+                            {item.size || item.ukuran_file || item.file_size || "-"}
                           </span>
                           <span className="flex items-center gap-1">
                             <Eye size={10} />
@@ -321,7 +461,7 @@ function Materi() {
                             <div className="w-8 h-8 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg flex items-center justify-center">
                               <File size={14} className="text-blue-500" />
                             </div>
-                            <span className="font-medium text-slate-800 text-sm">{item.title}</span>
+                            <span className="font-medium text-slate-800 text-sm">{title}</span>
                           </div>
                         </td>
                         <td className="px-5 py-3">
@@ -330,7 +470,10 @@ function Materi() {
                           </span>
                         </td>
                         <td className="px-5 py-3 text-sm text-slate-500">
-                          {item.date || (item.createdAt ? new Date(item.createdAt).toLocaleDateString("id-ID") : "-")}
+                          {item.date || item.created_at || item.createdAt
+                            ? new Date(item.date || item.created_at || item.createdAt).toLocaleDateString("id-ID")
+                            : "-"
+                          }
                         </td>
                         <td className="px-5 py-3 text-sm text-slate-500">
                           <div className="flex items-center gap-1">
@@ -343,7 +486,7 @@ function Materi() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/coo/edit-materi/${idx}`);
+                                navigate(`/coo/edit-materi/${id || idx}`);
                               }}
                               className="p-1.5 hover:bg-slate-100 rounded-lg transition"
                             >
@@ -352,7 +495,7 @@ function Materi() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDelete(idx);
+                                handleDelete(id, idx);
                               }}
                               className="p-1.5 hover:bg-red-50 rounded-lg transition"
                             >
@@ -383,7 +526,7 @@ function Materi() {
                   </div>
                   <p className="text-xs text-slate-400 ml-7">Kelola soal evaluasi untuk peserta</p>
                 </div>
-                <button 
+                <button
                   onClick={() => navigate("/coo/add-quiz")}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg text-white text-xs font-medium shadow-sm hover:shadow-md transition"
                 >
@@ -392,7 +535,7 @@ function Materi() {
                 </button>
               </div>
             </div>
-            
+
             <div className="divide-y divide-slate-100">
               {[
                 { title: "Evaluasi Dasar Teknik Sipil", questions: 20, duration: 30, participants: 45, avgScore: 78, status: "active" },
@@ -408,9 +551,8 @@ function Materi() {
                           <Award size={12} className="text-purple-600" />
                         </div>
                         <h4 className="font-semibold text-slate-800 text-sm">{quiz.title}</h4>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                          quiz.status === "active" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"
-                        }`}>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${quiz.status === "active" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"
+                          }`}>
                           {quiz.status === "active" ? "Aktif" : "Draft"}
                         </span>
                       </div>
@@ -421,7 +563,7 @@ function Materi() {
                         <span className="flex items-center gap-1">⭐ Rata-rata {quiz.avgScore}%</span>
                       </div>
                     </div>
-                    <button 
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
                         navigate(`/coo/quiz/${idx + 1}`);
@@ -440,48 +582,154 @@ function Materi() {
 
         {/* ===== PREVIEW MODAL ===== */}
         {preview && (
-          <div className="fixed inset-0 bg-black/90 z-50 flex flex-col animate-in fade-in duration-200">
-            <div className="bg-white px-5 py-3 flex items-center justify-between shadow-lg">
-              <div>
-                <h2 className="font-semibold text-slate-800">{preview.title}</h2>
-                <p className="text-xs text-slate-500 mt-0.5">{preview.divisi || "General"} • {preview.size || "Unknown"}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button className="p-2 hover:bg-slate-100 rounded-lg transition">
-                  <Download size={18} className="text-slate-600" />
-                </button>
-                <button className="p-2 hover:bg-slate-100 rounded-lg transition">
-                  <Share2 size={18} className="text-slate-600" />
-                </button>
-                <button 
-                  onClick={() => setPreview(null)}
-                  className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500"
-                >
-                  ✕
-                </button>
-              </div>
+  <div className="fixed inset-0 bg-black/90 z-50 flex flex-col animate-in fade-in duration-200">
+    <div className="bg-white px-5 py-3 flex items-center justify-between shadow-lg">
+      <div>
+        <h2 className="font-semibold text-slate-800">{preview.title || preview.judul}</h2>
+        <p className="text-xs text-slate-500 mt-0.5">{preview.divisi || "General"} • {preview.size || preview.ukuran_file || "Unknown"}</p>
+      </div>
+      <div className="flex items-center gap-2">
+        {/* Tombol Download */}
+        <button 
+          onClick={() => {
+            if (preview.fileUrl) {
+              window.open(preview.fileUrl, '_blank');
+            } else if (preview.file_url) {
+              window.open(preview.file_url, '_blank');
+            } else if (preview.file_path) {
+              window.open(preview.file_path, '_blank');
+            }
+          }}
+          className="p-2 hover:bg-slate-100 rounded-lg transition"
+        >
+          <Download size={18} className="text-slate-600" />
+        </button>
+        <button
+          onClick={() => setPreview(null)}
+          className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+
+    <div className="flex-1 flex items-center justify-center p-6">
+      {loading ? (
+        <div className="text-center text-white">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-slate-400">Memuat preview...</p>
+        </div>
+      ) : (() => {
+        // Mendapatkan URL file dari berbagai sumber
+        const fileUrl = preview.fileUrl || preview.file_url || preview.file_path;
+        const fileType = preview.type || preview.tipe_file || preview.file_type || preview.kategori;
+        
+        // Cek tipe file
+        const isPDF = fileType?.toLowerCase().includes('pdf') || fileUrl?.toLowerCase().includes('.pdf');
+        const isVideo = fileType?.toLowerCase().includes('video') || 
+                       fileType?.toLowerCase().includes('mp4') ||
+                       fileUrl?.toLowerCase().includes('.mp4') ||
+                       fileUrl?.toLowerCase().includes('.webm');
+        const isImage = fileType?.toLowerCase().includes('image') ||
+                       fileUrl?.toLowerCase().includes('.jpg') ||
+                       fileUrl?.toLowerCase().includes('.jpeg') ||
+                       fileUrl?.toLowerCase().includes('.png') ||
+                       fileUrl?.toLowerCase().includes('.gif');
+        const isDoc = fileType?.toLowerCase().includes('doc') ||
+                     fileUrl?.toLowerCase().includes('.doc') ||
+                     fileUrl?.toLowerCase().includes('.docx');
+        
+        if (!fileUrl) {
+          return (
+            <div className="text-center text-white">
+              <File size={64} className="mx-auto mb-4 opacity-50" />
+              <p className="text-slate-400 mb-4">Preview tidak tersedia</p>
+              <button 
+                onClick={() => {
+                  // Coba download file jika ada ID
+                  if (preview.id || preview.id_materi) {
+                    const materiId = preview.id || preview.id_materi;
+                    api.downloadMateri?.(materiId);
+                  }
+                }}
+                className="px-5 py-2 bg-white/20 rounded-lg text-sm hover:bg-white/30 transition"
+              >
+                Download File
+              </button>
             </div>
-            
-            <div className="flex-1 flex items-center justify-center p-6">
-              {preview.file?.type?.includes("pdf") ? (
-                <iframe src={preview.file.url} className="w-full h-full rounded-lg shadow-2xl" />
-              ) : preview.file?.type?.includes("video") ? (
-                <video src={preview.file.url} controls className="max-w-full max-h-full rounded-lg shadow-2xl" />
-              ) : (
-                <div className="text-center text-white">
-                  <File size={64} className="mx-auto mb-4 opacity-50" />
-                  <p className="text-slate-400">Preview tidak tersedia</p>
-                  <button className="mt-4 px-5 py-2 bg-white/20 rounded-lg text-sm hover:bg-white/30 transition">
-                    Download File
-                  </button>
-                </div>
-              )}
-            </div>
+          );
+        }
+        
+        // Preview PDF
+        if (isPDF) {
+          return (
+            <iframe 
+              src={`${fileUrl}#toolbar=0`} 
+              className="w-full h-full rounded-lg shadow-2xl bg-white"
+              title="PDF Preview"
+            />
+          );
+        }
+        
+        // Preview Video
+        if (isVideo) {
+          return (
+            <video 
+              src={fileUrl} 
+              controls 
+              autoPlay
+              className="max-w-full max-h-full rounded-lg shadow-2xl"
+            >
+              Browser Anda tidak mendukung video tag.
+            </video>
+          );
+        }
+        
+        // Preview Image
+        if (isImage) {
+          return (
+            <img 
+              src={fileUrl} 
+              alt={preview.title || preview.judul}
+              className="max-w-full max-h-full rounded-lg shadow-2xl object-contain"
+            />
+          );
+        }
+        
+        // Preview Dokumen (Google Docs Viewer untuk Word/Excel/PPT)
+        if (isDoc || fileType?.toLowerCase().includes('presentasi') || fileType?.toLowerCase().includes('ppt')) {
+          const googleDocsUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`;
+          return (
+            <iframe 
+              src={googleDocsUrl}
+              className="w-full h-full rounded-lg shadow-2xl bg-white"
+              title="Document Preview"
+            />
+          );
+        }
+        
+        // Fallback untuk tipe file lain
+        return (
+          <div className="text-center text-white">
+            <File size={64} className="mx-auto mb-4 opacity-50" />
+            <p className="text-slate-400 mb-2">Preview tidak tersedia untuk tipe file ini</p>
+            <p className="text-xs text-slate-500 mb-4">{fileType || 'Unknown type'}</p>
+            <button 
+              onClick={() => window.open(fileUrl, '_blank')}
+              className="px-5 py-2 bg-white/20 rounded-lg text-sm hover:bg-white/30 transition inline-flex items-center gap-2"
+            >
+              <Download size={16} />
+              Buka / Download File
+            </button>
           </div>
-        )}
+        );
+      })()}
+    </div>
+  </div>
+)}
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
