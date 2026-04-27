@@ -3,8 +3,10 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MentorController;
 use App\Http\Controllers\Api\PesertaController;
-use App\Http\Controllers\Api\DivisiController; // Tambahkan ini
+use App\Http\Controllers\Api\DivisiController;
+use App\Http\Controllers\Api\MateriPelatihanController;
 use Illuminate\Support\Facades\Route;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -27,7 +29,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     
-    // Divisi routes (Tambahkan ini)
+    // Divisi routes
     Route::get('/divisi', [DivisiController::class, 'index']);
     Route::post('/divisi', [DivisiController::class, 'store']);
     Route::put('/divisi/{id}', [DivisiController::class, 'update']);
@@ -44,6 +46,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/peserta', [PesertaController::class, 'store']);
     Route::put('/peserta/{id}', [PesertaController::class, 'update']);
     Route::delete('/peserta/{id}', [PesertaController::class, 'destroy']);
+    
+    // ================= MATERI PELATIHAN ROUTES =================
+    Route::get('/materi', [MateriPelatihanController::class, 'index']);
+    Route::post('/materi', [MateriPelatihanController::class, 'store']);
+    Route::get('/materi/{id}', [MateriPelatihanController::class, 'show']);
+    Route::put('/materi/{id}', [MateriPelatihanController::class, 'update']);
+    Route::delete('/materi/{id}', [MateriPelatihanController::class, 'destroy']);
+    Route::get('/materi-divisi/{divisi}', [MateriPelatihanController::class, 'getByDivisi']);
+    
     
     // Additional list
     Route::get('/mentor-list', [MentorController::class, 'getMentorList']);
