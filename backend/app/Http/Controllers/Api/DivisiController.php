@@ -32,6 +32,7 @@ class DivisiController extends Controller
         $validator = Validator::make($request->all(), [
             'nama_divisi' => 'required|string|max:100|unique:divisis,nama_divisi',
             'deskripsi' => 'nullable|string',
+            'status' => 'nullable|in:aktif,non_aktif',
             'id_mentor' => 'nullable|exists:mentors,id_mentor'
         ]);
 
@@ -47,6 +48,7 @@ class DivisiController extends Controller
             $divisi = Divisi::create([
                 'nama_divisi' => $request->nama_divisi,
                 'deskripsi' => $request->deskripsi,
+                'status' => $request->status ?? 'aktif',
                 'id_mentor' => $request->id_mentor
             ]);
 
@@ -69,6 +71,7 @@ class DivisiController extends Controller
         $validator = Validator::make($request->all(), [
             'nama_divisi' => 'required|string|max:100|unique:divisis,nama_divisi,' . $id . ',id_divisi',
             'deskripsi' => 'nullable|string',
+            'status' => 'nullable|in:aktif,non_aktif',
             'id_mentor' => 'nullable|exists:mentors,id_mentor'
         ]);
 
@@ -83,11 +86,18 @@ class DivisiController extends Controller
         try {
             $divisi = Divisi::findOrFail($id);
             
-            $divisi->update([
+            $updateData = [
                 'nama_divisi' => $request->nama_divisi,
                 'deskripsi' => $request->deskripsi,
                 'id_mentor' => $request->id_mentor
-            ]);
+            ];
+            
+            // 🔥 TAMBAHKAN status jika ada dalam request
+            if ($request->has('status')) {
+                $updateData['status'] = $request->status;
+            }
+            
+            $divisi->update($updateData);
 
             return response()->json([
                 'success' => true,
@@ -126,6 +136,25 @@ class DivisiController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete divisi',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    // Optional: Get divisi list for dropdown (aktif only)
+    public function getActiveDivisi()
+    {
+        try {
+            $divisi = Divisi::where('status', 'aktif')->get(['id_divisi', 'nama_divisi']);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $divisi
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch aktif divisi',
                 'error' => $e->getMessage()
             ], 500);
         }
