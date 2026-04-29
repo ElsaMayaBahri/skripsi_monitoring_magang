@@ -1,5 +1,5 @@
-import { Routes, Route, Navigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
 
 // AUTH
 import Login from "./pages/auth/Login";
@@ -25,7 +25,7 @@ import Quiz from "./pages/coo/Quiz";
 import AddQuiz from "./pages/coo/AddQuiz";
 import AddQuestion from "./pages/coo/AddQuestion";
 import QuizDetail from "./pages/coo/QuizDetail";
-import EditQuiz from "./pages/coo/EditQuiz";  // <-- TAMBAH IMPORT
+import EditQuiz from "./pages/coo/EditQuiz";
 
 // PRESENSI
 import Presensi from "./pages/coo/Presensi";
@@ -37,15 +37,23 @@ import SettingsAttendance from "./pages/coo/SettingsAttendance";
 // COMPONENT
 import ProtectedRoute from "./components/ProtectedRoute";
 
+// ── AUTO LOGOUT
+import useIdleTimeout from "./hooks/useIdleTimeout";
+import IdleWarningModal from "./components/IdleWarningModal";
+
+// ─── Konfigurasi waktu idle ───
+const IDLE_MINUTES    = 2; // Auto-logout setelah 2 menit tidak aktif
+const WARNING_MINUTES = 1;  // Tampilkan warning 1 menit sebelum logout
+
 function App() {
   const [userRole, setUserRole] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    const role = localStorage.getItem("role");
-
+    const role  = localStorage.getItem("role");
     setIsAuthenticated(!!token);
     setUserRole(role);
     setLoading(false);
@@ -54,90 +62,126 @@ function App() {
   useEffect(() => {
     const interval = setInterval(() => {
       const token = localStorage.getItem("token");
-      const role = localStorage.getItem("role");
-
+      const role  = localStorage.getItem("role");
       setIsAuthenticated(!!token);
       setUserRole(role);
     }, 500);
-
     return () => clearInterval(interval);
   }, []);
+
+  // ── Handler auto-logout ─────────────────────────────────────────────────
+  const handleAutoLogout = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (token) {
+        await fetch("http://localhost:8000/api/logout", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Accept": "application/json",
+          },
+        }).catch(() => {}); // abaikan error jaringan
+      }
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("role");
+
+      // Tandai agar Login.jsx bisa tampilkan notifikasi
+      sessionStorage.setItem("autoLogout", "true");
+
+      navigate("/login", { replace: true });
+    }
+  }, [navigate]);
+
+  // ── Idle timeout — hanya aktif kalau user sedang login ─────────────────
+  const { showWarning, countdown, formatCountdown, continueSession } =
+    useIdleTimeout({
+      idleMinutes:    IDLE_MINUTES,
+      warningMinutes: WARNING_MINUTES,
+      onLogout:       handleAutoLogout,
+      enabled:        isAuthenticated, // timer TIDAK jalan di halaman login
+    });
 
   if (loading) return null;
 
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
+    <>
+      <Routes>
+        <Route path="/login" element={<Login />} />
 
-      <Route
-        path="/"
-        element={
-          isAuthenticated ? (
-            userRole === "admin" ? (
-              <Navigate to="/admin/dashboard" replace />
-            ) : userRole === "coo" || userRole === "mentor" ? (
-              <Navigate to="/coo/dashboard" replace />
+        <Route
+          path="/"
+          element={
+            isAuthenticated ? (
+              userRole === "admin" ? (
+                <Navigate to="/admin/dashboard" replace />
+              ) : userRole === "coo" || userRole === "mentor" ? (
+                <Navigate to="/coo/dashboard" replace />
+              ) : (
+                <Navigate to="/login" replace />
+              )
             ) : (
               <Navigate to="/login" replace />
             )
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
+          }
+        />
 
-      {/* ADMIN */}
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute allowedRoles={["admin"]}>
-            <AdminLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Navigate to="dashboard" replace />} />
-        <Route path="dashboard" element={<DashboardAdmin />} />
-        <Route path="users" element={<Users />} />
-        <Route path="add-mentor" element={<AddMentor />} />
-        <Route path="add-peserta" element={<AddPeserta />} />
-        <Route path="edit-user/:id" element={<EditUser />} />
-        <Route path="divisi" element={<Divisi />} />
-      </Route>
+        {/* ADMIN */}
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard"       element={<DashboardAdmin />} />
+          <Route path="users"           element={<Users />} />
+          <Route path="add-mentor"      element={<AddMentor />} />
+          <Route path="add-peserta"     element={<AddPeserta />} />
+          <Route path="edit-user/:id"   element={<EditUser />} />
+          <Route path="divisi"          element={<Divisi />} />
+        </Route>
 
-      {/* COO */}
-      <Route
-        path="/coo"
-        element={
-          <ProtectedRoute allowedRoles={["coo", "mentor"]}>
-            <CooLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Navigate to="dashboard" replace />} />
-        <Route path="dashboard" element={<DashboardCOO />} />
-        
-        {/* Materi Routes */}
-        <Route path="materi" element={<Materi />} />
-        <Route path="add-materi" element={<AddMateri />} />
-        <Route path="edit-materi/:id" element={<EditMateri />} />
-        
-        {/* Quiz Routes */}
-        <Route path="quiz" element={<Quiz />} />
-        <Route path="quiz/:id" element={<QuizDetail />} />
-        <Route path="add-quiz" element={<AddQuiz />} />
-        <Route path="add-question/:quizId" element={<AddQuestion />} />
-        <Route path="edit-quiz/:id" element={<EditQuiz />} />  {/* <-- TAMBAH ROUTE INI */}
-        
-        {/* Presensi Routes */}
-        <Route path="presensi" element={<Presensi />} />
-        <Route path="laporan-presensi" element={<LaporanPresensi />} />
-        
-        {/* Settings Routes */}
-        <Route path="settings-attendance" element={<SettingsAttendance />} />
-      </Route>
+        {/* COO */}
+        <Route
+          path="/coo"
+          element={
+            <ProtectedRoute allowedRoles={["coo", "mentor"]}>
+              <CooLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard"            element={<DashboardCOO />} />
+          <Route path="materi"               element={<Materi />} />
+          <Route path="add-materi"           element={<AddMateri />} />
+          <Route path="edit-materi/:id"      element={<EditMateri />} />
+          <Route path="quiz"                 element={<Quiz />} />
+          <Route path="quiz/:id"             element={<QuizDetail />} />
+          <Route path="add-quiz"             element={<AddQuiz />} />
+          <Route path="add-question/:quizId" element={<AddQuestion />} />
+          <Route path="edit-quiz/:id"        element={<EditQuiz />} />
+          <Route path="presensi"             element={<Presensi />} />
+          <Route path="laporan-presensi"     element={<LaporanPresensi />} />
+          <Route path="settings-attendance"  element={<SettingsAttendance />} />
+        </Route>
 
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+
+      {/* Modal muncul di atas semua halaman, hanya saat sudah login */}
+      {isAuthenticated && showWarning && (
+        <IdleWarningModal
+          countdown={countdown}
+          formatCountdown={formatCountdown}
+          onContinue={continueSession}
+          onLogout={handleAutoLogout}
+        />
+      )}
+    </>
   );
 }
 
