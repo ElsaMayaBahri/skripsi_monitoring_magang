@@ -21,15 +21,28 @@ class MentorController extends Controller
             ->get()
             ->map(function ($user) {
                 return [
+                    'id_mentor' => $user->mentor ? $user->mentor->id_mentor : null,  // 🔥 TAMBAHKAN id_mentor
                     'id_user' => $user->id_user,
                     'email' => $user->email,
                     'name' => $user->nama,
+                    'nama' => $user->nama,  // 🔥 TAMBAHKAN alias name/nama
                     'phone' => $user->no_telepon,
+                    'no_telepon' => $user->no_telepon,
                     'divisi' => $user->mentor && $user->mentor->divisi ? $user->mentor->divisi->nama_divisi : '',
+                    'id_divisi' => $user->mentor ? $user->mentor->id_divisi : null,  // 🔥 TAMBAHKAN id_divisi
                     'jabatan' => $user->mentor ? $user->mentor->jabatan : '',
                     'status' => $user->status_akun === 'aktif',
+                    'status_akun' => $user->status_akun,  // 🔥 TAMBAHKAN status_akun
                     'role' => $user->role,
-                    'initials' => $this->getInitials($user->nama)
+                    'initials' => $this->getInitials($user->nama),
+                    'user' => [  // 🔥 TAMBAHKAN object user untuk kompatibilitas frontend
+                        'id_user' => $user->id_user,
+                        'nama' => $user->nama,
+                        'email' => $user->email,
+                        'no_telepon' => $user->no_telepon,
+                        'status_akun' => $user->status_akun,
+                        'role' => $user->role
+                    ]
                 ];
             });
 
@@ -52,9 +65,25 @@ class MentorController extends Controller
     public function getMentorList()
     {
         $mentors = Mentor::with('user')->get();
+        
+        $formattedMentors = $mentors->map(function($mentor) {
+            return [
+                'id_mentor' => $mentor->id_mentor,  // 🔥 PASTIKAN ID MENTOR ADA
+                'id_user' => $mentor->id_user,
+                'nama' => $mentor->user ? $mentor->user->nama : null,
+                'email' => $mentor->user ? $mentor->user->email : null,
+                'no_telepon' => $mentor->user ? $mentor->user->no_telepon : null,
+                'status_akun' => $mentor->user ? $mentor->user->status_akun : null,
+                'id_divisi' => $mentor->id_divisi,
+                'jabatan' => $mentor->jabatan,
+                'divisi' => $mentor->divisi ? $mentor->divisi->nama_divisi : null,
+                'user' => $mentor->user  // 🔥 SERTAKAN USER OBJECT
+            ];
+        });
+        
         return response()->json([
             'success' => true,
-            'data' => $mentors
+            'data' => $formattedMentors
         ]);
     }
 
@@ -106,14 +135,25 @@ class MentorController extends Controller
                 'success' => true,
                 'message' => 'Mentor berhasil ditambahkan',
                 'data' => [
+                    'id_mentor' => $mentor->id_mentor,  // 🔥 KEMBALIKAN id_mentor
                     'id_user' => $user->id_user,
                     'email' => $user->email,
                     'name' => $user->nama,
                     'phone' => $user->no_telepon,
                     'divisi' => $request->divisi,
+                    'id_divisi' => $id_divisi,
                     'jabatan' => $request->jabatan,
                     'status' => $user->status_akun === 'aktif',
-                    'initials' => $this->getInitials($user->nama)
+                    'status_akun' => $user->status_akun,
+                    'initials' => $this->getInitials($user->nama),
+                    'user' => [  // 🔥 SERTAKAN USER OBJECT
+                        'id_user' => $user->id_user,
+                        'nama' => $user->nama,
+                        'email' => $user->email,
+                        'no_telepon' => $user->no_telepon,
+                        'status_akun' => $user->status_akun,
+                        'role' => $user->role
+                    ]
                 ]
             ]);
         } catch (\Exception $e) {
@@ -136,15 +176,15 @@ class MentorController extends Controller
             'phone'     => 'nullable|string|max:20',
             'divisi'    => 'nullable|string|exists:divisis,nama_divisi',
             'jabatan'   => 'nullable|string|max:100',
-            'status'    => 'nullable|boolean',      // ✅ boolean dari frontend
-            'status_akun' => 'nullable|in:aktif,non_aktif', // ✅ fallback string
+            'status'    => 'nullable|boolean',
+            'status_akun' => 'nullable|in:aktif,non_aktif',
         ]);
 
         try {
             DB::beginTransaction();
 
-            // ✅ Resolve status_akun dari boolean 'status' ATAU string 'status_akun'
-            $statusAkun = 'aktif'; // default
+            // Resolve status_akun
+            $statusAkun = 'aktif';
             if ($request->has('status')) {
                 $statusAkun = $request->status ? 'aktif' : 'non_aktif';
             } elseif ($request->has('status_akun')) {
@@ -156,7 +196,7 @@ class MentorController extends Controller
                 'email'      => $request->email,
                 'nama'       => $request->name,
                 'no_telepon' => $request->phone,
-                'status_akun' => $statusAkun,      // ✅ nilai pasti valid
+                'status_akun' => $statusAkun,
             ]);
 
             if ($request->filled('password')) {
@@ -171,7 +211,8 @@ class MentorController extends Controller
                     $id_divisi = $divisi->id_divisi;
                 }
             }
-            Mentor::updateOrCreate(
+            
+            $mentor = Mentor::updateOrCreate(
                 ['id_user' => $user->id_user],
                 [
                     'id_divisi' => $id_divisi,
@@ -183,7 +224,16 @@ class MentorController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Mentor berhasil diupdate'
+                'message' => 'Mentor berhasil diupdate',
+                'data' => [
+                    'id_mentor' => $mentor->id_mentor,  // 🔥 KEMBALIKAN id_mentor
+                    'id_user' => $user->id_user,
+                    'name' => $user->nama,
+                    'email' => $user->email,
+                    'divisi' => $request->divisi,
+                    'jabatan' => $request->jabatan,
+                    'status_akun' => $user->status_akun
+                ]
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -198,8 +248,23 @@ class MentorController extends Controller
     public function destroy($id)
     {
         try {
-            $user = User::where('id_user', $id)->where('role', 'mentor')->firstOrFail();
-            $user->delete();
+            // Cari mentor berdasarkan id_mentor
+            $mentor = Mentor::where('id_mentor', $id)->first();
+            
+            if (!$mentor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Mentor tidak ditemukan'
+                ], 404);
+            }
+            
+            $user = User::where('id_user', $mentor->id_user)->where('role', 'mentor')->first();
+            
+            if ($user) {
+                $user->delete();
+            }
+            
+            $mentor->delete();
 
             return response()->json([
                 'success' => true,
@@ -209,6 +274,42 @@ class MentorController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal menghapus mentor: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Get mentor by ID
+    public function show($id)
+    {
+        try {
+            $mentor = Mentor::with('user')->where('id_mentor', $id)->first();
+            
+            if (!$mentor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Mentor tidak ditemukan'
+                ], 404);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id_mentor' => $mentor->id_mentor,
+                    'id_user' => $mentor->id_user,
+                    'nama' => $mentor->user ? $mentor->user->nama : null,
+                    'email' => $mentor->user ? $mentor->user->email : null,
+                    'no_telepon' => $mentor->user ? $mentor->user->no_telepon : null,
+                    'status_akun' => $mentor->user ? $mentor->user->status_akun : null,
+                    'id_divisi' => $mentor->id_divisi,
+                    'jabatan' => $mentor->jabatan,
+                    'divisi' => $mentor->divisi ? $mentor->divisi->nama_divisi : null,
+                    'user' => $mentor->user
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengambil data mentor: ' . $e->getMessage()
             ], 500);
         }
     }

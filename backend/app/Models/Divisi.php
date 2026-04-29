@@ -16,6 +16,12 @@ class Divisi extends Model
         'id_mentor',
         'nama_divisi',
         'deskripsi',
+        'status',  // 🔥 TAMBAHKAN FIELD STATUS
+    ];
+    
+    // Default values
+    protected $attributes = [
+        'status' => 'aktif',
     ];
 
     public function mentor()
