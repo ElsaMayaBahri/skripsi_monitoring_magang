@@ -19,8 +19,8 @@ import IdleWarningModal from "../components/IdleWarningModal";
  *   </Route>
  */
 
-const IDLE_MINUTES    = 2; // Logout setelah X menit tidak aktif
-const WARNING_MINUTES = 1;  // Tampilkan warning X menit sebelum logout
+const IDLE_MINUTES    = 120; // Logout setelah X menit tidak aktif
+const WARNING_MINUTES = 10;  // Tampilkan warning X menit sebelum logout
 
 function ProtectedLayout() {
   const navigate = useNavigate();

@@ -44,8 +44,8 @@ import useIdleTimeout from "./hooks/useIdleTimeout";
 import IdleWarningModal from "./components/IdleWarningModal";
 
 // ─── Konfigurasi waktu idle ───
-const IDLE_MINUTES    = 2; // Auto-logout setelah 2 menit tidak aktif
-const WARNING_MINUTES = 1;  // Tampilkan warning 1 menit sebelum logout
+const IDLE_MINUTES    = 120; // Auto-logout setelah 2 menit tidak aktif
+const WARNING_MINUTES = 5;  // Tampilkan warning 1 menit sebelum logout
 
 function App() {
   const [userRole, setUserRole] = useState(null);

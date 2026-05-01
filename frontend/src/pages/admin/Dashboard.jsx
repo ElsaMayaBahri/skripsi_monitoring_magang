@@ -47,8 +47,14 @@ function DashboardAdmin() {
 
   // Load activities dari localStorage menggunakan activityLogger
   const loadActivities = () => {
-    const savedActivities = getActivities()
-    setActivities(savedActivities)
+    try {
+      const savedActivities = getActivities()
+      console.log("Loaded activities from localStorage:", savedActivities.length)
+      setActivities(savedActivities)
+    } catch (err) {
+      console.error("Error loading activities:", err)
+      setActivities([])
+    }
   }
 
   const fetchAll = async () => {
@@ -89,7 +95,7 @@ function DashboardAdmin() {
       loadActivities()
       
     } catch (err) {
-      setError("Gagal memuat data: " + err.message)
+      setError("Gagal memuat数据: " + err.message)
     } finally {
       setLoading(false)
     }
@@ -100,15 +106,23 @@ function DashboardAdmin() {
     
     const handleStorageChange = (e) => {
       if (e.key === "system_activities") {
+        console.log("Storage event detected, reloading activities")
         loadActivities()
       }
     }
     window.addEventListener("storage", handleStorageChange)
     
-    return () => window.removeEventListener("storage", handleStorageChange)
+    // Refresh setiap 5 detik untuk memastikan data up-to-date
+    const interval = setInterval(() => {
+      loadActivities()
+    }, 5000)
+    
+    return () => {
+      window.removeEventListener("storage", handleStorageChange)
+      clearInterval(interval)
+    }
   }, [])
 
-  // STATS
   const totalPeserta = pesertaList.length
   const totalMentor = mentorList.length
   const totalDivisi = divisiList.filter(d => d.status === "aktif").length
@@ -128,7 +142,6 @@ function DashboardAdmin() {
   const aktif = totalAkun - nonAktif
   const persenAktif = totalAkun > 0 ? Math.round((aktif / totalAkun) * 100) : 0
 
-  // Statistik per divisi
   const divisiStats = divisiList
     .filter(div => div.status === "aktif")
     .map((div) => {
@@ -156,13 +169,11 @@ function DashboardAdmin() {
         nama: divisiName.length > 18 ? divisiName.substring(0, 16) + "..." : divisiName,
         peserta: pesertaCount,
         mentor: mentorCount,
-        total: pesertaCount + mentorCount,
       }
     })
     .sort((a, b) => b.peserta - a.peserta)
     .slice(0, 3)
 
-  // Helper format tanggal
   const formatDate = (dateString) => {
     if (!dateString) return "Tanggal tidak tersedia"
     try {
@@ -191,7 +202,6 @@ function DashboardAdmin() {
     }
   }
 
-  // Helper get initials
   const getInitialsHelper = (name) => {
     if (!name || name === "-" || name === "No Name") return "?"
     const parts = name.trim().split(" ")
@@ -199,7 +209,6 @@ function DashboardAdmin() {
     return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
   }
 
-  // Gabungkan semua user
   const allUsers = [
     ...pesertaList.map((p) => {
       const userName = p.user?.nama || p.nama || "-"
@@ -263,7 +272,6 @@ function DashboardAdmin() {
     }),
   ]
 
-  // Aktivitas dari activityLogger
   const recentActivities = [...activities]
     .filter(a => a.type === "create" || a.type === "update" || a.type === "delete")
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
@@ -351,7 +359,6 @@ function DashboardAdmin() {
 
         {/* ===== STATS CARDS ===== */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* Card 1: Total Akun */}
           <div className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
             <div className="relative">
@@ -359,23 +366,12 @@ function DashboardAdmin() {
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
                   <Users className="w-5 h-5 text-white" />
                 </div>
-                <div className="flex items-center gap-1 px-2 py-1 bg-emerald-50 rounded-full">
-                  <TrendingUp className="w-2.5 h-2.5 text-emerald-500" />
-                  <span className="text-[10px] font-semibold text-emerald-600">Total</span>
-                </div>
               </div>
               <p className="text-3xl font-bold text-slate-800">{totalAkun}</p>
               <p className="text-sm text-slate-500 mt-0.5">Total Akun</p>
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"></div>
-                  <span className="text-[10px] text-slate-400">{totalPeserta} Peserta, {totalMentor} Mentor</span>
-                </div>
-              </div>
             </div>
           </div>
 
-          {/* Card 2: Akun Aktif */}
           <div className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
             <div className="relative">
@@ -383,22 +379,12 @@ function DashboardAdmin() {
                 <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-md">
                   <UserCheck className="w-5 h-5 text-white" />
                 </div>
-                <div className="flex items-center gap-1 px-2 py-1 bg-emerald-50 rounded-full">
-                  <span className="text-[10px] font-semibold text-emerald-600">{persenAktif}%</span>
-                </div>
               </div>
               <p className="text-3xl font-bold text-slate-800">{aktif}</p>
               <p className="text-sm text-slate-500 mt-0.5">Akun Aktif</p>
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-10 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full"></div>
-                  <span className="text-[10px] text-slate-400">{persenAktif}% dari total</span>
-                </div>
-              </div>
             </div>
           </div>
 
-          {/* Card 3: Divisi Aktif */}
           <div className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
             <div className="relative">
@@ -406,22 +392,12 @@ function DashboardAdmin() {
                 <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-md">
                   <Building2 className="w-5 h-5 text-white" />
                 </div>
-                <div className="flex items-center gap-1 px-2 py-1 bg-purple-50 rounded-full">
-                  <span className="text-[10px] font-semibold text-purple-600">Aktif</span>
-                </div>
               </div>
               <p className="text-3xl font-bold text-slate-800">{totalDivisi}</p>
               <p className="text-sm text-slate-500 mt-0.5">Divisi Aktif</p>
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
-                  <span className="text-[10px] text-slate-400">Total divisi aktif</span>
-                </div>
-              </div>
             </div>
           </div>
 
-          {/* Card 4: Akun Nonaktif */}
           <div className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-rose-500/10 to-red-500/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
             <div className="relative">
@@ -429,69 +405,53 @@ function DashboardAdmin() {
                 <div className="w-12 h-12 bg-gradient-to-br from-rose-500 to-red-600 rounded-xl flex items-center justify-center shadow-md">
                   <UserX className="w-5 h-5 text-white" />
                 </div>
-                <div className="flex items-center gap-1 px-2 py-1 bg-red-50 rounded-full">
-                  <span className="text-[10px] font-semibold text-red-600">{nonAktif}</span>
-                </div>
               </div>
               <p className="text-3xl font-bold text-slate-800">{nonAktif}</p>
               <p className="text-sm text-slate-500 mt-0.5">Akun Nonaktif</p>
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-10 bg-gradient-to-r from-rose-500 to-red-500 rounded-full"></div>
-                  <span className="text-[10px] text-slate-400">Perlu ditindaklanjuti</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* ===== DISTRIBUSI DIVISI & RINGKASAN PENGGUNA PREMIUM ===== */}
+        {/* ===== DISTRIBUSI DIVISI & STATISTIK PENGGUNA ===== */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
           
           {/* Distribusi Divisi */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
             <div className="relative h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
             <div className="p-5">
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center gap-2 mb-5">
                 <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl shadow-md">
                   <Layers className="w-4 h-4 text-white" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-slate-800 text-base">Distribusi Divisi</h3>
-                  <p className="text-[10px] text-slate-400">3 divisi dengan peserta terbanyak</p>
+                  <p className="text-xs text-slate-400">3 divisi dengan peserta terbanyak</p>
                 </div>
               </div>
               
               <div className="space-y-3">
                 {divisiStats.length > 0 ? (
                   divisiStats.map((div, idx) => (
-                    <div key={idx} className="bg-gradient-to-r from-slate-50 to-white rounded-xl p-3 border border-slate-100 hover:border-slate-200 transition-all">
-                      <div className="flex justify-between items-center mb-2">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-white text-[11px] font-bold shadow-md ${
-                            idx === 0 ? 'bg-gradient-to-br from-amber-500 to-orange-500' :
-                            idx === 1 ? 'bg-gradient-to-br from-slate-400 to-slate-500' :
-                            'bg-gradient-to-br from-amber-600 to-amber-700'
-                          }`}>
-                            {idx === 0 ? <Trophy size={14} /> : idx === 1 ? <Medal size={14} /> : idx + 1}
-                          </div>
-                          <span className="text-sm font-semibold text-slate-700">{div.nama}</span>
+                    <div key={idx} className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-white text-xs font-bold ${
+                          idx === 0 ? 'bg-amber-500' :
+                          idx === 1 ? 'bg-slate-500' :
+                          'bg-amber-600'
+                        }`}>
+                          {idx + 1}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-semibold text-slate-500">
-                            Total: {div.total}
-                          </span>
-                        </div>
+                        <span className="text-sm font-semibold text-slate-700">{div.nama}</span>
                       </div>
-                      <div className="flex gap-4 mt-2">
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50">
+                      <div className="flex gap-4">
+                        <span className="text-xs text-slate-500 flex items-center gap-1">
                           <Users size={11} className="text-blue-500" />
-                          <span className="text-[11px] font-medium text-blue-600">{div.peserta} Peserta</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50">
+                          {div.peserta} Peserta
+                        </span>
+                        <span className="text-xs text-slate-500 flex items-center gap-1">
                           <UserCheck size={11} className="text-purple-500" />
-                          <span className="text-[11px] font-medium text-purple-600">{div.mentor} Mentor</span>
-                        </div>
+                          {div.mentor} Mentor
+                        </span>
                       </div>
                     </div>
                   ))
@@ -505,111 +465,54 @@ function DashboardAdmin() {
             </div>
           </div>
 
-          {/* Ringkasan Pengguna PREMIUM */}
+          {/* Statistik Pengguna */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
             <div className="relative h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
             <div className="p-5">
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center gap-2 mb-5">
                 <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl shadow-md">
-                  <PieChart className="w-4 h-4 text-white" />
+                  <Users size={18} className="text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-slate-800 text-base">Ringkasan Pengguna</h3>
-                  <p className="text-[10px] text-slate-400">Komposisi peserta dan mentor</p>
+                  <h3 className="font-semibold text-slate-800 text-base">Statistik Pengguna</h3>
+                  <p className="text-xs text-slate-400">Total {totalAkun} pengguna terdaftar</p>
                 </div>
               </div>
               
               <div className="flex items-center justify-between gap-6">
-                {/* Peserta Card */}
-                <div className="flex-1 bg-gradient-to-br from-blue-50/50 to-white rounded-xl p-4 border border-blue-100 text-center">
-                  <div className="relative w-20 h-20 mx-auto mb-3">
-                    <svg className="w-full h-full transform -rotate-90">
-                      <circle cx="40" cy="40" r="34" fill="none" stroke="#dbeafe" strokeWidth="8" />
-                      <circle
-                        cx="40" cy="40" r="34" fill="none"
-                        stroke="#3b82f6" strokeWidth="8"
-                        strokeDasharray={`${totalAkun > 0 ? (totalPeserta / totalAkun) * 213.6 : 0} ${213.6 - (totalAkun > 0 ? (totalPeserta / totalAkun) * 213.6 : 0)}`}
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-lg font-bold text-slate-800">
-                        {totalAkun > 0 ? Math.round((totalPeserta / totalAkun) * 100) : 0}%
-                      </span>
-                    </div>
+                <div className="flex-1 text-center">
+                  <div className="w-16 h-16 mx-auto mb-2 bg-blue-50 rounded-full flex items-center justify-center">
+                    <Users size={28} className="text-blue-500" />
                   </div>
-                  <div className="flex items-center justify-center gap-1.5 mb-1">
-                    <Users size={16} className="text-blue-500" />
-                    <span className="text-sm font-semibold text-slate-700">Peserta</span>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-600">{totalPeserta}</p>
-                  <div className="mt-2 flex items-center justify-center gap-1 text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full w-fit mx-auto">
-                    <TrendingUp size={10} />
-                    <span>{totalAkun > 0 ? Math.round((totalPeserta / totalAkun) * 100) : 0}% total</span>
+                  <p className="text-3xl font-bold text-blue-600">{totalPeserta}</p>
+                  <p className="text-sm text-slate-500 mt-1">Peserta</p>
+                  <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 rounded-full">
+                    <span className="text-[10px] font-medium text-blue-600">{totalAkun > 0 ? Math.round((totalPeserta / totalAkun) * 100) : 0}%</span>
                   </div>
                 </div>
                 
-                {/* VS Badge */}
-                <div className="flex flex-col items-center justify-center">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-slate-200 to-slate-300 flex items-center justify-center shadow-sm">
-                    <span className="text-[10px] font-bold text-slate-500">VS</span>
-                  </div>
-                  <div className="h-12 w-px bg-slate-200 my-1"></div>
-                  <ArrowUpRight size={14} className="text-slate-400" />
-                </div>
+                <div className="w-px h-12 bg-slate-200"></div>
                 
-                {/* Mentor Card */}
-                <div className="flex-1 bg-gradient-to-br from-emerald-50/50 to-white rounded-xl p-4 border border-emerald-100 text-center">
-                  <div className="relative w-20 h-20 mx-auto mb-3">
-                    <svg className="w-full h-full transform -rotate-90">
-                      <circle cx="40" cy="40" r="34" fill="none" stroke="#d1fae5" strokeWidth="8" />
-                      <circle
-                        cx="40" cy="40" r="34" fill="none"
-                        stroke="#10b981" strokeWidth="8"
-                        strokeDasharray={`${totalAkun > 0 ? (totalMentor / totalAkun) * 213.6 : 0} ${213.6 - (totalAkun > 0 ? (totalMentor / totalAkun) * 213.6 : 0)}`}
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-lg font-bold text-slate-800">
-                        {totalAkun > 0 ? Math.round((totalMentor / totalAkun) * 100) : 0}%
-                      </span>
-                    </div>
+                <div className="flex-1 text-center">
+                  <div className="w-16 h-16 mx-auto mb-2 bg-emerald-50 rounded-full flex items-center justify-center">
+                    <UserCheck size={28} className="text-emerald-500" />
                   </div>
-                  <div className="flex items-center justify-center gap-1.5 mb-1">
-                    <UserCheck size={16} className="text-emerald-500" />
-                    <span className="text-sm font-semibold text-slate-700">Mentor</span>
-                  </div>
-                  <p className="text-2xl font-bold text-emerald-600">{totalMentor}</p>
-                  <div className="mt-2 flex items-center justify-center gap-1 text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full w-fit mx-auto">
-                    <TrendingUp size={10} />
-                    <span>{totalAkun > 0 ? Math.round((totalMentor / totalAkun) * 100) : 0}% total</span>
+                  <p className="text-3xl font-bold text-emerald-600">{totalMentor}</p>
+                  <p className="text-sm text-slate-500 mt-1">Mentor</p>
+                  <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 rounded-full">
+                    <span className="text-[10px] font-medium text-emerald-600">{totalAkun > 0 ? Math.round((totalMentor / totalAkun) * 100) : 0}%</span>
                   </div>
                 </div>
               </div>
               
-              {/* Rasio Info */}
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-center gap-3 text-[11px] text-slate-500">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-                    <span>Rasio Peserta : Mentor</span>
-                  </div>
-                  <div className="font-semibold text-slate-700">
-                    {totalMentor > 0 ? (totalPeserta / totalMentor).toFixed(1) : 0} : 1
-                  </div>
-                  <div className="w-px h-3 bg-slate-200"></div>
-                  <div className="flex items-center gap-1.5">
-                    <Users size={11} className="text-slate-400" />
-                    <span>{totalAkun} Total Akun</span>
-                  </div>
-                </div>
+              <div className="mt-5 pt-4 border-t border-slate-100 text-center">
+                <p className="text-xs text-slate-400">Total keseluruhan {totalAkun} akun</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* ===== DATA PENGGUNA - DIPERBESAR & PREMIUM ===== */}
+        {/* ===== DATA PENGGUNA ===== */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
           <div className="relative h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
           <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
@@ -635,11 +538,11 @@ function DashboardAdmin() {
           {loading ? (
             <div className="py-12 text-center text-slate-400 text-sm">
               <RefreshCw size={20} className="animate-spin mx-auto mb-2" />
-              Memuat data...
+              Memuat数据...
             </div>
           ) : filteredUsers.length === 0 ? (
             <div className="py-12 text-center text-slate-400 text-sm">
-              Tidak ada data pengguna.
+              Tidak ada数据 pengguna.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -661,10 +564,7 @@ function DashboardAdmin() {
                           <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center text-white text-[11px] font-bold shadow-sm">
                             {u.initials}
                           </div>
-                          <div>
-                            <p className="font-semibold text-slate-800 text-sm">{u.nama}</p>
-                            <p className="text-[10px] text-slate-400">ID: {u.id}</p>
-                          </div>
+                          <span className="font-semibold text-slate-800 text-sm">{u.nama}</span>
                         </div>
                       </td>
                       <td className="px-6 py-3.5 text-sm text-slate-500">{u.email}</td>
@@ -678,14 +578,11 @@ function DashboardAdmin() {
                         </span>
                       </td>
                       <td className="px-6 py-3.5">
-                        {u.divisi && u.divisi !== "-" ? (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full">
-                            <Building2 size={10} />
-                            {u.divisi}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-sm">-</span>
-                        )}
+                        <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${
+                          u.divisi !== "-" ? "bg-indigo-50 text-indigo-700" : "bg-slate-100 text-slate-500"
+                        }`}>
+                          {u.divisi !== "-" ? u.divisi : "-"}
+                        </span>
                       </td>
                       <td className="px-6 py-3.5">
                         {u.status ? (

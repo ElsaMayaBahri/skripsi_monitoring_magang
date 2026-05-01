@@ -2,7 +2,6 @@ import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
 import logo from "../../assets/logo.png"
-import illustration from "../../assets/login.png"
 
 const API_URL = "http://localhost:8000/api"
 
@@ -29,14 +28,14 @@ function Login() {
   const [error, setError] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
+  const [focusedField, setFocusedField] = useState(null)
+  const [activeDemo, setActiveDemo] = useState(null)
 
-  // 🔥 Cek apakah sudah login sebelumnya
   useEffect(() => {
     const token = localStorage.getItem("token")
     const role = localStorage.getItem("role")
     
     if (token && role) {
-      // Redirect sesuai role jika sudah login
       if (role === "admin") {
         navigate("/admin/dashboard")
       } else if (role === "coo" || role === "mentor") {
@@ -46,7 +45,6 @@ function Login() {
       }
     }
     
-    // 🔥 Load remembered email
     const savedEmail = localStorage.getItem("rememberedEmail")
     if (savedEmail) {
       setEmail(savedEmail)
@@ -55,7 +53,6 @@ function Login() {
   }, [navigate])
 
   const handleLogin = async () => {
-    // ✅ Validasi input
     if (!email.trim()) {
       setError("Email harus diisi")
       return
@@ -70,7 +67,6 @@ function Login() {
     setError("")
 
     try {
-      // ✅ PAKAI axiosInstance (SEKARANG UDAH ADA!)
       const response = await axiosInstance.post("/login", {
         email: email.trim(),
         password,
@@ -78,7 +74,6 @@ function Login() {
 
       console.log("LOGIN RESPONSE:", response.data)
 
-      // ✅ Ambil data fleksibel (jaga2 struktur beda)
       const token = response.data.token || response.data.data?.token
       const user = response.data.user || response.data.data?.user
       const role = response.data.role || response.data.data?.role
@@ -87,23 +82,28 @@ function Login() {
         throw new Error("Token tidak ditemukan dari backend")
       }
 
-      // ✅ Simpan ke localStorage
+      // PERBAIKAN: Ambil data aktivitas lama sebelum menyimpan data login baru
+      const existingActivities = localStorage.getItem("system_activities")
+
+      // Simpan data kredensial baru
       localStorage.setItem("token", token)
       localStorage.setItem("user", JSON.stringify(user))
       localStorage.setItem("role", role)
 
-      // ✅ Remember me
+      // PERBAIKAN: Pastikan system_activities ditulis ulang jika sebelumnya ada
+      if (existingActivities) {
+        localStorage.setItem("system_activities", existingActivities)
+      }
+
       if (rememberMe) {
         localStorage.setItem("rememberedEmail", email.trim())
       } else {
         localStorage.removeItem("rememberedEmail")
       }
 
-      // ✅ Set header global (optional, interceptor sudah handle)
       axiosInstance.defaults.headers.Authorization = `Bearer ${token}`
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
 
-      // ✅ Redirect berdasarkan role
       let redirectPath = "/admin/dashboard"
       if (role === "admin") {
         redirectPath = "/admin/dashboard"
@@ -113,7 +113,6 @@ function Login() {
         redirectPath = "/peserta/dashboard"
       }
       
-      // Bisa juga pake dari response
       const responseRedirect = response.data.redirect
       if (responseRedirect) {
         redirectPath = responseRedirect
@@ -153,197 +152,518 @@ function Login() {
     }
   }
 
-  // 🔥 Handle Enter key
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && !loading) {
       handleLogin()
     }
   }
 
-  // 🔥 Demo accounts untuk testing (sementara, nanti hapus)
   const demoAccounts = [
-    { role: "Admin", email: "admin@gmail.com", password: "password", redirect: "/admin/dashboard" },
-    { role: "COO/Mentor", email: "coo@gmail.com", password: "password", redirect: "/coo/dashboard" },
-    { role: "Peserta", email: "peserta@gmail.com", password: "password", redirect: "/peserta/dashboard" }
+    { role: "Administrator", email: "admin@gmail.com", password: "password", color: "#e74c3c" },
+    { role: "COO", email: "coo@gmail.com", password: "password", color: "#3498db" },
+    { role: "Mentor", email: "mentor@gmail.com", password: "password", color: "#27ae60" },
+    { role: "Peserta", email: "peserta@gmail.com", password: "password", color: "#f39c12" }
   ]
 
-  const fillDemoAccount = (demoEmail, demoPassword) => {
+  const fillDemoAccount = (demoEmail, demoPassword, roleIndex) => {
     setEmail(demoEmail)
     setPassword(demoPassword)
+    setActiveDemo(roleIndex)
     setError("")
   }
 
+  // SVG Icons (Tetap sama sesuai permintaan untuk tidak mengubah tampilan)
+  const EyeIcon = () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  )
+
+  const EyeOffIcon = () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  )
+
+  const MonitorIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+      <line x1="8" y1="21" x2="16" y2="21"/>
+      <line x1="12" y1="17" x2="12" y2="21"/>
+    </svg>
+  )
+
+  const FileIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+    </svg>
+  )
+
+  const UsersIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  )
+
+  const MailIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2"/>
+      <path d="M22 7l-10 7L2 7"/>
+    </svg>
+  )
+
+  const PhoneIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+    </svg>
+  )
+
+  const styles = {
+    container: {
+      minHeight: "100vh",
+      background: "linear-gradient(135deg, #d4fcff 0%, #b2f0e8 50%, #9be5dc 100%)",
+      position: "relative",
+      overflow: "hidden",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      padding: "20px"
+    },
+    patternBg: {
+      position: "absolute",
+      inset: 0,
+      opacity: 0.12,
+      backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23006666' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+      backgroundRepeat: "repeat"
+    },
+    circle1: {
+      position: "absolute",
+      top: "-150px",
+      left: "-150px",
+      width: "400px",
+      height: "400px",
+      background: "radial-gradient(circle, rgba(0,150,136,0.15) 0%, rgba(0,150,136,0) 70%)",
+      borderRadius: "50%",
+      animation: "float1 18s infinite ease-in-out"
+    },
+    circle2: {
+      position: "absolute",
+      bottom: "-150px",
+      right: "-150px",
+      width: "450px",
+      height: "450px",
+      background: "radial-gradient(circle, rgba(0,188,140,0.12) 0%, rgba(0,188,140,0) 70%)",
+      borderRadius: "50%",
+      animation: "float2 22s infinite ease-in-out"
+    },
+    mainCard: {
+      display: "flex",
+      maxWidth: "1060px",
+      width: "100%",
+      backgroundColor: "white",
+      borderRadius: "32px",
+      overflow: "hidden",
+      boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)",
+      position: "relative",
+      zIndex: 10
+    },
+    leftPanel: {
+      flex: 1.1,
+      padding: "44px",
+      background: "linear-gradient(135deg, #00897b 0%, #00acc1 100%)",
+      color: "white",
+      position: "relative"
+    },
+    leftPattern: {
+      position: "absolute",
+      inset: 0,
+      opacity: 0.08,
+      backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 0 L40 20 L20 40 L0 20 Z' fill='white' fill-opacity='0.3'/%3E%3C/svg%3E")`,
+      backgroundRepeat: "repeat",
+      backgroundSize: "24px"
+    },
+    rightPanel: {
+      flex: 1,
+      padding: "44px",
+      background: "white"
+    },
+    logoContainer: {
+      marginBottom: "52px",
+      position: "relative",
+      zIndex: 2
+    },
+    logoImage: {
+      height: "40px",
+      width: "auto",
+      objectFit: "contain",
+      filter: "brightness(0) invert(1)"
+    },
+    welcomeText: {
+      fontSize: "34px",
+      fontWeight: "700",
+      marginBottom: "16px",
+      lineHeight: 1.25,
+      position: "relative",
+      zIndex: 2
+    },
+    description: {
+      opacity: 0.85,
+      fontSize: "13px",
+      lineHeight: 1.6,
+      marginBottom: "38px",
+      position: "relative",
+      zIndex: 2
+    },
+    featureList: {
+      marginBottom: "45px",
+      position: "relative",
+      zIndex: 2
+    },
+    featureItem: {
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+      marginBottom: "18px",
+      fontSize: "13px"
+    },
+    featureIcon: {
+      width: "30px",
+      height: "30px",
+      background: "rgba(255,255,255,0.12)",
+      borderRadius: "8px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    contactSection: {
+      paddingTop: "32px",
+      borderTop: "1px solid rgba(255,255,255,0.2)",
+      position: "relative",
+      zIndex: 2
+    },
+    contactItem: {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      marginBottom: "12px",
+      fontSize: "12px",
+      opacity: 0.85
+    },
+    contactText: {
+      fontSize: "12px"
+    },
+    formTitle: {
+      fontSize: "28px",
+      fontWeight: "700",
+      color: "#1e293b",
+      marginBottom: "8px"
+    },
+    formSubtitle: {
+      color: "#64748b",
+      fontSize: "13px",
+      marginBottom: "32px"
+    },
+    inputGroup: {
+      marginBottom: "20px"
+    },
+    label: {
+      display: "block",
+      color: "#334155",
+      fontSize: "12px",
+      fontWeight: "600",
+      marginBottom: "6px",
+      letterSpacing: "0.3px"
+    },
+    inputWrapper: {
+      position: "relative"
+    },
+    input: (isFocused) => ({
+      width: "100%",
+      padding: "13px 16px",
+      backgroundColor: "#fafcff",
+      border: `1.5px solid ${isFocused ? "#00acc1" : "#e2e8f0"}`,
+      borderRadius: "14px",
+      color: "#1e293b",
+      fontSize: "14px",
+      outline: "none",
+      transition: "all 0.2s ease",
+      boxSizing: "border-box"
+    }),
+    passwordToggle: {
+      position: "absolute",
+      right: "14px",
+      top: "50%",
+      transform: "translateY(-50%)",
+      background: "none",
+      border: "none",
+      color: "#94a3b8",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "4px"
+    },
+    checkboxContainer: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: "28px"
+    },
+    checkboxLabel: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      color: "#475569",
+      fontSize: "13px",
+      cursor: "pointer"
+    },
+    forgotLink: {
+      color: "#00acc1",
+      fontSize: "12px",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      fontWeight: "500"
+    },
+    loginButton: {
+      width: "100%",
+      padding: "14px",
+      background: "linear-gradient(135deg, #00897b, #00acc1)",
+      border: "none",
+      borderRadius: "14px",
+      color: "white",
+      fontSize: "14px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 0.2s ease",
+      marginBottom: "28px"
+    },
+    demoSection: {
+      background: "#f8fafc",
+      borderRadius: "18px",
+      padding: "18px"
+    },
+    demoTitle: {
+      fontSize: "10px",
+      fontWeight: "700",
+      color: "#64748b",
+      textAlign: "center",
+      letterSpacing: "1.5px",
+      marginBottom: "14px"
+    },
+    demoGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(2, 1fr)",
+      gap: "10px"
+    },
+    demoButton: (isActive, color) => ({
+      padding: "10px 12px",
+      background: isActive ? `linear-gradient(135deg, ${color}, ${color}cc)` : "white",
+      border: isActive ? "none" : "1px solid #e2e8f0",
+      borderRadius: "12px",
+      color: isActive ? "white" : "#334155",
+      fontSize: "12px",
+      cursor: "pointer",
+      transition: "all 0.2s ease",
+      textAlign: "left"
+    }),
+    helpText: {
+      textAlign: "center",
+      marginTop: "20px",
+      fontSize: "11px",
+      color: "#94a3b8"
+    },
+    helpLink: {
+      color: "#00acc1",
+      cursor: "pointer",
+      fontWeight: "500"
+    },
+    errorAlert: {
+      marginBottom: "24px",
+      padding: "12px 16px",
+      background: "#fef2f2",
+      border: "1px solid #fecaca",
+      borderRadius: "14px",
+      color: "#dc2626",
+      fontSize: "12px",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center"
+    }
+  }
+
   return (
-    <div className="min-h-screen flex">
-      {/* LEFT SIDE - BRANDING */}
-      <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-blue-600 to-blue-800 flex-col justify-between px-24 py-12">
-        
-        <div>
-          <img src={logo} alt="logo" className="w-48 brightness-0 invert" />
-        </div>
+    <div style={styles.container}>
+      <div style={styles.patternBg}></div>
+      <div style={styles.circle1}></div>
+      <div style={styles.circle2}></div>
+      
+      <style>{`
+        @keyframes float1 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg); }
+          50% { transform: translate(25px, -25px) rotate(5deg); }
+        }
+        @keyframes float2 {
+          0%, 100% { transform: translate(0, 0) rotate(0deg); }
+          50% { transform: translate(-30px, 20px) rotate(-5deg); }
+        }
+        .login-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 10px 25px -8px rgba(0,150,136,0.4);
+        }
+        .demo-btn:hover {
+          transform: translateX(3px);
+        }
+        input::placeholder {
+          color: #cbd5e1;
+          font-size: 13px;
+        }
+      `}</style>
 
-        <div className="flex justify-center items-center flex-1">
-          <img
-            src={illustration}
-            alt="illustration"
-            className="w-full max-w-xl object-contain"
-          />
-        </div>
-
-        <div className="mt-6">
-          <h2 className="text-3xl font-bold text-white">
-            Sistem Monitoring Magang
-          </h2>
-          <p className="text-blue-100 text-base mt-3 leading-relaxed max-w-lg">
-            Platform terintegrasi untuk memantau kehadiran, aktivitas,
-            dan laporan magang mahasiswa secara real-time.
-          </p>
-        </div>
-      </div>
-
-      {/* MOBILE BRANDING (visible di mobile) */}
-      <div className="lg:hidden w-full bg-gradient-to-br from-blue-600 to-blue-800 py-8 px-6 text-center">
-        <img src={logo} alt="logo" className="w-32 mx-auto brightness-0 invert" />
-        <h2 className="text-xl font-bold text-white mt-4">Sistem Monitoring Magang</h2>
-      </div>
-
-      {/* RIGHT SIDE - LOGIN FORM */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center bg-white dark:bg-gray-900 px-6 py-12 lg:px-24">
-        <div className="w-full max-w-md">
+      <div style={styles.mainCard}>
+        <div style={styles.leftPanel}>
+          <div style={styles.leftPattern}></div>
+          <div style={styles.logoContainer}>
+            <img src={logo} alt="Kuanta Logo" style={styles.logoImage} />
+          </div>
           
-          {/* Header Form */}
-          <div className="text-center lg:text-left mb-8">
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">
-              Selamat Datang Kembali
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-              Silakan masuk dengan akun Anda
-            </p>
+          <div style={styles.welcomeText}>
+            Akses Sistem<br />Terintegrasi
+          </div>
+          <div style={styles.description}>
+            Platform terintegrasi untuk memastikan keandalan, aktivitas, dan kapasitas mengajar mahasiswa secara real-time.
+          </div>
+          
+          <div style={styles.featureList}>
+            <div style={styles.featureItem}>
+              <div style={styles.featureIcon}><MonitorIcon /></div>
+              <span>Monitoring Real-time</span>
+            </div>
+            <div style={styles.featureItem}>
+              <div style={styles.featureIcon}><FileIcon /></div>
+              <span>Laporan Aktivitas</span>
+            </div>
+            <div style={styles.featureItem}>
+              <div style={styles.featureIcon}><UsersIcon /></div>
+              <span>Multi-role Access</span>
+            </div>
           </div>
 
-          {/* ERROR ALERT */}
+          <div style={styles.contactSection}>
+            <div style={styles.contactItem}>
+              <MailIcon />
+              <span style={styles.contactText}>training@kuantika.id</span>
+            </div>
+            <div style={styles.contactItem}>
+              <PhoneIcon />
+              <span style={styles.contactText}>+62 21 1234 5678</span>
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.rightPanel}>
+          <div style={styles.formTitle}>Selamat Datang</div>
+          <div style={styles.formSubtitle}>Silakan masuk dengan akun Anda</div>
+
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start gap-2">
-              <span className="text-sm">⚠️</span>
-              <span className="text-sm flex-1">{error}</span>
-              <button 
-                onClick={() => setError("")}
-                className="text-red-500 hover:text-red-700"
-              >
-                ✕
-              </button>
+            <div style={styles.errorAlert}>
+              <span>{error}</span>
+              <button onClick={() => setError("")} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: "18px", fontWeight: "bold" }}>×</button>
             </div>
           )}
 
-          {/* EMAIL FIELD */}
-          <div className="mb-5">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Email Terdaftar
-            </label>
-            <input
-              type="email"
-              placeholder="name@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyPress={handleKeyPress}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white transition"
-              disabled={loading}
-              autoComplete="email"
-            />
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Alamat Email</label>
+            <div style={styles.inputWrapper}>
+              <input
+                type="email"
+                placeholder="nama@perusahaan.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyPress={handleKeyPress}
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField(null)}
+                style={styles.input(focusedField === "email")}
+                disabled={loading}
+              />
+            </div>
           </div>
 
-          {/* PASSWORD FIELD */}
-          <div className="mb-4">
-            <div className="flex justify-between items-center mb-1">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Kata Sandi
-              </label>
-              <span className="text-blue-500 cursor-pointer text-xs hover:underline">
-                Lupa Kata Sandi?
-              </span>
-            </div>
-            <div className="relative">
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Kata Sandi</label>
+            <div style={styles.inputWrapper}>
               <input
                 type={showPassword ? "text" : "password"}
-                placeholder="Masukkan password"
+                placeholder="Masukkan kata sandi"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyPress={handleKeyPress}
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white transition"
+                onFocus={() => setFocusedField("password")}
+                onBlur={() => setFocusedField(null)}
+                style={styles.input(focusedField === "password")}
                 disabled={loading}
-                autoComplete="current-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                style={styles.passwordToggle}
               >
-                {showPassword ? "🙈" : "👁️"}
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
             </div>
           </div>
 
-          {/* REMEMBER ME & TERMS */}
-          <div className="flex items-center justify-between mb-6">
-            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+          <div style={styles.checkboxContainer}>
+            <label style={styles.checkboxLabel}>
               <input
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                style={{ accentColor: "#00acc1", width: "14px", height: "14px" }}
               />
               Ingat saya
             </label>
-            <a href="#" className="text-xs text-gray-400 hover:text-blue-500">
-              Kebijakan Privasi
-            </a>
+            <button style={styles.forgotLink}>Lupa sandi?</button>
           </div>
 
-          {/* LOGIN BUTTON */}
           <button
             onClick={handleLogin}
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="login-btn"
+            style={styles.loginButton}
           >
-            {loading ? (
-              <>
-                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Memproses...
-              </>
-            ) : (
-              "Masuk ke Sistem"
-            )}
+            {loading ? "Memproses..." : "Masuk ke Sistem"}
           </button>
 
-          {/* DEMO ACCOUNTS (HANYA UNTUK TESTING - HAPUS NANTI) */}
-          <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 text-center">
-              🔐 AKUN DEMO (Testing)
-            </p>
-            <div className="space-y-2">
+          <div style={styles.demoSection}>
+            <div style={styles.demoTitle}>AKUN DEMO</div>
+            <div style={styles.demoGrid}>
               {demoAccounts.map((demo, idx) => (
                 <button
                   key={idx}
-                  onClick={() => fillDemoAccount(demo.email, demo.password)}
-                  className="w-full text-left text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded transition"
+                  onClick={() => fillDemoAccount(demo.email, demo.password, idx)}
+                  className="demo-btn"
+                  style={styles.demoButton(activeDemo === idx, demo.color)}
                 >
-                  <span className="font-medium">{demo.role}:</span> {demo.email}
+                  <div style={{ fontWeight: "600", marginBottom: "2px", fontSize: "12px" }}>{demo.role}</div>
+                  <div style={{ fontSize: "10px", opacity: 0.7 }}>{demo.email}</div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* HELP TEXT */}
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-6 text-center">
-            Butuh bantuan?{" "}
-            <span className="text-blue-500 cursor-pointer hover:underline">
-              Silakan hubungi administrator sistem
-            </span>
-          </p>
-
+          <div style={styles.helpText}>
+            Butuh bantuan? <span style={styles.helpLink}>Hubungi Administrator</span>
+          </div>
         </div>
       </div>
     </div>

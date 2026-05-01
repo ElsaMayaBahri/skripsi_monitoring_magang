@@ -25,18 +25,30 @@ export const logActivity = (type, target, itemName, details = {}) => {
       userName = "Admin"
     }
     
+    // 🔥 PERBAIKAN: Gunakan format yang SAMA dengan Dashboard
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    const hours = String(now.getHours()).padStart(2, '0')
+    const minutes = String(now.getMinutes()).padStart(2, '0')
+    const seconds = String(now.getSeconds()).padStart(2, '0')
+    
+    // Format ISO untuk sorting (biar sorting berdasarkan waktu benar)
+    const isoString = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000Z`
+    
     // Buat aktivitas baru
     const newActivity = {
       id: Date.now() + Math.random().toString(36).substr(2, 6),
-      timestamp: new Date().toISOString(),
-      type: type, // 'create', 'update', 'delete'
-      target: target, // 'peserta', 'mentor', 'divisi'
+      timestamp: isoString,
+      type: type,
+      target: target,
       itemName: itemName,
       user: userName,
       details: details
     }
     
-    // Tambahkan ke awal array (yang terbaru di atas)
+    // Tambahkan ke awal array
     activities.unshift(newActivity)
     
     // Simpan hanya 100 aktivitas terakhir
@@ -46,7 +58,7 @@ export const logActivity = (type, target, itemName, details = {}) => {
     
     localStorage.setItem("system_activities", JSON.stringify(activities))
     
-    // Trigger event storage agar halaman lain bisa update
+    // Trigger event storage
     window.dispatchEvent(new StorageEvent('storage', {
       key: 'system_activities',
       newValue: JSON.stringify(activities)
@@ -60,38 +72,27 @@ export const logActivity = (type, target, itemName, details = {}) => {
   }
 }
 
-/**
- * Mendapatkan semua aktivitas
- */
 export const getActivities = () => {
   try {
     const activities = localStorage.getItem("system_activities")
-    return activities ? JSON.parse(activities) : []
+    if (!activities) return []
+    return JSON.parse(activities)
   } catch (error) {
     console.error("❌ Failed to get activities:", error)
     return []
   }
 }
 
-/**
- * Menghapus semua aktivitas (untuk debugging)
- */
 export const clearActivities = () => {
   localStorage.removeItem("system_activities")
   console.log("🗑️ All activities cleared")
 }
 
-/**
- * Mendapatkan aktivitas berdasarkan filter
- */
 export const getActivitiesByType = (type) => {
   const activities = getActivities()
   return activities.filter(a => a.type === type)
 }
 
-/**
- * Mendapatkan aktivitas berdasarkan target
- */
 export const getActivitiesByTarget = (target) => {
   const activities = getActivities()
   return activities.filter(a => a.target === target)

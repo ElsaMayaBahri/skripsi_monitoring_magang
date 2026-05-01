@@ -55,13 +55,13 @@ function Users() {
     localStorage.setItem("users_tab", tab);
   }, [tab]);
 
-  // 🔥 PERBAIKAN: HAPUS atau COMMENT useEffect ini agar popup dari location.state TIDAK muncul
-  // useEffect(() => {
-  //   if (location.state?.message) {
-  //     setSuccessModal({ open: true, message: location.state.message, type: "success" });
-  //     window.history.replaceState({}, document.title);
-  //   }
-  // }, [location]);
+  // Tangani state tab dari navigasi (dari AddMentor/AddPeserta)
+  useEffect(() => {
+    if (location.state?.tab) {
+      setTab(location.state.tab);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
 
   const getInitials = (name) => {
     if (!name || name === "No Name") return "?";
@@ -72,9 +72,7 @@ function Users() {
     return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
   };
 
-  // Helper function untuk mendapatkan status dengan benar
   const getUserStatus = (userData, itemData) => {
-    // Prioritaskan dari user.status_akun
     if (userData?.status_akun) {
       if (userData.status_akun === "aktif" || userData.status_akun === "active") {
         return "aktif";
@@ -84,7 +82,6 @@ function Users() {
       }
     }
     
-    // Cek dari userData.status (bisa boolean)
     if (userData?.status !== undefined && userData?.status !== null) {
       if (userData.status === "aktif" || userData.status === "active" || userData.status === true) {
         return "aktif";
@@ -94,7 +91,6 @@ function Users() {
       }
     }
     
-    // Cek langsung dari itemData
     if (itemData?.status_akun) {
       if (itemData.status_akun === "aktif" || itemData.status_akun === "active") {
         return "aktif";
@@ -104,7 +100,6 @@ function Users() {
       }
     }
     
-    // Cek dari itemData.user?.status_akun
     if (itemData?.user?.status_akun) {
       if (itemData.user.status_akun === "aktif" || itemData.user.status_akun === "active") {
         return "aktif";
@@ -114,7 +109,6 @@ function Users() {
       }
     }
     
-    // Cek dari itemData.status (langsung dari item)
     if (itemData?.status !== undefined && itemData?.status !== null) {
       if (itemData.status === "aktif" || itemData.status === "active" || itemData.status === true) {
         return "aktif";
@@ -124,11 +118,9 @@ function Users() {
       }
     }
     
-    // Default
     return "non_aktif";
   };
 
-  // Helper function untuk memformat tanggal
   const formatDate = (dateString) => {
     if (!dateString) return null;
     try {
@@ -144,7 +136,6 @@ function Users() {
     }
   };
 
-  // LOAD ALL DATA
   const loadAllData = useCallback(async (showLoading = true) => {
     if (isLoadingData.current) return null;
     isLoadingData.current = true;
@@ -195,7 +186,6 @@ function Users() {
     }
   }, []);
 
-  // LOAD DATA BERDASARKAN TAB
   const loadData = useCallback(async () => {
     if (!dataLoaded) return;
     
@@ -203,12 +193,9 @@ function Users() {
     
     try {
       if (tab === "peserta") {
-        // Buat map mentor dengan berbagai format ID
         const mentorMap = new Map();
         allMentors.forEach(mentor => {
           const mentorName = mentor.user?.nama || mentor.nama || mentor.name || "";
-          
-          // Simpan dengan berbagai format ID
           const ids = [
             mentor.id_mentor,
             mentor.id_user,
@@ -218,7 +205,6 @@ function Users() {
             String(mentor.id_mentor),
             String(mentor.id_user)
           ];
-          
           ids.forEach(id => {
             if (id && id !== "undefined" && id !== "null" && id !== "") {
               mentorMap.set(id, mentorName);
@@ -226,7 +212,6 @@ function Users() {
           });
         });
         
-        // Buat map divisi untuk memudahkan pencarian
         const divisiMap = new Map();
         divisiList.forEach(divisi => {
           const divisiId = divisi.id_divisi || divisi.id;
@@ -242,7 +227,6 @@ function Users() {
           let mentorName = "";
           const pesertaMentorId = item.id_mentor;
           
-          // Cari mentor dari map
           if (pesertaMentorId) {
             if (mentorMap.has(pesertaMentorId)) {
               mentorName = mentorMap.get(pesertaMentorId);
@@ -303,8 +287,6 @@ function Users() {
           
           const status = getUserStatus(item.user, item);
           const fullName = item.user?.nama || item.nama || "No Name";
-          
-          // Format tanggal dari item
           const tanggalMulai = item.tanggal_mulai || item.start_date || item.tgl_mulai;
           const tanggalSelesai = item.tanggal_selesai || item.end_date || item.tgl_selesai;
           
@@ -325,7 +307,6 @@ function Users() {
         setData(formattedData);
         
       } else {
-        // TAB MENTOR
         const countMap = new Map();
         allPeserta.forEach(p => {
           if (p.id_mentor) {
@@ -447,7 +428,6 @@ function Users() {
   const aktif = filtered.filter((d) => d.status === "aktif").length;
   const non_aktif = filtered.filter((d) => d.status === "non_aktif").length;
 
-  // 🔥 PERBAIKAN: Tambahkan logActivity di confirmDelete
   const confirmDelete = async () => {
     const { user } = deleteModal;
     if (!user) return;
@@ -457,11 +437,9 @@ function Users() {
     try {
       if (tab === "peserta") {
         await api.deletePeserta(user.id);
-        // 🔥 LOG ACTIVITY - DELETE PESERTA
         logActivity("delete", "peserta", user.name);
       } else {
         await api.deleteMentor(user.id);
-        // 🔥 LOG ACTIVITY - DELETE MENTOR
         logActivity("delete", "mentor", user.name);
       }
       await loadAllData(false);
