@@ -5,8 +5,11 @@ use App\Http\Controllers\Api\MentorController;
 use App\Http\Controllers\Api\PesertaController;
 use App\Http\Controllers\Api\DivisiController;
 use App\Http\Controllers\Api\MateriPelatihanController;
+use App\Http\Controllers\Api\QuizController;
+use App\Http\Controllers\Api\JamKerjaController;
+use App\Http\Controllers\Api\HariLiburController;
 use Illuminate\Support\Facades\Route;
-
+use Illuminate\Support\Facades\Storage;
 
 /*
 |--------------------------------------------------------------------------
@@ -22,6 +25,42 @@ Route::get('/sanctum/csrf-cookie', function () {
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/divisi-list', [MentorController::class, 'getDivisiList']);
+
+// 🔥 ROUTE UNTUK AKSES FILE MATERI (PUBLIC)
+Route::get('/materi-file/{filename}', function ($filename) {
+    $paths = [
+        storage_path('app/public/materi/' . $filename),
+        storage_path('app/public/' . $filename),
+    ];
+    
+    $filePath = null;
+    foreach ($paths as $path) {
+        if (file_exists($path)) {
+            $filePath = $path;
+            break;
+        }
+    }
+    
+    if (!$filePath) {
+        return response()->json(['error' => 'File not found'], 404);
+    }
+    
+    $mime = mime_content_type($filePath);
+    
+    $headers = [
+        'Content-Type' => $mime,
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers' => '*',
+        'Cache-Control' => 'public, max-age=86400',
+    ];
+    
+    if ($mime === 'application/pdf') {
+        $headers['Content-Disposition'] = 'inline; filename="' . $filename . '"';
+    }
+    
+    return response()->file($filePath, $headers);
+})->where('filename', '.*');
 
 // Protected routes 
 Route::middleware('auth:sanctum')->group(function () {
@@ -47,15 +86,54 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/peserta/{id}', [PesertaController::class, 'update']);
     Route::delete('/peserta/{id}', [PesertaController::class, 'destroy']);
     
-    // ================= MATERI PELATIHAN ROUTES =================
-    Route::get('/materi', [MateriPelatihanController::class, 'index']);
-    Route::post('/materi', [MateriPelatihanController::class, 'store']);
-    Route::get('/materi/{id}', [MateriPelatihanController::class, 'show']);
-    Route::put('/materi/{id}', [MateriPelatihanController::class, 'update']);
-    Route::delete('/materi/{id}', [MateriPelatihanController::class, 'destroy']);
-    Route::get('/materi-divisi/{divisi}', [MateriPelatihanController::class, 'getByDivisi']);
+    // 🔥 JAM KERJA ROUTES (Working Hours)
+    Route::prefix('jam-kerja')->group(function () {
+        Route::get('/', [JamKerjaController::class, 'index']);
+        Route::post('/', [JamKerjaController::class, 'store']);
+        Route::put('/{id}', [JamKerjaController::class, 'update']);
+        Route::delete('/{id}', [JamKerjaController::class, 'destroy']);
+    });
     
+    // 🔥 HARI LIBUR ROUTES (Holidays)
+    Route::prefix('hari-libur')->group(function () {
+        Route::get('/', [HariLiburController::class, 'index']);
+        Route::post('/', [HariLiburController::class, 'store']);
+        Route::put('/{id}', [HariLiburController::class, 'update']);
+        Route::delete('/{id}', [HariLiburController::class, 'destroy']);
+    });
+    
+    // Materi Pelatihan routes
+    Route::prefix('materi-pelatihan')->group(function () {
+        Route::get('/', [MateriPelatihanController::class, 'index']);
+        Route::post('/', [MateriPelatihanController::class, 'store']);
+        Route::get('/{id}', [MateriPelatihanController::class, 'show']);
+        Route::put('/{id}', [MateriPelatihanController::class, 'update']);
+        Route::post('/{id}', [MateriPelatihanController::class, 'update']);
+        Route::delete('/{id}', [MateriPelatihanController::class, 'destroy']);
+        Route::get('/divisi/{divisi}', [MateriPelatihanController::class, 'getByDivisi']);
+        Route::get('/{id}/download', [MateriPelatihanController::class, 'download']);
+    });
+    
+    // 🔥 QUIZ ROUTES
+    Route::prefix('quiz')->group(function () {
+        Route::get('/', [QuizController::class, 'index']);
+        Route::post('/', [QuizController::class, 'store']);
+        Route::get('/{id}', [QuizController::class, 'show']);
+        Route::put('/{id}', [QuizController::class, 'update']);
+        Route::delete('/{id}', [QuizController::class, 'destroy']);
+        Route::get('/divisi/{divisi}', [QuizController::class, 'getByDivisi']);
+        Route::post('/import', [QuizController::class, 'import']);
+        Route::get('/template/download', [QuizController::class, 'downloadTemplate']);
+    });
     
     // Additional list
     Route::get('/mentor-list', [MentorController::class, 'getMentorList']);
+});
+
+// Fallback untuk route yang tidak ditemukan
+Route::fallback(function () {
+    return response()->json([
+        'success' => false,
+        'message' => 'Route not found'
+    ], 404);
 });

@@ -1,59 +1,86 @@
-import { useParams, useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
-import { getQuiz, updateQuiz } from "../../utils/storage"
-import { 
-  ArrowLeft, 
-  BookOpen, 
-  Users, 
-  BarChart3, 
-  Clock, 
-  Target,
-  Plus,
-  Trash2,
-  Edit3,
-  Eye,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
+import { useNavigate, useParams } from "react-router-dom"
+import { api } from "../../utils/api"
+import {
+  ArrowLeft,
+  BookOpen,
+  Clock,
+  Users,
+  Calendar,
+  Award,
   Sparkles,
   Shield,
-  Layers,
-  ChevronDown,
-  ChevronUp,
-  Save,
-  X
+  AlertCircle,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  FileText,
+  Target,
+  Star,
+  BarChart3,
+  ChevronRight,
+  Edit3  // 🔥 TAMBAHKAN INI
 } from "lucide-react"
 
 function QuizDetail() {
-  const { id } = useParams()
   const navigate = useNavigate()
+  const { id } = useParams()
+
   const [quiz, setQuiz] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [expandedQuestions, setExpandedQuestions] = useState({})
-  const [showQuestionModal, setShowQuestionModal] = useState(false)
-  const [editingQuestion, setEditingQuestion] = useState(null)
-  const [questionForm, setQuestionForm] = useState({
-    question: "",
-    options: ["", "", "", ""],
-    correct: null
-  })
 
   useEffect(() => {
-    // Cari berdasarkan id atau index
-    const allQuiz = getQuiz()
-    let foundQuiz = null
-    
-    // Coba cari berdasarkan property id
-    foundQuiz = allQuiz.find(q => q.id && q.id.toString() === id.toString())
-    
-    // Jika tidak ditemukan, coba berdasarkan index
-    if (!foundQuiz && allQuiz[id]) {
-      foundQuiz = allQuiz[id]
-    }
-    
-    setQuiz(foundQuiz)
-    setLoading(false)
+    fetchQuizDetail()
   }, [id])
+
+  const fetchQuizDetail = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await api.getQuiz()
+      console.log("Quiz response:", response)
+      
+      let quizData = []
+      if (response && response.success && response.data) {
+        quizData = response.data
+      } else if (response && response.data && Array.isArray(response.data)) {
+        quizData = response.data
+      } else if (Array.isArray(response)) {
+        quizData = response
+      }
+      
+      // Cari quiz berdasarkan ID
+      const foundQuiz = quizData.find(q => 
+        q.id == id || q.id_kuis == id || q.id_quiz == id
+      )
+      
+      if (foundQuiz) {
+        // Transform data ke format yang konsisten
+        setQuiz({
+          id: foundQuiz.id || foundQuiz.id_kuis,
+          judul: foundQuiz.judul || foundQuiz.title || foundQuiz.judul_kuis || "Tanpa Judul",
+          deskripsi: foundQuiz.deskripsi || "",
+          divisi: foundQuiz.divisi || "Umum",
+          durasi: foundQuiz.durasi || 30,
+          passing: foundQuiz.passing || 75,
+          total_soal: foundQuiz.total_soal || foundQuiz.questions?.length || 0,
+          questions: foundQuiz.questions || [],
+          peserta: foundQuiz.peserta || 0,
+          created_at: foundQuiz.created_at || foundQuiz.createdAt,
+          status: foundQuiz.status || "aktif"
+        })
+      } else {
+        setError("Kuis tidak ditemukan")
+      }
+    } catch (err) {
+      console.error("Error fetching quiz detail:", err)
+      setError(err.message || "Gagal mengambil detail kuis")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const toggleExpand = (questionId) => {
     setExpandedQuestions(prev => ({
@@ -62,83 +89,43 @@ function QuizDetail() {
     }))
   }
 
-  const handleAddQuestion = () => {
-    if (!questionForm.question.trim()) {
-      alert("Pertanyaan harus diisi")
-      return
+  const formatDate = (dateString) => {
+    if (!dateString) return "Tanggal tidak tersedia"
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return "Tanggal tidak valid"
+      return date.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      })
+    } catch {
+      return "Tanggal error"
     }
-    if (questionForm.options.some(opt => !opt.trim())) {
-      alert("Semua pilihan jawaban harus diisi")
-      return
-    }
-    if (questionForm.correct === null) {
-      alert("Pilih jawaban yang benar")
-      return
-    }
+  }
 
-    const newQuestion = {
-      id: Date.now(),
-      ...questionForm,
-      correctLetter: String.fromCharCode(65 + questionForm.correct)
-    }
-
-    let updatedQuestions
-    if (editingQuestion !== null) {
-      updatedQuestions = [...quiz.questions]
-      updatedQuestions[editingQuestion] = newQuestion
+  const getStatusBadge = (status) => {
+    if (status === "aktif") {
+      return { text: "Aktif", color: "text-emerald-600", bg: "bg-emerald-50", icon: CheckCircle }
+    } else if (status === "akan_datang") {
+      return { text: "Akan Datang", color: "text-amber-600", bg: "bg-amber-50", icon: Clock }
     } else {
-      updatedQuestions = [...(quiz.questions || []), newQuestion]
+      return { text: "Selesai", color: "text-slate-500", bg: "bg-slate-100", icon: XCircle }
     }
-
-    const updatedQuiz = { ...quiz, questions: updatedQuestions }
-    setQuiz(updatedQuiz)
-    updateQuiz(id, updatedQuiz)
-
-    resetQuestionForm()
-    setShowQuestionModal(false)
-  }
-
-  const handleEditQuestion = (index) => {
-    const q = quiz.questions[index]
-    setQuestionForm({
-      question: q.question,
-      options: [...q.options],
-      correct: q.correct
-    })
-    setEditingQuestion(index)
-    setShowQuestionModal(true)
-  }
-
-  const handleDeleteQuestion = (index) => {
-    if (window.confirm("Yakin ingin menghapus soal ini?")) {
-      const updatedQuestions = quiz.questions.filter((_, i) => i !== index)
-      const updatedQuiz = { ...quiz, questions: updatedQuestions }
-      setQuiz(updatedQuiz)
-      updateQuiz(id, updatedQuiz)
-    }
-  }
-
-  const resetQuestionForm = () => {
-    setQuestionForm({
-      question: "",
-      options: ["", "", "", ""],
-      correct: null
-    })
-    setEditingQuestion(null)
   }
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <Loader2 size={32} className="animate-spin text-blue-500" />
           <p className="text-slate-500 text-sm">Memuat detail kuis...</p>
         </div>
       </div>
     )
   }
 
-  if (!quiz) {
+  if (error || !quiz) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
         <div className="p-5 lg:p-6 max-w-5xl mx-auto">
@@ -147,7 +134,7 @@ function QuizDetail() {
               <AlertCircle size={28} className="text-red-500" />
             </div>
             <h2 className="text-xl font-semibold text-slate-800 mb-2">Kuis Tidak Ditemukan</h2>
-            <p className="text-slate-500 mb-6">Kuis yang Anda cari tidak tersedia</p>
+            <p className="text-slate-500 mb-6">{error || "Kuis yang Anda cari tidak ada"}</p>
             <button
               onClick={() => navigate("/coo/quiz")}
               className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg text-white text-sm font-semibold"
@@ -160,15 +147,13 @@ function QuizDetail() {
     )
   }
 
-  const totalSoal = quiz.questions?.length || 0
-  const totalPeserta = quiz.participants || 0
-  const passingGrade = quiz.passing || 75
+  const statusBadge = getStatusBadge(quiz.status)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
-      <div className="p-5 lg:p-6 max-w-5xl mx-auto">
+      <div className="p-5 lg:p-6 max-w-6xl mx-auto">
         
-        {/* ===== HEADER SECTION ===== */}
+        {/* HEADER SECTION */}
         <div className="mb-6">
           <button
             onClick={() => navigate("/coo/quiz")}
@@ -180,7 +165,7 @@ function QuizDetail() {
           
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-xl shadow-md">
-              <Eye className="w-4 h-4 text-white" />
+              <Sparkles className="w-4 h-4 text-white" />
             </div>
             <div>
               <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 via-blue-800 to-indigo-800 bg-clip-text text-transparent">
@@ -188,295 +173,218 @@ function QuizDetail() {
               </h1>
               <p className="text-xs text-slate-500 flex items-center gap-1.5">
                 <span className="w-1 h-1 bg-emerald-500 rounded-full"></span>
-                Lihat informasi lengkap dan kelola pertanyaan kuis
+                Informasi lengkap tentang kuis
               </p>
             </div>
           </div>
         </div>
 
-        {/* ===== INFO CARD ===== */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-          <div className="relative h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
-          <div className="p-6">
-            <div className="flex items-start justify-between flex-wrap gap-4">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">{quiz.title}</h2>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium">
-                    <Layers size={12} />
-                    {quiz.divisi || "Umum"}
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-600 rounded-lg text-xs font-medium">
-                    <Clock size={12} />
-                    {quiz.durasi || 30} menit
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-medium">
-                    <Target size={12} />
-                    Passing: {passingGrade}%
-                  </span>
+        {/* MAIN CONTENT */}
+        <div className="space-y-6">
+          
+          {/* INFO CARD */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="relative h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+            <div className="p-6">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <BookOpen size={18} className="text-blue-500" />
+                    <h2 className="text-xl font-bold text-slate-800">{quiz.judul}</h2>
+                  </div>
+                  {quiz.deskripsi && (
+                    <p className="text-slate-500 text-sm mt-2">{quiz.deskripsi}</p>
+                  )}
                 </div>
-                {quiz.deskripsi && (
-                  <p className="text-slate-500 text-sm mt-3">{quiz.deskripsi}</p>
-                )}
+                <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full ${statusBadge.bg}`}>
+                  {statusBadge.icon && <statusBadge.icon size={14} className={statusBadge.color} />}
+                  <span className={`text-xs font-medium ${statusBadge.color}`}>{statusBadge.text}</span>
+                </div>
               </div>
-              <button
-                onClick={() => navigate(`/coo/edit-quiz/${id}`)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 rounded-lg text-white text-sm font-semibold shadow-md hover:shadow-lg transition"
-              >
-                <Edit3 size={14} />
-                Edit Kuis
-              </button>
-            </div>
-          </div>
-        </div>
 
-        {/* ===== STATS CARDS ===== */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xl font-bold text-slate-800">{totalSoal}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Total Soal</p>
-              </div>
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <BookOpen size={18} className="text-blue-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xl font-bold text-slate-800">{totalPeserta}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Total Peserta</p>
-              </div>
-              <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
-                <Users size={18} className="text-emerald-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xl font-bold text-slate-800">-</p>
-                <p className="text-xs text-slate-500 mt-0.5">Rata-rata Nilai</p>
-              </div>
-              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                <BarChart3 size={18} className="text-purple-600" />
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-4 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Users size={14} className="text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400">Divisi</p>
+                    <p className="text-sm font-medium text-slate-700">{quiz.divisi}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                    <Clock size={14} className="text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400">Durasi</p>
+                    <p className="text-sm font-medium text-slate-700">{quiz.durasi} menit</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <Target size={14} className="text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400">Passing Grade</p>
+                    <p className="text-sm font-medium text-slate-700">{quiz.passing}%</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                    <Calendar size={14} className="text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400">Dibuat</p>
+                    <p className="text-sm font-medium text-slate-700">{formatDate(quiz.created_at)}</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* ===== QUESTIONS SECTION ===== */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center flex-wrap gap-3">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg shadow-md">
-                <Layers className="w-4 h-4 text-white" />
+          {/* STATS CARD */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xl font-bold text-slate-800">{quiz.total_soal}</p>
+                  <p className="text-xs text-slate-500">Total Soal</p>
+                </div>
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <FileText size={18} className="text-blue-600" />
+                </div>
               </div>
-              <div>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xl font-bold text-slate-800">{quiz.peserta}</p>
+                  <p className="text-xs text-slate-500">Total Peserta</p>
+                </div>
+                <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                  <Users size={18} className="text-emerald-600" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xl font-bold text-slate-800">{quiz.passing}%</p>
+                  <p className="text-xs text-slate-500">Passing Grade</p>
+                </div>
+                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                  <Award size={18} className="text-purple-600" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* QUESTIONS SECTION */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg">
+                  <BookOpen size={14} className="text-white" />
+                </div>
                 <h3 className="font-bold text-slate-800">Daftar Pertanyaan</h3>
-                <p className="text-xs text-slate-400">Kelola soal untuk kuis ini</p>
+                <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">
+                  {quiz.questions?.length || 0} Soal
+                </span>
               </div>
             </div>
+
+            <div className="p-5">
+              {(!quiz.questions || quiz.questions.length === 0) ? (
+                <div className="border-2 border-dashed border-slate-200 rounded-xl p-10 text-center bg-slate-50/30">
+                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <BookOpen size={28} className="text-slate-300" />
+                  </div>
+                  <p className="text-slate-400 text-sm mb-1">Belum ada pertanyaan</p>
+                  <p className="text-xs text-slate-300">Kuis ini belum memiliki soal</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {quiz.questions.map((q, i) => {
+                    const questionId = q.id || i
+                    const isExpanded = expandedQuestions[questionId] || false
+                    
+                    return (
+                      <div key={questionId} className="bg-slate-50 rounded-xl overflow-hidden hover:bg-slate-100 transition border border-slate-100">
+                        <div 
+                          className="flex items-center justify-between p-4 cursor-pointer"
+                          onClick={() => toggleExpand(questionId)}
+                        >
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center font-bold text-white text-xs shadow-sm">
+                              {i + 1}
+                            </div>
+                            <p className="font-medium text-slate-700 text-sm flex-1">
+                              {q.text || q.question || "Pertanyaan tidak valid"}
+                            </p>
+                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                              Jawab: {q.correctLetter || String.fromCharCode(65 + (q.correct || 0))}
+                            </span>
+                          </div>
+                          <div className="ml-3">
+                            {isExpanded ? <ChevronRight size={16} className="text-slate-400 rotate-90" /> : <ChevronRight size={16} className="text-slate-400" />}
+                          </div>
+                        </div>
+                        
+                        {isExpanded && q && (
+                          <div className="p-4 border-t border-slate-100 bg-white space-y-3">
+                            <p className="text-slate-700 text-sm">{q.text || q.question}</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {(q.options || []).map((opt, idx) => (
+                                <div key={idx} className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
+                                  q.correct === idx ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-100'
+                                }`}>
+                                  <span className={`font-medium w-6 ${q.correct === idx ? 'text-emerald-600' : 'text-slate-500'}`}>
+                                    {String.fromCharCode(65 + idx)}.
+                                  </span>
+                                  <span className="text-slate-600 flex-1">{opt}</span>
+                                  {q.correct === idx && <CheckCircle size={14} className="text-emerald-500" />}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ACTION BUTTONS */}
+          <div className="flex justify-end gap-3">
             <button
-              onClick={() => {
-                resetQuestionForm()
-                setShowQuestionModal(true)
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg text-white text-xs font-medium shadow-sm hover:shadow-md transition"
+              onClick={() => navigate("/coo/quiz")}
+              className="px-5 py-2 border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-white hover:border-slate-300 transition"
             >
-              <Plus size={12} />
-              Tambah Soal
+              Kembali
+            </button>
+            <button
+              onClick={() => navigate(`/coo/edit-quiz/${quiz.id}`)}
+              className="px-5 py-2 bg-gradient-to-r from-amber-600 to-orange-600 rounded-lg text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center gap-2"
+            >
+              <Edit3 size={14} />
+              Edit Kuis
             </button>
           </div>
-          
-          <div className="p-5">
-            {totalSoal === 0 ? (
-              <div className="border-2 border-dashed border-slate-200 rounded-xl p-10 text-center bg-slate-50/30">
-                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Layers size={28} className="text-slate-300" />
-                </div>
-                <p className="text-slate-400 text-sm mb-2">Belum ada pertanyaan</p>
-                <p className="text-xs text-slate-300 mb-4">Tambahkan soal untuk kuis ini</p>
-                <button
-                  onClick={() => {
-                    resetQuestionForm()
-                    setShowQuestionModal(true)
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg text-white text-sm font-medium mx-auto"
-                >
-                  <Plus size={14} />
-                  Tambah Soal Pertama
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {quiz.questions.map((q, i) => (
-                  <div key={q.id || i} className="bg-slate-50 rounded-xl overflow-hidden hover:bg-slate-100 transition border border-slate-100">
-                    <div className="flex items-center justify-between p-4">
-                      <div className="flex items-center gap-3 flex-1">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center font-bold text-white text-xs shadow-sm">
-                          {i + 1}
-                        </div>
-                        <p className="font-medium text-slate-700 text-sm flex-1">
-                          {q.question}
-                        </p>
-                        <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-                          Jawab: {q.correctLetter}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 ml-3">
-                        <button
-                          onClick={() => toggleExpand(q.id || i)}
-                          className="p-1.5 hover:bg-white rounded-lg transition"
-                        >
-                          {expandedQuestions[q.id || i] ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
-                        </button>
-                        <button
-                          onClick={() => handleEditQuestion(i)}
-                          className="p-1.5 hover:bg-blue-100 text-blue-600 rounded-lg transition"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteQuestion(i)}
-                          className="p-1.5 hover:bg-red-100 text-red-500 rounded-lg transition"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {expandedQuestions[q.id || i] && (
-                      <div className="p-4 border-t border-slate-100 bg-white space-y-3">
-                        <p className="text-slate-700 text-sm">{q.question}</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          {q.options.map((opt, idx) => (
-                            <div key={idx} className={`flex items-center gap-2 p-2 rounded-lg text-sm ${
-                              q.correct === idx ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-100'
-                            }`}>
-                              <span className={`font-medium w-6 ${q.correct === idx ? 'text-emerald-600' : 'text-slate-500'}`}>
-                                {String.fromCharCode(65 + idx)}.
-                              </span>
-                              <span className="text-slate-600 flex-1">{opt}</span>
-                              {q.correct === idx && <CheckCircle size={14} className="text-emerald-500" />}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* ===== INFO BANNER ===== */}
-        <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100">
-          <div className="flex items-center gap-2">
-            <Shield size={14} className="text-blue-500" />
-            <p className="text-xs text-blue-700">
-              <strong className="font-semibold">Tips:</strong> Klik tombol ✏️ untuk mengedit soal, 🗑️ untuk menghapus, dan klik panah untuk melihat pilihan jawaban.
-            </p>
+          {/* INFO BANNER */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100">
+            <div className="flex items-center gap-2">
+              <Shield size={14} className="text-blue-500" />
+              <p className="text-xs text-blue-700">
+                <strong className="font-semibold">Informasi:</strong> Klik pada pertanyaan untuk melihat pilihan jawaban.
+              </p>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* ===== MODAL TAMBAH/EDIT SOAL ===== */}
-      {showQuestionModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
-            <div className="sticky top-0 bg-white px-5 py-3 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="font-semibold text-slate-800">
-                {editingQuestion !== null ? "Edit Soal" : "Tambah Soal Baru"}
-              </h3>
-              <button
-                onClick={() => {
-                  setShowQuestionModal(false)
-                  resetQuestionForm()
-                }}
-                className="p-1.5 hover:bg-slate-100 rounded-lg transition"
-              >
-                <X size={16} className="text-slate-400" />
-              </button>
-            </div>
-            
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Pertanyaan <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  placeholder="Masukkan pertanyaan di sini..."
-                  rows={2}
-                  className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
-                  value={questionForm.question}
-                  onChange={(e) => setQuestionForm({ ...questionForm, question: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Pilihan Jawaban <span className="text-red-500">*</span>
-                </label>
-                <div className="space-y-2">
-                  {questionForm.options.map((opt, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center text-slate-600 text-xs font-medium">
-                        {String.fromCharCode(65 + i)}
-                      </div>
-                      <input
-                        className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                        placeholder={`Jawaban ${String.fromCharCode(65 + i)}`}
-                        value={opt}
-                        onChange={(e) => {
-                          const newOpt = [...questionForm.options]
-                          newOpt[i] = e.target.value
-                          setQuestionForm({ ...questionForm, options: newOpt })
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setQuestionForm({ ...questionForm, correct: i })}
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${
-                          questionForm.correct === i
-                            ? "bg-emerald-500 text-white"
-                            : "bg-slate-100 text-slate-400 hover:bg-emerald-100 hover:text-emerald-600"
-                        }`}
-                      >
-                        <CheckCircle size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            
-            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setShowQuestionModal(false)
-                  resetQuestionForm()
-                }}
-                className="px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 text-xs font-medium hover:bg-white transition"
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleAddQuestion}
-                className="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg text-white text-xs font-medium transition flex items-center gap-1"
-              >
-                <Save size={12} />
-                {editingQuestion !== null ? "Update" : "Simpan"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

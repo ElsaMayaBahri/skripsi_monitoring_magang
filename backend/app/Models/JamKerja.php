@@ -20,9 +20,9 @@ class JamKerja extends Model
     ];
 
     protected $casts = [
-        'jam_masuk' => 'datetime',
-        'jam_pulang' => 'datetime',
-        'batas_terlambat' => 'datetime',
+        'jam_masuk' => 'string',
+        'jam_pulang' => 'string',
+        'batas_terlambat' => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
