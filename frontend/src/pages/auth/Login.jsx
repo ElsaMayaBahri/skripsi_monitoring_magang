@@ -30,19 +30,26 @@ function Login() {
   const [rememberMe, setRememberMe] = useState(false)
   const [focusedField, setFocusedField] = useState(null)
   const [activeDemo, setActiveDemo] = useState(null)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
+  // HANYA CEK TOKEN, JANGAN LANGSUNG REDIRECT
   useEffect(() => {
     const token = localStorage.getItem("token")
     const role = localStorage.getItem("role")
     
     if (token && role) {
-      if (role === "admin") {
-        navigate("/admin/dashboard")
-      } else if (role === "coo" || role === "mentor") {
-        navigate("/coo/dashboard")
-      } else if (role === "peserta") {
-        navigate("/peserta/dashboard")
-      }
+      // Redirect setelah komponen mount, tapi dengan delay kecil
+      setTimeout(() => {
+        if (role === "admin") {
+          navigate("/admin/dashboard", { replace: true })
+        } else if (role === "coo") {
+          navigate("/coo/dashboard", { replace: true })
+        } else if (role === "mentor") {
+          navigate("/mentor/dashboard", { replace: true })
+        } else if (role === "peserta") {
+          navigate("/peserta/dashboard", { replace: true })
+        }
+      }, 100)
     }
     
     const savedEmail = localStorage.getItem("rememberedEmail")
@@ -50,7 +57,24 @@ function Login() {
       setEmail(savedEmail)
       setRememberMe(true)
     }
+    
+    setIsCheckingAuth(false)
   }, [navigate])
+
+  // Jika sedang mengecek auth, tampilkan loading
+  if (isCheckingAuth) {
+    return (
+      <div style={{ 
+        minHeight: "100vh", 
+        display: "flex", 
+        alignItems: "center", 
+        justifyContent: "center",
+        background: "linear-gradient(135deg, #d4fcff 0%, #b2f0e8 50%, #9be5dc 100%)"
+      }}>
+        <div>Memuat...</div>
+      </div>
+    )
+  }
 
   const handleLogin = async () => {
     if (!email.trim()) {
@@ -82,18 +106,10 @@ function Login() {
         throw new Error("Token tidak ditemukan dari backend")
       }
 
-      // PERBAIKAN: Ambil data aktivitas lama sebelum menyimpan data login baru
-      const existingActivities = localStorage.getItem("system_activities")
-
       // Simpan data kredensial baru
       localStorage.setItem("token", token)
       localStorage.setItem("user", JSON.stringify(user))
       localStorage.setItem("role", role)
-
-      // PERBAIKAN: Pastikan system_activities ditulis ulang jika sebelumnya ada
-      if (existingActivities) {
-        localStorage.setItem("system_activities", existingActivities)
-      }
 
       if (rememberMe) {
         localStorage.setItem("rememberedEmail", email.trim())
@@ -104,21 +120,18 @@ function Login() {
       axiosInstance.defaults.headers.Authorization = `Bearer ${token}`
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
 
-      let redirectPath = "/admin/dashboard"
+      // Redirect berdasarkan role
       if (role === "admin") {
-        redirectPath = "/admin/dashboard"
-      } else if (role === "coo" || role === "mentor") {
-        redirectPath = "/coo/dashboard"
+        navigate("/admin/dashboard", { replace: true })
+      } else if (role === "coo") {
+        navigate("/coo/dashboard", { replace: true })
+      } else if (role === "mentor") {
+        navigate("/mentor/dashboard", { replace: true })
       } else if (role === "peserta") {
-        redirectPath = "/peserta/dashboard"
+        navigate("/peserta/dashboard", { replace: true })
+      } else {
+        navigate("/login", { replace: true })
       }
-      
-      const responseRedirect = response.data.redirect
-      if (responseRedirect) {
-        redirectPath = responseRedirect
-      }
-
-      navigate(redirectPath)
 
     } catch (err) {
       console.error("LOGIN ERROR:", err)
@@ -172,7 +185,7 @@ function Login() {
     setError("")
   }
 
-  // SVG Icons (Tetap sama sesuai permintaan untuk tidak mengubah tampilan)
+  // SVG Icons
   const EyeIcon = () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>

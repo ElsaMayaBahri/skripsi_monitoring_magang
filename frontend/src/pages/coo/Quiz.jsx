@@ -24,7 +24,11 @@ import {
   FileSpreadsheet,
   CheckCircle,
   TrendingUp,
-  Info
+  Info,
+  Filter,
+  SlidersHorizontal,
+  Building2,
+  Tag
 } from "lucide-react"
 
 function Quiz() {
@@ -40,6 +44,12 @@ function Quiz() {
   const [showSuccessToast, setShowSuccessToast] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   
+  // Filter states
+  const [showFilter, setShowFilter] = useState(false)
+  const [selectedDivisi, setSelectedDivisi] = useState("all")
+  const [selectedStatus, setSelectedStatus] = useState("all")
+  const [divisiList, setDivisiList] = useState([])
+  
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deletingQuizId, setDeletingQuizId] = useState(null)
   const [deletingQuizTitle, setDeletingQuizTitle] = useState("")
@@ -50,6 +60,7 @@ function Quiz() {
 
   useEffect(() => {
     loadQuizData()
+    fetchDivisi()
   }, [])
 
   const loadQuizData = async () => {
@@ -88,6 +99,23 @@ function Quiz() {
       setQuiz([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchDivisi = async () => {
+    try {
+      const response = await api.getDivisi()
+      let divisiData = []
+      if (response.success && response.data) {
+        divisiData = response.data
+      } else if (Array.isArray(response)) {
+        divisiData = response
+      } else if (response.data && Array.isArray(response.data)) {
+        divisiData = response.data
+      }
+      setDivisiList(divisiData)
+    } catch (error) {
+      console.error("Error fetching divisi:", error)
     }
   }
 
@@ -194,6 +222,12 @@ function Quiz() {
     }
   }
 
+  const resetFilters = () => {
+    setSelectedDivisi("all")
+    setSelectedStatus("all")
+    setSearch("")
+  }
+
   const formatDate = (dateString) => {
     if (!dateString) return "Tanggal tidak tersedia"
     
@@ -212,9 +246,13 @@ function Quiz() {
     }
   }
 
-  const filtered = quiz.filter(q =>
-    q.judul?.toLowerCase().includes(search.toLowerCase())
-  )
+  // Filter logic
+  const filtered = quiz.filter(q => {
+    const matchesSearch = q.judul?.toLowerCase().includes(search.toLowerCase())
+    const matchesDivisi = selectedDivisi === "all" || q.divisi === selectedDivisi
+    const matchesStatus = selectedStatus === "all" || q.status?.toLowerCase() === selectedStatus.toLowerCase()
+    return matchesSearch && matchesDivisi && matchesStatus
+  })
 
   const totalPage = Math.ceil(filtered.length / perPage)
   const currentData = filtered.slice(
@@ -391,6 +429,21 @@ function Quiz() {
               </div>
               
               <button
+                onClick={() => setShowFilter(!showFilter)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  showFilter 
+                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md" 
+                    : "bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600"
+                }`}
+              >
+                <SlidersHorizontal size={16} />
+                Filter
+                {(selectedDivisi !== "all" || selectedStatus !== "all") && (
+                  <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                )}
+              </button>
+              
+              <button
                 onClick={() => setShowImportModal(true)}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 text-sm font-medium hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md transition-all duration-200"
               >
@@ -408,6 +461,166 @@ function Quiz() {
             </div>
           </div>
         </div>
+
+        {/* FILTER PANEL */}
+        {showFilter && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-lg p-5 mb-6 animate-in fade-in duration-200">
+            <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center">
+                  <Filter size={14} className="text-white" />
+                </div>
+                <h3 className="font-semibold text-slate-800">Filter Kuis</h3>
+              </div>
+              <button 
+                onClick={resetFilters} 
+                className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-indigo-50 transition"
+              >
+                <X size={12} />
+                Reset Filter
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Filter Divisi */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600 flex items-center gap-1 mb-2">
+                  <Building2 size={12} />
+                  Divisi
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedDivisi("all")
+                      setPage(1)
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      selectedDivisi === "all"
+                        ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Semua Divisi
+                  </button>
+                  {divisiList.map(div => (
+                    <button
+                      key={div.id_divisi}
+                      onClick={() => {
+                        setSelectedDivisi(div.nama_divisi)
+                        setPage(1)
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                        selectedDivisi === div.nama_divisi
+                          ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {div.nama_divisi}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Filter Status */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600 flex items-center gap-1 mb-2">
+                  <Tag size={12} />
+                  Status
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedStatus("all")
+                      setPage(1)
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      selectedStatus === "all"
+                        ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Semua Status
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedStatus("aktif")
+                      setPage(1)
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      selectedStatus === "aktif"
+                        ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Aktif
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedStatus("draft")
+                      setPage(1)
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      selectedStatus === "draft"
+                        ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Draft
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedStatus("arsip")
+                      setPage(1)
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      selectedStatus === "arsip"
+                        ? "bg-gradient-to-r from-slate-600 to-slate-700 text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Arsip
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {/* Filter info */}
+            {(selectedDivisi !== "all" || selectedStatus !== "all" || search) && (
+              <div className="mt-4 pt-3 border-t border-slate-100">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] text-slate-500">Filter aktif:</span>
+                  {selectedDivisi !== "all" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[10px]">
+                      <Building2 size={10} />
+                      {selectedDivisi}
+                      <button onClick={() => setSelectedDivisi("all")} className="hover:text-indigo-900">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  )}
+                  {selectedStatus !== "all" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px]">
+                      <Tag size={10} />
+                      {selectedStatus}
+                      <button onClick={() => setSelectedStatus("all")} className="hover:text-purple-900">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  )}
+                  {search && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px]">
+                      <Search size={10} />
+                      "{search}"
+                      <button onClick={() => setSearch("")} className="hover:text-slate-800">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* STATS CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-6">
@@ -503,13 +716,12 @@ function Quiz() {
                         <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl flex items-center justify-center">
                           <File size="32" className="text-slate-400" />
                         </div>
-                        <p className="text-slate-500 font-medium">Belum ada data kuis</p>
+                        <p className="text-slate-500 font-medium">Tidak ada kuis yang sesuai dengan filter</p>
                         <button
-                          onClick={() => navigate("/coo/add-quiz")}
-                          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-medium shadow-md hover:shadow-lg transition-all"
+                          onClick={resetFilters}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-all"
                         >
-                          <Plus size={16} />
-                          Buat Kuis Sekarang
+                          Reset Filter
                         </button>
                       </div>
                     </td>
@@ -697,7 +909,8 @@ function Quiz() {
               <p className="text-xs font-semibold text-slate-700 mb-1">Informasi</p>
               <p className="text-xs text-slate-600 leading-relaxed">
                 Klik ikon mata untuk melihat detail kuis, ikon pensil untuk mengedit, 
-                dan ikon tempat sampah untuk menghapus kuis. Gunakan tombol Import Excel 
+                dan ikon tempat sampah untuk menghapus kuis. Gunakan tombol Filter untuk 
+                menyaring berdasarkan divisi atau status. Gunakan tombol Import Excel 
                 untuk mengimport banyak kuis sekaligus dengan file CSV/Excel.
               </p>
             </div>
@@ -816,10 +1029,6 @@ function Quiz() {
       )}
 
       <style jsx>{`
-        @keyframes shrink {
-          from { width: 100%; }
-          to { width: 0%; }
-        }
         .animate-in {
           animation: fadeIn 0.2s ease-out;
         }
