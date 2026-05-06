@@ -22,10 +22,10 @@ import {
   Zap,
   Shield,
   Gem,
-  Diamond,
   TrendingUp,
   Eye
 } from "lucide-react";
+import api from "../../utils/api";
 
 function DaftarPeserta() {
   const [loading, setLoading] = useState(true);
@@ -37,42 +37,82 @@ function DaftarPeserta() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(8);
   const [hoveredCard, setHoveredCard] = useState(null);
+  const [periodeList, setPeriodeList] = useState([]);
+  const [divisiList, setDivisiList] = useState([]);
 
   useEffect(() => {
+    fetchFilters();
     fetchPeserta();
   }, []);
+
+  // Fetch filter options
+  const fetchFilters = async () => {
+    try {
+      const response = await api.getMentorFilters();
+      
+      if (response.success) {
+        setPeriodeList(response.data.periode || []);
+        setDivisiList(response.data.divisi || []);
+      } else {
+        setPeriodeList(["2024", "2025"]);
+        setDivisiList([]);
+      }
+    } catch (error) {
+      console.error("Error fetching filters:", error);
+      setPeriodeList(["2024", "2025"]);
+      setDivisiList([]);
+    }
+  };
 
   const fetchPeserta = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:8000/api/mentor/peserta", {
-        headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
-      });
+      const params = {};
+      if (searchTerm && searchTerm !== '') params.search = searchTerm;
+      if (selectedPeriode !== 'all' && selectedPeriode !== '') params.periode = selectedPeriode;
+      if (selectedDivisi !== 'all' && selectedDivisi !== '') params.divisi = selectedDivisi;
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setPeserta(data.data || []);
-        }
+      const response = await api.getMentorPesertaList(params);
+      
+      if (response.success && response.data) {
+        const transformedData = response.data.map(pesertaItem => ({
+          id: pesertaItem.id || pesertaItem.peserta_id || pesertaItem.id_peserta,
+          nama: pesertaItem.nama_lengkap || pesertaItem.nama || pesertaItem.name,
+          email: pesertaItem.email,
+          periode_magang: pesertaItem.periode_magang,
+          divisi: pesertaItem.divisi || pesertaItem.peserta_divisi,
+          status_akun: pesertaItem.status || pesertaItem.status_magang || 'aktif',
+          progress: pesertaItem.progress || 0,
+          attendance: pesertaItem.kehadiran_persen || 0,
+          tugas_selesai: pesertaItem.tugas_selesai || 0,
+          total_tugas: pesertaItem.total_tugas || 15,
+          nilai_akhir: pesertaItem.nilai_akhir || 0,
+          rank: pesertaItem.rank || hitungRank(pesertaItem.nilai_akhir || 0)
+        }));
+        setPeserta(transformedData);
       } else {
-        setPeserta([
-          { id: 1, nama: "Ahmad Firmansyah", email: "ahmad.firmansyah@email.com", periode_magang: "Agustus - Desember 2024", divisi: "Frontend Development", status_akun: "aktif", progress: 85, attendance: 92, tugas_selesai: 12, total_tugas: 14, nilai_akhir: 87.5, rank: "diamond" },
-          { id: 2, nama: "Siti Nurhaliza", email: "siti.nurhaliza@email.com", periode_magang: "Agustus - Desember 2024", divisi: "Backend Development", status_akun: "aktif", progress: 92, attendance: 98, tugas_selesai: 13, total_tugas: 14, nilai_akhir: 92.3, rank: "diamond" },
-          { id: 3, nama: "Budi Santoso", email: "budi.santoso@email.com", periode_magang: "Agustus - Desember 2024", divisi: "UI/UX Design", status_akun: "aktif", progress: 68, attendance: 75, tugas_selesai: 9, total_tugas: 14, nilai_akhir: 72.0, rank: "silver" },
-          { id: 4, nama: "Dewi Lestari", email: "dewi.lestari@email.com", periode_magang: "Agustus - Desember 2024", divisi: "Mobile Development", status_akun: "aktif", progress: 78, attendance: 88, tugas_selesai: 11, total_tugas: 14, nilai_akhir: 79.5, rank: "gold" },
-          { id: 5, nama: "Eko Prasetyo", email: "eko.prasetyo@email.com", periode_magang: "Agustus - Desember 2024", divisi: "Quality Assurance", status_akun: "aktif", progress: 71, attendance: 82, tugas_selesai: 10, total_tugas: 14, nilai_akhir: 74.2, rank: "gold" },
-          { id: 6, nama: "Fitri Amelia", email: "fitri.amelia@email.com", periode_magang: "Agustus - Desember 2024", divisi: "Data Analyst", status_akun: "aktif", progress: 89, attendance: 94, tugas_selesai: 12, total_tugas: 14, nilai_akhir: 88.9, rank: "diamond" },
-          { id: 7, nama: "Gilang Permana", email: "gilang.permana@email.com", periode_magang: "Agustus - Desember 2024", divisi: "DevOps Engineer", status_akun: "aktif", progress: 64, attendance: 70, tugas_selesai: 9, total_tugas: 14, nilai_akhir: 68.5, rank: "silver" },
-          { id: 8, nama: "Hana Kirana", email: "hana.kirana@email.com", periode_magang: "Agustus - Desember 2024", divisi: "Frontend Development", status_akun: "aktif", progress: 95, attendance: 96, tugas_selesai: 14, total_tugas: 14, nilai_akhir: 94.7, rank: "diamond" },
-        ]);
+        setPeserta([]);
       }
     } catch (error) {
       console.error("Error fetching peserta:", error);
+      setPeserta([]);
     } finally {
       setLoading(false);
     }
   };
+
+  const hitungRank = (nilai) => {
+    if (nilai >= 85) return "diamond";
+    if (nilai >= 70) return "gold";
+    return "silver";
+  };
+
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      fetchPeserta();
+    }, 500);
+    return () => clearTimeout(delayDebounce);
+  }, [searchTerm, selectedPeriode, selectedDivisi]);
 
   const getRankColor = (rank) => {
     const colors = {
@@ -83,15 +123,16 @@ function DaftarPeserta() {
     return colors[rank] || "from-teal-500 to-blue-600";
   };
 
-  const getRankIcon = (rank) => {
-    if (rank === "diamond") return <Gem size="10" className="text-cyan-400" />;
-    if (rank === "gold") return <Crown size="10" className="text-amber-400" />;
-    return <Medal size="10" className="text-slate-400" />;
+  const getRankIcon = (rank, size = "10") => {
+    if (rank === "diamond") return <Gem size={size} className="text-cyan-400" />;
+    if (rank === "gold") return <Crown size={size} className="text-amber-400" />;
+    return <Medal size={size} className="text-slate-400" />;
   };
 
   const filteredPeserta = peserta.filter(p => {
-    const matchesSearch = p.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          p.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = !searchTerm || 
+                          (p.nama?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          p.email?.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesPeriode = selectedPeriode === "all" || p.periode_magang === selectedPeriode;
     const matchesDivisi = selectedDivisi === "all" || p.divisi === selectedDivisi;
     return matchesSearch && matchesPeriode && matchesDivisi;
@@ -119,7 +160,6 @@ function DaftarPeserta() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20">
-      {/* Background Decoration */}
       <div className="fixed inset-0 opacity-[0.03] pointer-events-none">
         <div className="absolute top-0 left-0 w-96 h-96 bg-teal-500 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500 rounded-full blur-3xl"></div>
@@ -128,7 +168,6 @@ function DaftarPeserta() {
       
       <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
         
-        {/* Header Premium - Full Width Gradient Background (sama persis dengan Presensi) */}
         <div className="relative mb-10 rounded-2xl overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-teal-500/15 via-blue-500/10 to-teal-500/15 rounded-2xl"></div>
           <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-6 px-6 py-5">
@@ -167,12 +206,9 @@ function DaftarPeserta() {
           </div>
         </div>
 
-        {/* Filter & Search - sama persis dengan Presensi */}
         <div className="mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5 mb-6">
-            <div className="flex items-center gap-3">
-              {/* Tidak ada date navigation di DaftarPeserta, jadi kosong */}
-            </div>
+            <div className="flex items-center gap-3"></div>
             <div className="relative flex-1 max-w-md">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search className="h-4 w-4 text-slate-400" />
@@ -188,7 +224,6 @@ function DaftarPeserta() {
           </div>
         </div>
 
-        {/* Filter Options */}
         <div className="mb-6">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
@@ -211,7 +246,9 @@ function DaftarPeserta() {
               className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-teal-400 cursor-pointer"
             >
               <option value="all">Semua Periode</option>
-              <option value="Agustus - Desember 2024">Agustus - Desember 2024</option>
+              {periodeList.map(periode => (
+                <option key={periode} value={periode}>{periode}</option>
+              ))}
             </select>
             <select
               value={selectedDivisi}
@@ -219,13 +256,9 @@ function DaftarPeserta() {
               className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-teal-400 cursor-pointer"
             >
               <option value="all">Semua Divisi</option>
-              <option value="Frontend Development">Frontend Development</option>
-              <option value="Backend Development">Backend Development</option>
-              <option value="UI/UX Design">UI/UX Design</option>
-              <option value="Mobile Development">Mobile Development</option>
-              <option value="Quality Assurance">Quality Assurance</option>
-              <option value="Data Analyst">Data Analyst</option>
-              <option value="DevOps Engineer">DevOps Engineer</option>
+              {divisiList.map(divisi => (
+                <option key={divisi} value={divisi}>{divisi}</option>
+              ))}
             </select>
             <button className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300">
               <span className="relative z-10 flex items-center gap-2">
@@ -237,7 +270,6 @@ function DaftarPeserta() {
           </div>
         </div>
 
-        {/* Results count */}
         <div className="mb-5">
           <p className="text-sm text-slate-500 flex items-center gap-2">
             <Sparkles size="14" className="text-teal-500" />
@@ -246,10 +278,10 @@ function DaftarPeserta() {
           </p>
         </div>
 
-        {/* Grid View Premium */}
+        {/* Grid View */}
         {viewMode === "grid" && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {currentItems.map((p, idx) => {
+            {currentItems.map((p) => {
               const rankColor = getRankColor(p.rank);
               const isHovered = hoveredCard === p.id;
               
@@ -272,14 +304,14 @@ function DaftarPeserta() {
                           <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-xl blur-md opacity-50 group-hover:opacity-100 transition-opacity"></div>
                           <div className="relative w-20 h-20 rounded-xl bg-white shadow-xl flex items-center justify-center border-2 border-white/50">
                             <span className="text-2xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
-                              {p.nama.charAt(0)}
+                              {p.nama?.charAt(0) || "P"}
                             </span>
                           </div>
                         </div>
                       </div>
                       <div className="absolute top-3 right-3">
-                        <div className={`px-3 py-1 rounded-full text-[11px] font-bold ${rankColor === "from-cyan-400 to-blue-500" ? "bg-gradient-to-r from-cyan-400 to-blue-500" : rankColor === "from-amber-400 to-yellow-500" ? "bg-gradient-to-r from-amber-400 to-yellow-500" : "bg-gradient-to-r from-slate-400 to-gray-500"} shadow-lg flex items-center gap-1.5`}>
-                          {getRankIcon(p.rank)}
+                        <div className={`px-3 py-1 rounded-full text-[11px] font-bold bg-gradient-to-r ${rankColor} shadow-lg flex items-center gap-1.5`}>
+                          {getRankIcon(p.rank, "10")}
                           <span className="text-white uppercase tracking-wider">{p.rank}</span>
                         </div>
                       </div>
@@ -291,7 +323,7 @@ function DaftarPeserta() {
                       </h3>
                       <p className="text-xs text-slate-500 mb-4 flex items-center gap-1">
                         <GraduationCap size="12" />
-                        {p.divisi}
+                        {p.divisi || "-"}
                       </p>
                       
                       <div className="space-y-3 mb-4">
@@ -301,11 +333,7 @@ function DaftarPeserta() {
                             <span className="font-bold text-teal-600">{p.progress}%</span>
                           </div>
                           <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div 
-                              className="absolute inset-y-0 left-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-full transition-all duration-1000 ease-out"
-                              style={{ width: `${p.progress}%` }}
-                            ></div>
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+                            <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-full transition-all duration-1000 ease-out" style={{ width: `${p.progress}%` }}></div>
                           </div>
                         </div>
                         <div>
@@ -314,11 +342,7 @@ function DaftarPeserta() {
                             <span className="font-bold text-emerald-600">{p.attendance}%</span>
                           </div>
                           <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div 
-                              className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-1000 ease-out"
-                              style={{ width: `${p.attendance}%` }}
-                            ></div>
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+                            <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-1000 ease-out" style={{ width: `${p.attendance}%` }}></div>
                           </div>
                         </div>
                       </div>
@@ -353,7 +377,7 @@ function DaftarPeserta() {
           </div>
         )}
 
-        {/* List View Premium */}
+        {/* List View */}
         {viewMode === "list" && (
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
             <div className="overflow-x-auto">
@@ -373,7 +397,6 @@ function DaftarPeserta() {
                 <tbody className="divide-y divide-slate-100">
                   {currentItems.map((p) => {
                     const rankColor = getRankColor(p.rank);
-                    const rankIcon = getRankIcon(p.rank);
                     
                     return (
                       <tr key={p.id} className="hover:bg-slate-50/80 transition-all duration-200 group">
@@ -382,7 +405,7 @@ function DaftarPeserta() {
                             <div className="relative">
                               <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-lg blur-sm opacity-0 group-hover:opacity-50 transition-opacity"></div>
                               <div className={`relative w-10 h-10 rounded-lg bg-gradient-to-r ${rankColor} flex items-center justify-center text-white font-bold text-sm shadow-md`}>
-                                {p.nama.charAt(0)}
+                                {p.nama?.charAt(0) || "P"}
                               </div>
                             </div>
                             <div>
@@ -391,9 +414,7 @@ function DaftarPeserta() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <span className="text-sm text-slate-600">{p.divisi}</span>
-                        </td>
+                        <td className="px-6 py-4"><span className="text-sm text-slate-600">{p.divisi || "-"}</span></td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -410,9 +431,7 @@ function DaftarPeserta() {
                             <span className="text-sm font-semibold text-slate-700">{p.attendance}%</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <span className="text-sm text-slate-600">{p.tugas_selesai}/{p.total_tugas}</span>
-                        </td>
+                        <td className="px-6 py-4"><span className="text-sm text-slate-600">{p.tugas_selesai}/{p.total_tugas}</span></td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-1.5">
                             <Star size="14" className="text-amber-500 fill-amber-500" />
@@ -421,7 +440,7 @@ function DaftarPeserta() {
                         </td>
                         <td className="px-6 py-4">
                           <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r ${rankColor} shadow-md`}>
-                            {rankIcon}
+                            {getRankIcon(p.rank, "10")}
                             <span className="text-xs font-bold text-white uppercase">{p.rank}</span>
                           </div>
                         </td>
@@ -442,8 +461,7 @@ function DaftarPeserta() {
           </div>
         )}
 
-        {/* Empty State Premium */}
-        {filteredPeserta.length === 0 && (
+        {filteredPeserta.length === 0 && !loading && (
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-100 py-16 text-center">
             <div className="relative inline-block">
               <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-full blur-xl opacity-30 animate-pulse"></div>
@@ -456,7 +474,6 @@ function DaftarPeserta() {
           </div>
         )}
 
-        {/* Premium Pagination - sama persis dengan Presensi */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between mt-8">
             <p className="text-sm text-slate-500 flex items-center gap-2">
@@ -512,16 +529,6 @@ function DaftarPeserta() {
           </div>
         )}
       </div>
-
-      <style jsx>{`
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        .animate-shimmer {
-          animation: shimmer 2s infinite;
-        }
-      `}</style>
     </div>
   );
 }

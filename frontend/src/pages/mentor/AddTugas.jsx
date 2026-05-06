@@ -1,5 +1,5 @@
 // src/pages/mentor/AddTugas.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   ClipboardList,
@@ -24,48 +24,54 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
-  Search
+  Search,
+  Upload,
+  Paperclip
 } from "lucide-react";
+import api from "../../utils/api";
 
 function AddTugas() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
   const [pesertaList, setPesertaList] = useState([]);
   const [filteredPeserta, setFilteredPeserta] = useState([]);
   const [displayedPeserta, setDisplayedPeserta] = useState([]);
   const [searchPeserta, setSearchPeserta] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(6);
+  const [fileUpload, setFileUpload] = useState(null);
+  const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
     judul: "",
     deskripsi: "",
     deadline: "",
-    bobot: "",
     peserta: []
   });
   const [errors, setErrors] = useState({});
-  const [focusedField, setFocusedField] = useState(null);
 
-  // Load peserta dummy
+  // Fetch peserta from backend
   useEffect(() => {
-    const dummyPeserta = [
-      { id: 1, nama: "Ahmad Firmansyah", divisi: "Frontend Development", progress: 85, email: "ahmad@email.com" },
-      { id: 2, nama: "Siti Nurhaliza", divisi: "Backend Development", progress: 92, email: "siti@email.com" },
-      { id: 3, nama: "Budi Santoso", divisi: "UI/UX Design", progress: 68, email: "budi@email.com" },
-      { id: 4, nama: "Dewi Lestari", divisi: "Mobile Development", progress: 78, email: "dewi@email.com" },
-      { id: 5, nama: "Eko Prasetyo", divisi: "Quality Assurance", progress: 71, email: "eko@email.com" },
-      { id: 6, nama: "Fitri Amelia", divisi: "Data Analyst", progress: 89, email: "fitri@email.com" },
-      { id: 7, nama: "Gilang Permana", divisi: "DevOps Engineer", progress: 64, email: "gilang@email.com" },
-      { id: 8, nama: "Hana Kirana", divisi: "Frontend Development", progress: 95, email: "hana@email.com" },
-      { id: 9, nama: "Indra Wijaya", divisi: "Backend Development", progress: 82, email: "indra@email.com" },
-      { id: 10, nama: "Joko Susilo", divisi: "UI/UX Design", progress: 70, email: "joko@email.com" },
-      { id: 11, nama: "Kartika Dewi", divisi: "Mobile Development", progress: 88, email: "kartika@email.com" },
-      { id: 12, nama: "Lukman Hakim", divisi: "Quality Assurance", progress: 76, email: "lukman@email.com" }
-    ];
-    setPesertaList(dummyPeserta);
-    setFilteredPeserta(dummyPeserta);
-    setFormData(prev => ({ ...prev, peserta: dummyPeserta.map(p => p.id) }));
+    const fetchPeserta = async () => {
+      try {
+        const response = await api.getMentorPesertaList({});
+        if (response.success && response.data) {
+          const transformedPeserta = response.data.map(p => ({
+            id: p.id_peserta,
+            nama: p.nama || p.nama_peserta || "Unknown",
+            divisi: p.divisi || "-",
+            progress: p.progress || 0,
+            email: p.email || "-"
+          }));
+          setPesertaList(transformedPeserta);
+          setFilteredPeserta(transformedPeserta);
+        }
+      } catch (error) {
+        console.error("Error fetching peserta:", error);
+      }
+    };
+    fetchPeserta();
   }, []);
 
   // Filter peserta berdasarkan search
@@ -97,6 +103,47 @@ function AddTugas() {
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: "" }));
     }
+    if (error) setError("");
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        setErrors({ file: "Ukuran file maksimal 10 MB" });
+        return;
+      }
+      
+      const allowedTypes = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "image/jpeg",
+        "image/png",
+        "application/zip",
+        "application/x-rar-compressed",
+        "text/plain"
+      ];
+      
+      if (!allowedTypes.includes(file.type)) {
+        setErrors({ file: "Format file tidak didukung. Gunakan PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, JPG, PNG, ZIP, RAR, atau TXT" });
+        return;
+      }
+      
+      setFileUpload(file);
+      setErrors(prev => ({ ...prev, file: "" }));
+    }
+  };
+
+  const removeFile = () => {
+    setFileUpload(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handlePesertaToggle = (pesertaId) => {
@@ -122,8 +169,6 @@ function AddTugas() {
     if (!formData.judul.trim()) newErrors.judul = "Judul tugas wajib diisi";
     if (!formData.deskripsi.trim()) newErrors.deskripsi = "Deskripsi tugas wajib diisi";
     if (!formData.deadline) newErrors.deadline = "Deadline wajib diisi";
-    if (!formData.bobot) newErrors.bobot = "Bobot nilai wajib diisi";
-    if (formData.bobot && (formData.bobot < 0 || formData.bobot > 100)) newErrors.bobot = "Bobot harus antara 0-100";
     if (formData.peserta.length === 0) newErrors.peserta = "Pilih minimal 1 peserta";
     
     setErrors(newErrors);
@@ -135,14 +180,38 @@ function AddTugas() {
     if (!validateForm()) return;
     
     setLoading(true);
+    setError("");
     
-    setTimeout(() => {
+    try {
+      const submitData = new FormData();
+      submitData.append("judul", formData.judul);
+      submitData.append("deskripsi", formData.deskripsi);
+      submitData.append("deadline", formData.deadline);
+      submitData.append("id_peserta", JSON.stringify(formData.peserta));
+      
+      if (fileUpload) {
+        submitData.append("file_tugas", fileUpload);
+      }
+      
+      const response = await api.createMentorTugas(submitData);
+      
+      if (response.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          navigate("/mentor/tugas");
+        }, 1500);
+      } else {
+        setError(response.message || "Gagal menambahkan tugas");
+        if (response.errors) {
+          setErrors(response.errors);
+        }
+      }
+    } catch (err) {
+      console.error("Error adding tugas:", err);
+      setError(err.message || "Terjadi kesalahan saat menambahkan tugas");
+    } finally {
       setLoading(false);
-      setSuccess(true);
-      setTimeout(() => {
-        navigate("/mentor/tugas");
-      }, 1500);
-    }, 1500);
+    }
   };
 
   const formatDateForInput = () => {
@@ -154,6 +223,17 @@ function AddTugas() {
   };
 
   const getMinDate = formatDateForInput();
+
+  const getFileIcon = (file) => {
+    const type = file.type;
+    if (type.includes("pdf")) return "📄";
+    if (type.includes("word")) return "📝";
+    if (type.includes("powerpoint")) return "📊";
+    if (type.includes("excel")) return "📈";
+    if (type.includes("image")) return "🖼️";
+    if (type.includes("zip") || type.includes("rar")) return "📦";
+    return "📎";
+  };
 
   const selectedCount = formData.peserta.length;
   const totalCount = filteredPeserta.length;
@@ -168,7 +248,7 @@ function AddTugas() {
       
       <div className="relative p-6 lg:p-8 max-w-[1200px] mx-auto">
         
-        {/* Header Premium - Sama seperti halaman lain */}
+        {/* Header Premium */}
         <div className="relative mb-10 rounded-2xl overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-teal-500/15 via-blue-500/10 to-teal-500/15 rounded-2xl"></div>
           <div className="relative px-6 py-5">
@@ -196,15 +276,27 @@ function AddTugas() {
           </div>
         </div>
 
-        {/* Success Alert Premium */}
-        {success && (
-          <div className="mb-6 bg-gradient-to-r from-emerald-50/90 to-teal-50/90 backdrop-blur-sm border border-emerald-200 rounded-2xl p-5 animate-in slide-in-from-top-2 duration-300 shadow-md">
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-6 bg-gradient-to-r from-red-50/90 to-rose-50/90 backdrop-blur-sm border border-red-200 rounded-2xl p-5">
             <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="absolute inset-0 bg-emerald-500 rounded-full blur-md opacity-30"></div>
-                <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md">
-                  <CheckCircle size="16" className="text-white" />
-                </div>
+              <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center shadow-md">
+                <AlertCircle size="16" className="text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-red-800">Gagal Membuat Tugas!</p>
+                <p className="text-xs text-red-600">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Alert */}
+        {success && (
+          <div className="mb-6 bg-gradient-to-r from-emerald-50/90 to-teal-50/90 backdrop-blur-sm border border-emerald-200 rounded-2xl p-5">
+            <div className="flex items-center gap-3">
+              <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md">
+                <CheckCircle size="16" className="text-white" />
               </div>
               <div>
                 <p className="text-sm font-bold text-emerald-800">Tugas Berhasil Dibuat!</p>
@@ -263,47 +355,85 @@ function AddTugas() {
               {errors.deskripsi && <p className="text-xs text-red-500 mt-1">{errors.deskripsi}</p>}
             </div>
 
-            {/* Deadline & Bobot */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                  <div className="p-1 rounded-lg bg-amber-50">
-                    <Calendar size="14" className="text-amber-600" />
-                  </div>
-                  Deadline <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  name="deadline"
-                  value={formData.deadline}
-                  onChange={handleChange}
-                  min={getMinDate}
-                  className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl text-sm text-slate-700 focus:outline-none transition-all duration-200 ${
-                    errors.deadline ? "border-red-400 bg-red-50/30" : "border-slate-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
-                  }`}
-                />
-                {errors.deadline && <p className="text-xs text-red-500 mt-1">{errors.deadline}</p>}
-              </div>
+            {/* Deadline */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                <div className="p-1 rounded-lg bg-amber-50">
+                  <Calendar size="14" className="text-amber-600" />
+                </div>
+                Deadline <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                name="deadline"
+                value={formData.deadline}
+                onChange={handleChange}
+                min={getMinDate}
+                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl text-sm text-slate-700 focus:outline-none transition-all duration-200 ${
+                  errors.deadline ? "border-red-400 bg-red-50/30" : "border-slate-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
+                }`}
+              />
+              {errors.deadline && <p className="text-xs text-red-500 mt-1">{errors.deadline}</p>}
+            </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                  <div className="p-1 rounded-lg bg-purple-50">
-                    <Award size="14" className="text-purple-600" />
-                  </div>
-                  Bobot Nilai (%) <span className="text-red-500">*</span>
-                </label>
+            {/* Upload File */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                <div className="p-1 rounded-lg bg-indigo-50">
+                  <Paperclip size="14" className="text-indigo-600" />
+                </div>
+                Lampiran File (Opsional)
+              </label>
+              <div className="relative">
                 <input
-                  type="number"
-                  name="bobot"
-                  value={formData.bobot}
-                  onChange={handleChange}
-                  placeholder="Contoh: 30"
-                  className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none transition-all duration-200 ${
-                    errors.bobot ? "border-red-400 bg-red-50/30" : "border-slate-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
-                  }`}
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="file_tugas"
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.rar,.txt"
                 />
-                {errors.bobot && <p className="text-xs text-red-500 mt-1">{errors.bobot}</p>}
+                {!fileUpload ? (
+                  <label
+                    htmlFor="file_tugas"
+                    className="flex items-center justify-center w-full p-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50 cursor-pointer hover:border-teal-400 hover:bg-teal-50/20 transition-all duration-200"
+                  >
+                    <div className="text-center">
+                      <Upload size="32" className="mx-auto mb-2 text-slate-400" />
+                      <p className="text-sm text-slate-600">Klik untuk upload file</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, JPG, PNG, ZIP, RAR, TXT (Max 10 MB)
+                      </p>
+                    </div>
+                  </label>
+                ) : (
+                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-100 to-blue-100 flex items-center justify-center text-xl">
+                        {getFileIcon(fileUpload)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700">{fileUpload.name}</p>
+                        <p className="text-xs text-slate-400">
+                          {(fileUpload.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeFile}
+                      className="p-2 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all duration-200"
+                    >
+                      <Trash2 size="16" />
+                    </button>
+                  </div>
+                )}
               </div>
+              {errors.file && <p className="text-xs text-red-500 mt-1">{errors.file}</p>}
+              <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
+                <Shield size="10" />
+                File akan tersedia untuk diunduh oleh peserta tugas
+              </p>
             </div>
 
             {/* Peserta dengan Search & Pagination */}
@@ -478,15 +608,15 @@ function AddTugas() {
             <div>
               <p className="text-sm font-bold text-teal-800">Informasi Penting</p>
               <p className="text-xs text-teal-700 mt-1 leading-relaxed">
-                Tugas akan langsung tersedia untuk peserta yang dipilih. Peserta akan menerima notifikasi melalui email dan dashboard.
-                Anda dapat memantau pengumpulan dan melakukan validasi melalui menu <span className="font-bold text-teal-800">Validasi Tugas</span>.
+                Tugas akan langsung tersedia untuk peserta yang dipilih. Anda dapat melampirkan file soal/template yang diperlukan.
+                Peserta akan menerima notifikasi dan dapat mengunduh file tugas.
               </p>
             </div>
           </div>
         </div>
 
         {/* Ringkasan Form */}
-        {formData.judul && formData.deadline && formData.bobot && (
+        {formData.judul && formData.deadline && (
           <div className="mt-6 p-4 bg-white/50 backdrop-blur-sm rounded-xl border border-slate-100">
             <div className="flex items-center gap-2 mb-2">
               <Zap size="12" className="text-teal-500" />
@@ -497,27 +627,17 @@ function AddTugas() {
               <span className="text-slate-300">•</span>
               <span>Deadline: {formData.deadline}</span>
               <span className="text-slate-300">•</span>
-              <span>Bobot: {formData.bobot}%</span>
-              <span className="text-slate-300">•</span>
               <span>Peserta: {formData.peserta.length} orang</span>
+              {fileUpload && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <span>File: {fileUpload.name}</span>
+                </>
+              )}
             </div>
           </div>
         )}
       </div>
-
-      <style jsx>{`
-        @keyframes slide-in-from-top-2 {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-in {
-          animation-duration: 0.3s;
-          animation-fill-mode: both;
-        }
-        .slide-in-from-top-2 {
-          animation-name: slide-in-from-top-2;
-        }
-      `}</style>
     </div>
   );
 }

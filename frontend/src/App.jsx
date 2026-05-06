@@ -50,6 +50,8 @@ import ValidasiTugas from "./pages/mentor/ValidasiTugas";
 import LaporanAkhir from "./pages/mentor/LaporanAkhir";
 import InputNilaiManual from "./pages/mentor/InputNilaiManual";
 import NilaiAkhirMentor from "./pages/mentor/NilaiAkhir";
+import EditMateri from "./pages/mentor/EditMateri";
+import LihatMateri from "./pages/mentor/LihatMateri";
 
 // PESERTA
 import PesertaLayout from "./layouts/PesertaLayout";
@@ -227,6 +229,8 @@ function App() {
           <Route path="input-nilai-manual" element={<InputNilaiManual />} />
           <Route path="penilaian-manual" element={<InputNilaiManual />} />
           <Route path="nilai-akhir" element={<NilaiAkhirMentor />} />
+          <Route path="/mentor/edit-materi/:id" element={<EditMateri />} />
+          <Route path="materi/:id" element={<LihatMateri />} />
         </Route>
 
        // PESERTA ROUTES - Tambahkan route untuk daftar kuis

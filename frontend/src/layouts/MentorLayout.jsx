@@ -41,7 +41,6 @@ function MentorLayout() {
   const [profileOpen, setProfileOpen] = useState(false)
   
   // Menu dropdown states
-  const [presensiOpen, setPresensiOpen] = useState(false)
   const [materiOpen, setMateriOpen] = useState(false)
   const [tugasOpen, setTugasOpen] = useState(false)
   const [penilaianOpen, setPenilaianOpen] = useState(false)
@@ -130,7 +129,6 @@ function MentorLayout() {
   const isActive = (path) => {
     if (path === "/mentor/dashboard") return location.pathname === "/mentor/dashboard"
     if (path === "/mentor/peserta") return location.pathname === "/mentor/peserta"
-    if (path === "/mentor/presensi") return location.pathname === "/mentor/presensi"
     if (path === "/mentor/daily-report") return location.pathname === "/mentor/daily-report"
     if (path === "/mentor/materi") return location.pathname === "/mentor/materi" || location.pathname === "/mentor/add-materi" || location.pathname.includes("/mentor/edit-materi")
     if (path === "/mentor/tugas") return location.pathname === "/mentor/tugas" || location.pathname === "/mentor/add-tugas" || location.pathname.includes("/mentor/edit-tugas")
@@ -146,8 +144,7 @@ function MentorLayout() {
     const titles = {
       "dashboard": "Dashboard",
       "peserta": "Daftar Peserta Bimbingan",
-      "presensi": "Presensi Peserta",
-      "daily-report": "Daily Report Peserta",
+      "daily-report": "Presensi & Daily Report",
       "materi": "Materi Pembelajaran",
       "add-materi": "Tambah Materi",
       "edit-materi": "Edit Materi",
@@ -248,55 +245,20 @@ function MentorLayout() {
                   </li>
                 </Link>
 
-                {/* PRESENSI MENU dengan dropdown */}
-                <li>
-                  <div 
-                    onClick={() => !sidebarCollapsed && setPresensiOpen(!presensiOpen)}
-                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                      isActive("/mentor/presensi") || isActive("/mentor/daily-report")
-                        ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <CalendarCheck size={18} />
-                      {!sidebarCollapsed && <span className="font-medium">Presensi & Daily</span>}
-                    </div>
-                    {!sidebarCollapsed && (
-                      <button onClick={(e) => { e.stopPropagation(); setPresensiOpen(!presensiOpen); }} className="p-0.5">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                          className={`transition-transform duration-200 ${presensiOpen ? "rotate-180" : ""}`}>
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                      </button>
+                {/* PRESENSI & DAILY REPORT - single menu langsung ke daily-report */}
+                <Link to="/mentor/daily-report">
+                  <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                    isActive("/mentor/daily-report")
+                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}>
+                    <CalendarCheck size={18} />
+                    {!sidebarCollapsed && <span className="font-medium">Presensi & Daily Report</span>}
+                    {isActive("/mentor/daily-report") && !sidebarCollapsed && (
+                      <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
                     )}
-                  </div>
-
-                  {!sidebarCollapsed && presensiOpen && (
-                    <div className="ml-7 mt-2 space-y-1">
-                      <Link to="/mentor/presensi">
-                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                          location.pathname === "/mentor/presensi"
-                            ? "bg-teal-50 text-teal-600 font-medium"
-                            : "text-gray-500 hover:bg-gray-100"
-                        }`}>
-                          <UserCheck size={14} />
-                          <span>Presensi</span>
-                        </div>
-                      </Link>
-                      <Link to="/mentor/daily-report">
-                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                          location.pathname === "/mentor/daily-report"
-                            ? "bg-teal-50 text-teal-600 font-medium"
-                            : "text-gray-500 hover:bg-gray-100"
-                        }`}>
-                          <FileSpreadsheet size={14} />
-                          <span>Daily Report</span>
-                        </div>
-                      </Link>
-                    </div>
-                  )}
-                </li>
+                  </li>
+                </Link>
 
                 {/* MATERI MENU dengan dropdown */}
                 <li>

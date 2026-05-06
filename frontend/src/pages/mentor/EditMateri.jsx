@@ -1,6 +1,6 @@
-// src/pages/mentor/AddMateri.jsx
-import React, { useState, useRef } from "react";
-import { useNavigate, Link } from "react-router-dom";
+// src/pages/mentor/EditMateri.jsx
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate, Link, useParams } from "react-router-dom";
 import {
   BookOpen,
   ArrowLeft,
@@ -21,9 +21,11 @@ import {
 } from "lucide-react";
 import api from "../../utils/api";
 
-function AddMateri() {
+function EditMateri() {
+  const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [filePreview, setFilePreview] = useState(null);
@@ -36,6 +38,38 @@ function AddMateri() {
     link: "",
   });
   const [errors, setErrors] = useState({});
+  const [oldFile, setOldFile] = useState(null);
+
+  // Fetch materi data
+  useEffect(() => {
+    const fetchMateri = async () => {
+      try {
+        const response = await api.getMentorMateriById(id);
+        if (response.success && response.data) {
+          const data = response.data;
+          setFormDataState({
+            judul: data.judul || "",
+            deskripsi: data.deskripsi || "",
+            tipe_materi: data.tipe_materi || "dokumen",
+            file_materi: null,
+            link: data.link || "",
+          });
+          setOldFile(data.file_materi);
+          if (data.tipe_materi === "video" && data.file_url) {
+            setFilePreview(data.file_url);
+          }
+        } else {
+          setError("Gagal mengambil data materi");
+        }
+      } catch (err) {
+        console.error("Error fetching materi:", err);
+        setError("Terjadi kesalahan saat mengambil data");
+      } finally {
+        setFetching(false);
+      }
+    };
+    fetchMateri();
+  }, [id]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -49,7 +83,7 @@ function AddMateri() {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (filePreview) {
+      if (filePreview && !filePreview.startsWith('http')) {
         URL.revokeObjectURL(filePreview);
         setFilePreview(null);
       }
@@ -98,10 +132,10 @@ function AddMateri() {
       newErrors.deskripsi = "Deskripsi materi wajib diisi";
     }
     
-    if (formDataState.tipe_materi === "dokumen" && !formDataState.file_materi) {
+    if (formDataState.tipe_materi === "dokumen" && !formDataState.file_materi && !oldFile) {
       newErrors.file_materi = "File wajib diupload";
     }
-    if (formDataState.tipe_materi === "video" && !formDataState.file_materi) {
+    if (formDataState.tipe_materi === "video" && !formDataState.file_materi && !oldFile) {
       newErrors.file_materi = "File video wajib diupload";
     }
     if (formDataState.tipe_materi === "link" && (!formDataState.link || formDataState.link.trim() === "")) {
@@ -114,7 +148,7 @@ function AddMateri() {
 
   const resetFile = () => {
     setFormDataState(prev => ({ ...prev, file_materi: null }));
-    if (filePreview) {
+    if (filePreview && !filePreview.startsWith('http')) {
       URL.revokeObjectURL(filePreview);
       setFilePreview(null);
     }
@@ -144,7 +178,7 @@ function AddMateri() {
         submitData.append("link", formDataState.link);
       }
       
-      const response = await api.createMentorMateri(submitData);
+      const response = await api.updateMentorMateri(id, submitData);
       
       if (response.success) {
         setSuccess(true);
@@ -152,14 +186,14 @@ function AddMateri() {
           navigate("/mentor/materi");
         }, 1500);
       } else {
-        setError(response.message || "Gagal menambahkan materi");
+        setError(response.message || "Gagal mengupdate materi");
         if (response.errors) {
           setErrors(response.errors);
         }
       }
     } catch (err) {
-      console.error("Error adding materi:", err);
-      setError(err.message || "Terjadi kesalahan saat menambahkan materi");
+      console.error("Error updating materi:", err);
+      setError(err.message || "Terjadi kesalahan saat mengupdate materi");
     } finally {
       setLoading(false);
     }
@@ -173,6 +207,7 @@ function AddMateri() {
       file_materi: null, 
       link: "" 
     }));
+    setOldFile(null);
     setErrors({});
   };
 
@@ -191,6 +226,18 @@ function AddMateri() {
 
   const currentTipe = getTipeIcon(formDataState.tipe_materi);
   const TipeIcon = currentTipe.icon;
+
+  if (fetching) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20 flex items-center justify-center">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-full blur-xl opacity-50 animate-pulse"></div>
+          <Loader2 className="w-12 h-12 text-teal-500 animate-spin relative" />
+        </div>
+        <p className="text-slate-500 mt-6 text-sm font-medium ml-3">Memuat data materi...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20">
@@ -221,9 +268,9 @@ function AddMateri() {
                 </div>
                 <div>
                   <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 via-teal-800 to-blue-800 bg-clip-text text-transparent">
-                    Tambah Materi Baru
+                    Edit Materi
                   </h1>
-                  <p className="text-sm text-slate-500 mt-0.5">Tambahkan materi pembelajaran untuk peserta bimbingan</p>
+                  <p className="text-sm text-slate-500 mt-0.5">Edit materi pembelajaran untuk peserta bimbingan</p>
                 </div>
               </div>
             </div>
@@ -237,7 +284,7 @@ function AddMateri() {
                 <AlertCircle size={14} className="text-white" />
               </div>
               <div>
-                <p className="text-sm font-bold text-red-800">Gagal menambahkan materi!</p>
+                <p className="text-sm font-bold text-red-800">Gagal mengupdate materi!</p>
                 <p className="text-xs text-red-600">{error}</p>
               </div>
             </div>
@@ -251,8 +298,8 @@ function AddMateri() {
                 <CheckCircle size={14} className="text-white" />
               </div>
               <div>
-                <p className="text-sm font-bold text-emerald-800">Materi berhasil ditambahkan!</p>
-                <p className="text-xs text-emerald-600">Materi akan segera tersedia untuk peserta</p>
+                <p className="text-sm font-bold text-emerald-800">Materi berhasil diupdate!</p>
+                <p className="text-xs text-emerald-600">Materi akan segera update</p>
               </div>
             </div>
           </div>
@@ -361,7 +408,7 @@ function AddMateri() {
                   <div className="p-1.5 rounded-lg bg-emerald-50">
                     <Upload size={14} className="text-emerald-600" />
                   </div>
-                  {formDataState.tipe_materi === "video" ? "Upload File Video" : "Upload File"} <span className="text-red-500">*</span>
+                  {formDataState.tipe_materi === "video" ? "Upload File Video" : "Upload File"}
                 </label>
                 <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 ${
                   errors.file_materi 
@@ -376,7 +423,7 @@ function AddMateri() {
                     id="file_upload"
                     accept={formDataState.tipe_materi === "video" ? "video/*" : ".pdf,.doc,.docx,.ppt,.pptx"}
                   />
-                  {formDataState.file_materi ? (
+                  {(formDataState.file_materi || oldFile) && (
                     <div>
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
@@ -388,8 +435,12 @@ function AddMateri() {
                             )}
                           </div>
                           <div className="text-left">
-                            <p className="text-sm font-semibold text-slate-700">{formDataState.file_materi.name}</p>
-                            <p className="text-xs text-slate-500">{(formDataState.file_materi.size / 1024 / 1024).toFixed(2)} MB</p>
+                            <p className="text-sm font-semibold text-slate-700">
+                              {formDataState.file_materi ? formDataState.file_materi.name : (oldFile ? oldFile.split('/').pop() : 'File saat ini')}
+                            </p>
+                            {formDataState.file_materi && (
+                              <p className="text-xs text-slate-500">{(formDataState.file_materi.size / 1024 / 1024).toFixed(2)} MB</p>
+                            )}
                           </div>
                         </div>
                         <button
@@ -400,16 +451,25 @@ function AddMateri() {
                           <X size={16} />
                         </button>
                       </div>
-                      {formDataState.tipe_materi === "video" && filePreview && (
+                      {formDataState.tipe_materi === "video" && filePreview && !filePreview.startsWith('http') && (
                         <div className="mt-4 rounded-xl overflow-hidden border border-slate-200">
                           <video controls className="w-full max-h-64">
-                            <source src={filePreview} type={formDataState.file_materi.type} />
+                            <source src={filePreview} type={formDataState.file_materi?.type} />
+                            Browser Anda tidak mendukung video tag.
+                          </video>
+                        </div>
+                      )}
+                      {formDataState.tipe_materi === "video" && filePreview && filePreview.startsWith('http') && (
+                        <div className="mt-4 rounded-xl overflow-hidden border border-slate-200">
+                          <video controls className="w-full max-h-64">
+                            <source src={filePreview} />
                             Browser Anda tidak mendukung video tag.
                           </video>
                         </div>
                       )}
                     </div>
-                  ) : (
+                  )}
+                  {!formDataState.file_materi && !oldFile && (
                     <label htmlFor="file_upload" className="cursor-pointer block">
                       <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-teal-100 to-blue-100 flex items-center justify-center mb-3">
                         {formDataState.tipe_materi === "video" ? (
@@ -468,7 +528,7 @@ function AddMateri() {
               className="relative group overflow-hidden px-6 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-white font-semibold shadow-md hover:shadow-xl transition-all duration-300 disabled:opacity-50 flex items-center gap-2"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              {loading ? "Menyimpan..." : "Simpan Materi"}
+              {loading ? "Menyimpan..." : "Update Materi"}
             </button>
           </div>
         </form>
@@ -495,4 +555,4 @@ function AddMateri() {
   );
 }
 
-export default AddMateri;
+export default EditMateri;

@@ -5,10 +5,15 @@ use App\Http\Controllers\Api\MentorController;
 use App\Http\Controllers\Api\PesertaController;
 use App\Http\Controllers\Api\DivisiController;
 use App\Http\Controllers\Api\MateriPelatihanController;
+use App\Http\Controllers\Api\MateriMentorController;
 use App\Http\Controllers\Api\QuizController;
 use App\Http\Controllers\Api\JamKerjaController;
 use App\Http\Controllers\Api\HariLiburController;
-use Illuminate\Http\Request; // 🔥 TAMBAHKAN INI - IMPORT CLASS REQUEST
+use App\Http\Controllers\Api\DailyReportController;
+use App\Http\Controllers\Api\TugasController;
+use App\Http\Controllers\Api\LaporanAkhirController;
+use App\Http\Controllers\Api\NilaiController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -107,7 +112,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{id}', [HariLiburController::class, 'destroy']);
     });
     
-    // ==================== MATERI PELATIHAN ROUTES ====================
+    // ==================== MATERI PELATIHAN ROUTES (untuk COO/Admin) ====================
     Route::prefix('materi-pelatihan')->group(function () {
         Route::get('/', [MateriPelatihanController::class, 'index']);
         Route::post('/', [MateriPelatihanController::class, 'store']);
@@ -116,6 +121,44 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{id}', [MateriPelatihanController::class, 'destroy']);
         Route::get('/divisi/{divisi}', [MateriPelatihanController::class, 'getByDivisi']);
         Route::get('/{id}/download', [MateriPelatihanController::class, 'download']);
+    });
+    
+    // ==================== MATERI MENTOR ROUTES (untuk Mentor) ====================
+    Route::prefix('mentor/materi')->group(function () {
+        Route::get('/', [MateriMentorController::class, 'index']);
+        Route::get('/divisi-list', [MateriMentorController::class, 'getDivisiList']);
+        Route::post('/', [MateriMentorController::class, 'store']);
+        Route::get('/{id}', [MateriMentorController::class, 'show']);
+        Route::put('/{id}', [MateriMentorController::class, 'update']);
+        Route::delete('/{id}', [MateriMentorController::class, 'destroy']);
+    });
+    
+    // ==================== TUGAS MENTOR ROUTES ====================
+    Route::prefix('mentor/tugas')->group(function () {
+        Route::get('/', [TugasController::class, 'index']);
+        Route::post('/', [TugasController::class, 'store']);
+        Route::get('/{id}', [TugasController::class, 'show']);
+        Route::put('/{id}', [TugasController::class, 'update']);
+        Route::delete('/{id}', [TugasController::class, 'destroy']);
+        Route::post('/reminder', [TugasController::class, 'sendReminder']);
+        Route::post('/{id}/reminder', [TugasController::class, 'sendReminder']);
+        Route::get('/{id}/submissions', [TugasController::class, 'getSubmissions']);
+        Route::put('/submissions/{id}', [TugasController::class, 'updateSubmission']);
+    });
+    
+    // ==================== LAPORAN AKHIR MENTOR ROUTES ====================
+    Route::prefix('mentor/laporan-akhir')->group(function () {
+        Route::get('/', [LaporanAkhirController::class, 'index']);
+        Route::post('/{id}/review', [LaporanAkhirController::class, 'submitReview']);
+        Route::get('/export', [LaporanAkhirController::class, 'export']);
+    });
+    
+    // ==================== NILAI MENTOR ROUTES (BARU) ====================
+    Route::prefix('mentor/nilai')->group(function () {
+        Route::get('/', [NilaiController::class, 'index']);
+        Route::post('/', [NilaiController::class, 'store']);
+        Route::post('/{id}/finalize', [NilaiController::class, 'finalize']);
+        Route::get('/export', [NilaiController::class, 'export']);
     });
     
     // ==================== QUIZ ROUTES ====================
@@ -130,13 +173,31 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/template/download', [QuizController::class, 'downloadTemplate']);
     });
     
-    // ==================== ROUTES SEDERHANA UNTUK MENTOR ====================
+    // ==================== ROUTES UNTUK MENTOR (PESERTA BIMBINGAN) ====================
     
-    // Dashboard sederhana untuk mentor
+    // Filter options untuk mentor
+    Route::get('/mentor/filters', [MentorController::class, 'getFilters']);
+    
+    // Daftar peserta bimbingan dengan filter
+    Route::get('/mentor/peserta-list', [MentorController::class, 'getPesertaList']);
+    
+    // Peserta bimbingan mentor (detail)
+    Route::get('/mentor/pesertas', [MentorController::class, 'getMyPesertas']);
+    Route::get('/mentor/pesertas/{id_peserta}', [MentorController::class, 'getDetailPeserta']);
+    
+    // ==================== DAILY REPORT ROUTES ====================
+    Route::prefix('daily-report')->group(function () {
+        Route::get('/', [DailyReportController::class, 'getReports']);
+        Route::get('/export', [DailyReportController::class, 'exportExcel']);
+        Route::get('/{peserta_id}', [DailyReportController::class, 'getReportDetail']);
+        Route::post('/{peserta_id}/feedback', [DailyReportController::class, 'submitFeedback']);
+    });
+    
+    // ==================== ROUTES DASHBOARD MENTOR ====================
+    
     Route::get('/mentor/dashboard', function (Request $request) {
         $user = $request->user();
         
-        // Validasi role mentor
         if ($user->role !== 'mentor') {
             return response()->json([
                 'success' => false,
@@ -144,10 +205,12 @@ Route::middleware('auth:sanctum')->group(function () {
             ], 403);
         }
         
-        // Hitung jumlah peserta bimbingan
-        $totalMentees = \App\Models\User::where('id_mentor', $user->id_user)
-            ->where('role', 'peserta')
-            ->count();
+        $mentor = \App\Models\Mentor::where('id_user', $user->id_user)->first();
+        $totalMentees = 0;
+        
+        if ($mentor) {
+            $totalMentees = \App\Models\Peserta::where('id_mentor', $mentor->id_mentor)->count();
+        }
         
         return response()->json([
             'success' => true,
@@ -164,7 +227,6 @@ Route::middleware('auth:sanctum')->group(function () {
         ]);
     });
     
-    // Notifikasi sederhana untuk mentor
     Route::get('/mentor/notifications', function (Request $request) {
         $user = $request->user();
         
@@ -175,34 +237,6 @@ Route::middleware('auth:sanctum')->group(function () {
         return response()->json([]);
     });
     
-    // Daftar peserta bimbingan untuk mentor
-    Route::get('/mentor/peserta', function (Request $request) {
-        $user = $request->user();
-        
-        if ($user->role !== 'mentor') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-        
-        $peserta = \App\Models\User::where('id_mentor', $user->id_user)
-            ->where('role', 'peserta')
-            ->paginate(10);
-        
-        return response()->json([
-            'success' => true,
-            'data' => $peserta->items(),
-            'pagination' => [
-                'current_page' => $peserta->currentPage(),
-                'last_page' => $peserta->lastPage(),
-                'per_page' => $peserta->perPage(),
-                'total' => $peserta->total()
-            ]
-        ]);
-    });
-    
-    // Detail profil untuk mentor
     Route::get('/mentor/profile', function (Request $request) {
         $user = $request->user();
         
@@ -227,7 +261,6 @@ Route::middleware('auth:sanctum')->group(function () {
         ]);
     });
     
-    // Update profil untuk mentor
     Route::put('/mentor/profile', function (Request $request) {
         $user = $request->user();
         

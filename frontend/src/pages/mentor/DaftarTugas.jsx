@@ -28,8 +28,14 @@ import {
   Sparkles,
   Shield,
   Zap,
-  Target
+  Target,
+  Download,
+  ExternalLink,
+  File,
+  Image,
+  FileArchive
 } from "lucide-react";
+import api from "../../utils/api";
 
 function DaftarTugas() {
   const [loading, setLoading] = useState(false);
@@ -46,89 +52,62 @@ function DaftarTugas() {
   const [sendingReminder, setSendingReminder] = useState(false);
   const [hoveredCard, setHoveredCard] = useState(null);
   const [selectedFilter, setSelectedFilter] = useState("all");
+  const [deleting, setDeleting] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
+  const [previewFileUrl, setPreviewFileUrl] = useState("");
+  const [previewFileName, setPreviewFileName] = useState("");
 
-  const getSubmissionStatusColor = (status, hasSubmitted) => {
-    if (!hasSubmitted) {
-      return { bg: "bg-slate-200", ring: "ring-slate-300", text: "text-slate-700", label: "Belum Kumpul" };
+  // Helper function untuk mendapatkan URL file yang benar
+  const getFileUrl = (filePath) => {
+    if (!filePath) return null;
+    if (filePath.startsWith('http')) return filePath;
+    if (filePath.startsWith('/storage')) return `http://localhost:8000${filePath}`;
+    if (filePath.startsWith('tugas/')) return `http://localhost:8000/storage/${filePath}`;
+    return `http://localhost:8000/storage/${filePath}`;
+  };
+
+  // Fetch tugas from backend
+  const fetchTugas = async () => {
+    setLoading(true);
+    try {
+      const response = await api.getMentorTugas();
+      
+      if (response.success && response.data) {
+        const transformedTugas = response.data.map(item => ({
+          id: item.id_tugas,
+          judul: item.judul,
+          deskripsi: item.deskripsi || "-",
+          deadline: item.deadline,
+          bobot: item.bobot,
+          status: item.status || (new Date(item.deadline) < new Date() ? "closed" : "active"),
+          created_at: item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
+          submissions: item.submissions || [],
+          total_submissions: item.total_submissions || 0,
+          submitted_count: item.submitted_count || 0,
+          pending_review: item.pending_review || 0,
+          file_tugas: item.file_tugas,
+          file_url: getFileUrl(item.file_tugas)
+        }));
+        setTugas(transformedTugas);
+        setFilteredTugas(transformedTugas);
+      } else {
+        console.error("Failed to fetch tugas:", response.message);
+        setTugas([]);
+        setFilteredTugas([]);
+      }
+    } catch (error) {
+      console.error("Error fetching tugas:", error);
+      setTugas([]);
+      setFilteredTugas([]);
+    } finally {
+      setLoading(false);
     }
-    if (status === "selesai") {
-      return { bg: "bg-emerald-100", ring: "ring-emerald-300", text: "text-emerald-700", label: "Selesai" };
-    }
-    if (status === "revisi") {
-      return { bg: "bg-purple-200", ring: "ring-purple-300", text: "text-purple-800", label: "Revisi" };
-    }
-    return { bg: "bg-slate-200", ring: "ring-slate-300", text: "text-slate-700", label: "Menunggu" };
   };
 
   useEffect(() => {
-    loadDummyData();
+    fetchTugas();
   }, []);
-
-  const loadDummyData = () => {
-    setLoading(true);
-    setTimeout(() => {
-      const dummyTugas = [
-        {
-          id: 1,
-          judul: "Frontend Development - Week 3",
-          deskripsi: "Buat halaman dashboard dengan React JS yang menampilkan data user secara real-time menggunakan API",
-          deadline: "2024-12-20",
-          bobot: 30,
-          status: "active",
-          created_at: "2024-12-10",
-          submissions: [
-            { peserta_id: 1, peserta_nama: "Ahmad Firmansyah", status: "pending", submitted_at: "2024-12-19", nilai: null, catatan: null },
-            { peserta_id: 2, peserta_nama: "Siti Nurhaliza", status: "selesai", submitted_at: "2024-12-18", nilai: 85, catatan: "Bagus, pertahankan" },
-            { peserta_id: 3, peserta_nama: "Budi Santoso", status: "pending", submitted_at: null, nilai: null, catatan: null },
-            { peserta_id: 4, peserta_nama: "Dewi Lestari", status: "selesai", submitted_at: "2024-12-19", nilai: 78, catatan: "Perbaiki padding" }
-          ]
-        },
-        {
-          id: 2,
-          judul: "Backend API Integration",
-          deskripsi: "Buat API endpoint untuk CRUD user dengan Laravel dan implementasi middleware auth",
-          deadline: "2024-12-25",
-          bobot: 35,
-          status: "active",
-          created_at: "2024-12-12",
-          submissions: [
-            { peserta_id: 1, peserta_nama: "Ahmad Firmansyah", status: "pending", submitted_at: null, nilai: null, catatan: null },
-            { peserta_id: 2, peserta_nama: "Siti Nurhaliza", status: "selesai", submitted_at: "2024-12-22", nilai: 92, catatan: "Excellent!" },
-            { peserta_id: 3, peserta_nama: "Budi Santoso", status: "revisi", submitted_at: "2024-12-21", nilai: 65, catatan: "Perbaiki validasi" }
-          ]
-        },
-        {
-          id: 3,
-          judul: "UI/UX Design Prototype",
-          deskripsi: "Buat prototype aplikasi mobile dengan Figma beserta design system",
-          deadline: "2024-12-18",
-          bobot: 25,
-          status: "closed",
-          created_at: "2024-12-05",
-          submissions: [
-            { peserta_id: 1, peserta_nama: "Ahmad Firmansyah", status: "selesai", submitted_at: "2024-12-17", nilai: 88, catatan: "Good design" },
-            { peserta_id: 2, peserta_nama: "Siti Nurhaliza", status: "selesai", submitted_at: "2024-12-16", nilai: 90, catatan: "Very creative" },
-            { peserta_id: 4, peserta_nama: "Dewi Lestari", status: "selesai", submitted_at: "2024-12-17", nilai: 82, catatan: "Nice work" }
-          ]
-        },
-        {
-          id: 4,
-          judul: "Database Design",
-          deskripsi: "Buat ERD dan implementasi database untuk sistem magang dengan relasi kompleks",
-          deadline: "2024-12-30",
-          bobot: 20,
-          status: "active",
-          created_at: "2024-12-15",
-          submissions: [
-            { peserta_id: 2, peserta_nama: "Siti Nurhaliza", status: "pending", submitted_at: null, nilai: null, catatan: null }
-          ]
-        }
-      ];
-      setTugas(dummyTugas);
-      setFilteredTugas(dummyTugas);
-      setLoading(false);
-    }, 500);
-  };
 
   useEffect(() => {
     let filtered = [...tugas];
@@ -166,22 +145,69 @@ function DaftarTugas() {
     setCurrentPage(1);
   }, [searchTerm, filterStatus, filterDeadline, tugas]);
 
-  const handleDelete = () => {
-    if (selectedTugas) {
-      const newTugas = tugas.filter(t => t.id !== selectedTugas.id);
-      setTugas(newTugas);
-      setShowDeleteModal(false);
-      setSelectedTugas(null);
+  const handleDelete = async () => {
+    if (!selectedTugas) return;
+    
+    setDeleting(true);
+    try {
+      const response = await api.deleteMentorTugas(selectedTugas.id);
+      
+      if (response.success) {
+        const newTugas = tugas.filter(t => t.id !== selectedTugas.id);
+        setTugas(newTugas);
+        setShowDeleteModal(false);
+        setSelectedTugas(null);
+      } else {
+        alert("Gagal menghapus tugas: " + (response.message || "Terjadi kesalahan"));
+      }
+    } catch (error) {
+      console.error("Error deleting tugas:", error);
+      alert("Gagal menghapus tugas");
+    } finally {
+      setDeleting(false);
     }
   };
 
-  const handleSendReminder = () => {
+  const handleSendReminder = async () => {
     setSendingReminder(true);
-    setTimeout(() => {
+    try {
+      const response = await api.sendTugasReminder();
+      if (response.success) {
+        alert("Pengingat berhasil dikirim ke semua peserta yang belum mengumpulkan");
+      } else {
+        alert("Gagal mengirim pengingat: " + (response.message || "Terjadi kesalahan"));
+      }
+    } catch (error) {
+      console.error("Error sending reminder:", error);
+      alert("Gagal mengirim pengingat");
+    } finally {
       setSendingReminder(false);
       setShowReminderModal(false);
-      alert("Pengingat berhasil dikirim ke semua peserta yang belum mengumpulkan");
-    }, 1500);
+    }
+  };
+
+  const openPreview = (fileUrl, fileName) => {
+    setPreviewFileUrl(fileUrl);
+    setPreviewFileName(fileName);
+    setShowPreviewModal(true);
+  };
+
+  const getFileIcon = (fileName) => {
+    if (!fileName) return <File size={40} className="text-slate-400" />;
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return <Image size={40} className="text-blue-500" />;
+    if (ext === 'pdf') return <FileText size={40} className="text-red-500" />;
+    if (['doc', 'docx'].includes(ext)) return <FileText size={40} className="text-blue-600" />;
+    if (['ppt', 'pptx'].includes(ext)) return <FileText size={40} className="text-orange-500" />;
+    if (['xls', 'xlsx'].includes(ext)) return <FileText size={40} className="text-green-500" />;
+    if (['zip', 'rar', '7z'].includes(ext)) return <FileArchive size={40} className="text-amber-500" />;
+    return <File size={40} className="text-slate-400" />;
+  };
+
+  const isPreviewable = (fileName) => {
+    if (!fileName) return false;
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'].includes(ext);
   };
 
   const getStatusBadge = (status) => {
@@ -189,6 +215,19 @@ function DaftarTugas() {
       return { bg: "bg-gradient-to-r from-emerald-500/20 to-teal-500/20", text: "text-emerald-600", icon: CheckCircle, label: "Aktif", border: "border-emerald-200" };
     }
     return { bg: "bg-gradient-to-r from-slate-500/10 to-slate-600/10", text: "text-slate-500", icon: Clock, label: "Selesai", border: "border-slate-200" };
+  };
+
+  const getSubmissionStatusColor = (status, hasSubmitted) => {
+    if (!hasSubmitted) {
+      return { bg: "bg-slate-200", ring: "ring-slate-300", text: "text-slate-700", label: "Belum Kumpul" };
+    }
+    if (status === "selesai") {
+      return { bg: "bg-emerald-100", ring: "ring-emerald-300", text: "text-emerald-700", label: "Selesai" };
+    }
+    if (status === "revisi") {
+      return { bg: "bg-purple-200", ring: "ring-purple-300", text: "text-purple-800", label: "Revisi" };
+    }
+    return { bg: "bg-slate-200", ring: "ring-slate-300", text: "text-slate-700", label: "Menunggu" };
   };
 
   const getDeadlineStatus = (deadline) => {
@@ -210,14 +249,26 @@ function DaftarTugas() {
   const totalPages = Math.ceil(filteredTugas.length / itemsPerPage);
 
   const totalPending = tugas.reduce((acc, t) => {
-    return acc + (t.submissions?.filter(s => s.status === "pending" && !s.submitted_at).length || 0);
+    return acc + (t.pending_review || 0);
   }, 0);
 
   const totalSubmitted = tugas.reduce((acc, t) => {
-    return acc + (t.submissions?.filter(s => s.submitted_at).length || 0);
+    return acc + (t.submitted_count || 0);
   }, 0);
 
   const totalActiveTugas = tugas.filter(t => t.status === "active").length;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20 flex items-center justify-center">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-full blur-xl opacity-50 animate-pulse"></div>
+          <Loader2 className="w-12 h-12 text-teal-500 animate-spin relative" />
+        </div>
+        <p className="text-slate-500 mt-6 text-sm font-medium ml-3">Memuat tugas...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20">
@@ -306,7 +357,17 @@ function DaftarTugas() {
         </div>
 
         {/* Results Count */}
-        <div className="mb-6"><div className="flex items-center justify-between"><p className="text-sm text-slate-500 flex items-center gap-2"><div className="w-1 h-4 bg-gradient-to-b from-teal-500 to-blue-600 rounded-full"></div>Menampilkan <span className="font-bold text-slate-700">{currentItems.length}</span> dari <span className="font-bold text-slate-700">{filteredTugas.length}</span> tugas</p><button className="text-xs text-teal-500 hover:text-teal-600 transition-colors flex items-center gap-1"><RefreshCw size="12" />Refresh</button></div></div>
+        <div className="mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-4 bg-gradient-to-b from-teal-500 to-blue-600 rounded-full"></div>
+              <p className="text-sm text-slate-500">Menampilkan <span className="font-bold text-slate-700">{currentItems.length}</span> dari <span className="font-bold text-slate-700">{filteredTugas.length}</span> tugas</p>
+            </div>
+            <button onClick={fetchTugas} className="text-xs text-teal-500 hover:text-teal-600 transition-colors flex items-center gap-1">
+              <RefreshCw size="12" />Refresh
+            </button>
+          </div>
+        </div>
 
         {/* Tugas List */}
         <div className="space-y-6">
@@ -315,9 +376,9 @@ function DaftarTugas() {
             const StatusIcon = status.icon;
             const deadlineStatus = getDeadlineStatus(item.deadline);
             const DeadlineIcon = deadlineStatus.icon;
-            const totalSubmissions = item.submissions?.length || 0;
-            const submittedCount = item.submissions?.filter(s => s.submitted_at).length || 0;
-            const pendingReview = item.submissions?.filter(s => s.status === "pending" && s.submitted_at).length || 0;
+            const totalSubmissions = item.total_submissions || 0;
+            const submittedCount = item.submitted_count || 0;
+            const pendingReview = item.pending_review || 0;
             const isHovered = hoveredCard === item.id;
             
             return (
@@ -332,6 +393,47 @@ function DaftarTugas() {
                         <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${deadlineStatus.bg} ${deadlineStatus.text} border shadow-sm`}><DeadlineIcon size="10" /><span className="text-[10px] font-semibold">{deadlineStatus.label}</span></div>
                       </div>
                       <p className="text-sm text-slate-500 mb-4 leading-relaxed line-clamp-2">{item.deskripsi}</p>
+                      
+                      {/* File Tugas dengan Preview */}
+                      {item.file_url && (
+                        <div className="mb-4 p-3 bg-gradient-to-r from-slate-50 to-white rounded-xl border border-slate-200 inline-flex flex-wrap items-center gap-3">
+                          {getFileIcon(item.file_tugas)}
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-slate-700 truncate max-w-[200px] md:max-w-[300px]">
+                              {item.file_tugas?.split('/').pop() || 'File Tugas'}
+                            </p>
+                            <p className="text-[10px] text-slate-400">File tugas tersedia</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isPreviewable(item.file_tugas) && (
+                              <button
+                                onClick={() => openPreview(item.file_url, item.file_tugas?.split('/').pop() || 'File Tugas')}
+                                className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white transition-all duration-200"
+                                title="Preview"
+                              >
+                                <Eye size="16" />
+                              </button>
+                            )}
+                            <a 
+                              href={item.file_url} 
+                              download
+                              className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-500 hover:text-white transition-all duration-200"
+                              title="Download"
+                            >
+                              <Download size="16" />
+                            </a>
+                            <a 
+                              href={item.file_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-all duration-200"
+                              title="Buka di tab baru"
+                            >
+                              <ExternalLink size="16" />
+                            </a>
+                          </div>
+                        </div>
+                      )}
                       
                       <div className="flex flex-wrap items-center gap-6 text-xs">
                         <div className="flex items-center gap-2">
@@ -410,7 +512,7 @@ function DaftarTugas() {
         </div>
 
         {/* Empty State */}
-        {filteredTugas.length === 0 && (
+        {filteredTugas.length === 0 && !loading && (
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-100 py-20 text-center">
             <div className="relative inline-block"><div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-full blur-xl opacity-30 animate-pulse"></div><div className="relative w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 rounded-full flex items-center justify-center mx-auto shadow-inner"><FolderOpen size="40" className="text-slate-400" /></div></div>
             <p className="text-slate-700 font-bold text-lg mt-5">Belum ada tugas</p><p className="text-sm text-slate-400 mt-1">Mulai buat tugas untuk peserta bimbingan Anda</p>
@@ -444,13 +546,68 @@ function DaftarTugas() {
         </div>
       </div>
 
+      {/* Preview Modal */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-teal-100">
+                  <Eye size="18" className="text-teal-600" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">Preview File: <span className="text-teal-600">{previewFileName}</span></h3>
+              </div>
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="p-2 rounded-lg hover:bg-slate-100 transition-all duration-200"
+              >
+                <X size="20" className="text-slate-500" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-slate-50">
+              {previewFileUrl && (
+                previewFileUrl.endsWith('.pdf') ? (
+                  <iframe
+                    src={previewFileUrl}
+                    className="w-full h-[70vh] rounded-xl"
+                    title="PDF Preview"
+                  />
+                ) : (
+                  <img
+                    src={previewFileUrl}
+                    alt={previewFileName}
+                    className="max-w-full max-h-[70vh] mx-auto object-contain rounded-xl"
+                  />
+                )
+              )}
+            </div>
+            <div className="flex justify-end gap-3 p-4 border-t border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="px-5 py-2.5 border-2 border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-all duration-200"
+              >
+                Tutup
+              </button>
+              <a
+                href={previewFileUrl}
+                download
+                className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-xl transition-all duration-200 flex items-center gap-2"
+              >
+                <Download size="18" />
+                Download File
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6">
             <div className="flex items-center justify-between mb-4"><div className="flex items-center gap-3"><div className="p-2.5 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg"><Trash2 size="18" className="text-white" /></div><h3 className="text-xl font-bold text-slate-800">Hapus Tugas</h3></div><button onClick={() => setShowDeleteModal(false)} className="p-1.5 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200"><X size="18" /></button></div>
             <p className="text-slate-600 mb-6">Apakah Anda yakin ingin menghapus tugas <span className="font-bold text-slate-800">"{selectedTugas?.judul}"</span>? Semua data pengumpulan akan hilang secara <span className="font-semibold text-red-500">permanen</span>.</p>
-            <div className="flex gap-3"><button onClick={() => setShowDeleteModal(false)} className="flex-1 px-4 py-2.5 border-2 border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50">Batal</button><button onClick={handleDelete} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl font-semibold hover:shadow-lg">Hapus</button></div>
+            <div className="flex gap-3"><button onClick={() => setShowDeleteModal(false)} className="flex-1 px-4 py-2.5 border-2 border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50">Batal</button><button onClick={handleDelete} disabled={deleting} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl font-semibold hover:shadow-lg disabled:opacity-50">{deleting ? "Menghapus..." : "Hapus"}</button></div>
           </div>
         </div>
       )}

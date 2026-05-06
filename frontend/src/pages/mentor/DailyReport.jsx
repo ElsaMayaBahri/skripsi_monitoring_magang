@@ -30,17 +30,19 @@ import {
   Wifi,
   Smartphone
 } from "lucide-react";
+import api from "../../utils/api";
 
 function DailyReport() {
   const [searchParams, setSearchParams] = useSearchParams();
   const pesertaId = searchParams.get("peserta");
   const viewMode = searchParams.get("view") || "list";
+  const tanggalParam = searchParams.get("tanggal");
   
   const [loading, setLoading] = useState(false);
   const [allReports, setAllReports] = useState([]);
   const [filteredReports, setFilteredReports] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(tanggalParam || new Date().toISOString().split('T')[0]);
   const [selectedPeserta, setSelectedPeserta] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -54,52 +56,189 @@ function DailyReport() {
     persentase: 0
   });
 
+  // Fetch list peserta dan daily report
   useEffect(() => {
     if (viewMode === "list") {
-      loadDummyData();
+      fetchDailyReports();
     } else if (viewMode === "detail" && pesertaId) {
-      loadDummyDetailData();
+      fetchDailyReportDetail();
     }
   }, [selectedDate, viewMode, pesertaId]);
 
-  const loadDummyData = () => {
+  const fetchDailyReports = async () => {
     setLoading(true);
-    setTimeout(() => {
-      const dummyReports = [
-        { id: 1, peserta_id: 1, peserta_nama: "Ahmad Firmansyah", peserta_divisi: "Frontend Development", check_in: "08:00:00", check_out: "16:30:00", status_kehadiran: "hadir", aktivitas: "Mengerjakan tugas frontend dashboard", kendala: "Tidak ada kendala", lokasi: "WFO", device: "Web", rank: "diamond" },
-        { id: 2, peserta_id: 2, peserta_nama: "Siti Nurhaliza", peserta_divisi: "Backend Development", check_in: "08:15:00", check_out: "16:30:00", status_kehadiran: "terlambat", aktivitas: "Membuat API endpoint user", kendala: "Error pada database", lokasi: "WFH", device: "Mobile", rank: "diamond" },
-        { id: 3, peserta_id: 3, peserta_nama: "Budi Santoso", peserta_divisi: "UI/UX Design", check_in: null, check_out: null, status_kehadiran: "alpha", aktivitas: null, kendala: null, lokasi: "-", device: "-", rank: "silver" },
-        { id: 4, peserta_id: 4, peserta_nama: "Dewi Lestari", peserta_divisi: "Mobile Development", check_in: "07:55:00", check_out: "16:30:00", status_kehadiran: "hadir", aktivitas: "Membuat UI komponen mobile", kendala: "Responsive design masih kurang", lokasi: "WFO", device: "Web", rank: "gold" },
-        { id: 5, peserta_id: 5, peserta_nama: "Eko Prasetyo", peserta_divisi: "Quality Assurance", check_in: "08:30:00", check_out: "16:30:00", status_kehadiran: "terlambat", aktivitas: "Testing fitur login", kendala: "Bug pada validasi form", lokasi: "WFH", device: "Mobile", rank: "gold" },
-        { id: 6, peserta_id: 6, peserta_nama: "Fitri Amelia", peserta_divisi: "Data Analyst", check_in: "08:00:00", check_out: "16:30:00", status_kehadiran: "hadir", aktivitas: "Analisis data penjualan", kendala: "Data tidak valid", lokasi: "WFO", device: "Web", rank: "diamond" },
-        { id: 7, peserta_id: 7, peserta_nama: "Gilang Permana", peserta_divisi: "DevOps Engineer", check_in: null, check_out: null, status_kehadiran: "izin", aktivitas: null, kendala: null, lokasi: "-", device: "-", rank: "silver" },
-        { id: 8, peserta_id: 8, peserta_nama: "Hana Kirana", peserta_divisi: "Frontend Development", check_in: "08:00:00", check_out: "16:30:00", status_kehadiran: "hadir", aktivitas: "Mengerjakan komponen reusable", kendala: "Styling tidak konsisten", lokasi: "WFO", device: "Web", rank: "diamond" }
-      ];
-      setAllReports(dummyReports);
-      setFilteredReports(dummyReports);
-      const sudahMengisi = dummyReports.filter(r => r.aktivitas).length;
-      setSummary({
-        total: dummyReports.length,
-        sudahMengisi: sudahMengisi,
-        belumMengisi: dummyReports.length - sudahMengisi,
-        persentase: Math.round((sudahMengisi / dummyReports.length) * 100)
-      });
+    try {
+      // Ambil daftar peserta bimbingan mentor
+      const pesertaResponse = await api.getMentorPesertaList({});
+      
+      if (pesertaResponse.success && pesertaResponse.data) {
+        const pesertaList = pesertaResponse.data;
+        
+        // Untuk setiap peserta, coba ambil daily report berdasarkan tanggal
+        const reportsWithDaily = await Promise.all(
+          pesertaList.map(async (peserta) => {
+            try {
+              const dailyResponse = await api.getDailyReport(peserta.id_peserta, selectedDate);
+              if (dailyResponse.success && dailyResponse.data) {
+                return {
+                  id: peserta.id_peserta,
+                  peserta_id: peserta.id_peserta,
+                  peserta_nama: peserta.nama || peserta.nama_lengkap,
+                  peserta_divisi: peserta.divisi,
+                  rank: peserta.rank || "silver",
+                  check_in: dailyResponse.data.check_in || null,
+                  check_out: dailyResponse.data.check_out || null,
+                  status_kehadiran: dailyResponse.data.status_kehadiran || "alpha",
+                  aktivitas: dailyResponse.data.aktivitas || null,
+                  kendala: dailyResponse.data.kendala || null,
+                  lokasi: dailyResponse.data.lokasi || "-",
+                  device: dailyResponse.data.device || "-"
+                };
+              }
+            } catch (error) {
+              console.error(`Error fetching daily report for peserta ${peserta.id_peserta}:`, error);
+            }
+            
+            // Return default jika tidak ada data
+            return {
+              id: peserta.id_peserta,
+              peserta_id: peserta.id_peserta,
+              peserta_nama: peserta.nama || peserta.nama_lengkap,
+              peserta_divisi: peserta.divisi,
+              rank: peserta.rank || "silver",
+              check_in: null,
+              check_out: null,
+              status_kehadiran: "alpha",
+              aktivitas: null,
+              kendala: null,
+              lokasi: "-",
+              device: "-"
+            };
+          })
+        );
+        
+        setAllReports(reportsWithDaily);
+        setFilteredReports(reportsWithDaily);
+        
+        const sudahMengisi = reportsWithDaily.filter(r => r.aktivitas).length;
+        setSummary({
+          total: reportsWithDaily.length,
+          sudahMengisi: sudahMengisi,
+          belumMengisi: reportsWithDaily.length - sudahMengisi,
+          persentase: reportsWithDaily.length > 0 ? Math.round((sudahMengisi / reportsWithDaily.length) * 100) : 0
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching daily reports:", error);
+    } finally {
       setLoading(false);
-    }, 300);
+    }
   };
 
-  const loadDummyDetailData = () => {
+  const fetchDailyReportDetail = async () => {
     setLoading(true);
-    setTimeout(() => {
-      const pesertaMap = {
-        1: { nama: "Ahmad Firmansyah", divisi: "Frontend Development", rank: "diamond", check_in: "08:00:00", check_out: "16:30:00", status: "hadir", aktivitas: "Mengerjakan tugas frontend dashboard - membuat komponen card, sidebar, dan integrasi API", kendala: "Tidak ada kendala yang berarti", lokasi: "WFO", device: "Web" },
-        2: { nama: "Siti Nurhaliza", divisi: "Backend Development", rank: "diamond", check_in: "08:15:00", check_out: "16:30:00", status: "terlambat", aktivitas: "Membuat API endpoint untuk user authentication dan CRUD", kendala: "Error pada database connection", lokasi: "WFH", device: "Mobile" },
-        3: { nama: "Budi Santoso", divisi: "UI/UX Design", rank: "silver", check_in: null, check_out: null, status: "alpha", aktivitas: null, kendala: null, lokasi: "-", device: "-" },
-        4: { nama: "Dewi Lestari", divisi: "Mobile Development", rank: "gold", check_in: "07:55:00", check_out: "16:30:00", status: "hadir", aktivitas: "Membuat UI komponen mobile dan integrasi dengan API", kendala: "Responsive design masih kurang optimal", lokasi: "WFO", device: "Web" }
-      };
-      setSelectedPeserta(pesertaMap[pesertaId] || { nama: "Peserta", divisi: "-", rank: "silver" });
+    try {
+      const response = await api.getDailyReport(pesertaId, selectedDate);
+      
+      if (response.success && response.data) {
+        // Juga ambil data peserta
+        const pesertaResponse = await api.getMentorPesertaList({});
+        let pesertaData = null;
+        
+        if (pesertaResponse.success && pesertaResponse.data) {
+          pesertaData = pesertaResponse.data.find(p => p.id_peserta == pesertaId);
+        }
+        
+        setSelectedPeserta({
+          nama: pesertaData?.nama || pesertaData?.nama_lengkap || "Peserta",
+          divisi: pesertaData?.divisi || "-",
+          rank: pesertaData?.rank || "silver",
+          check_in: response.data.check_in || null,
+          check_out: response.data.check_out || null,
+          status: response.data.status_kehadiran || "alpha",
+          aktivitas: response.data.aktivitas || null,
+          kendala: response.data.kendala || null,
+          lokasi: response.data.lokasi || "-",
+          device: response.data.device || "-"
+        });
+        
+        // Jika sudah ada feedback sebelumnya
+        if (response.data.feedback) {
+          setReviewText(response.data.feedback);
+        }
+      } else {
+        // Jika belum ada daily report
+        const pesertaResponse = await api.getMentorPesertaList({});
+        let pesertaData = null;
+        
+        if (pesertaResponse.success && pesertaResponse.data) {
+          pesertaData = pesertaResponse.data.find(p => p.id_peserta == pesertaId);
+        }
+        
+        setSelectedPeserta({
+          nama: pesertaData?.nama || pesertaData?.nama_lengkap || "Peserta",
+          divisi: pesertaData?.divisi || "-",
+          rank: pesertaData?.rank || "silver",
+          check_in: null,
+          check_out: null,
+          status: "alpha",
+          aktivitas: null,
+          kendala: null,
+          lokasi: "-",
+          device: "-"
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching daily report detail:", error);
+      setSelectedPeserta({
+        nama: "Peserta",
+        divisi: "-",
+        rank: "silver",
+        check_in: null,
+        check_out: null,
+        status: "alpha",
+        aktivitas: null,
+        kendala: null,
+        lokasi: "-",
+        device: "-"
+      });
+    } finally {
       setLoading(false);
-    }, 300);
+    }
+  };
+
+  const submitFeedback = async () => {
+    if (!reviewText.trim() || !pesertaId) return;
+    
+    setSubmitting(true);
+    try {
+      const response = await api.submitDailyReportFeedback(pesertaId, selectedDate, reviewText);
+      
+      if (response.success) {
+        alert("Feedback berhasil dikirim!");
+      } else {
+        alert("Gagal mengirim feedback: " + (response.message || "Terjadi kesalahan"));
+      }
+    } catch (error) {
+      console.error("Error submitting feedback:", error);
+      alert("Gagal mengirim feedback");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const exportToExcel = async () => {
+    try {
+      const response = await api.exportDailyReport(selectedDate);
+      if (response.success && response.data && response.data.url) {
+        window.open(response.data.url, '_blank');
+      } else {
+        alert("Gagal mengexport data");
+      }
+    } catch (error) {
+      console.error("Error exporting:", error);
+      alert("Fitur export akan segera tersedia");
+    }
   };
 
   const getRankGradient = (rank) => {
@@ -120,7 +259,7 @@ function DailyReport() {
   useEffect(() => {
     if (searchTerm) {
       const filtered = allReports.filter(r => 
-        r.peserta_nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.peserta_nama?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (r.peserta_divisi && r.peserta_divisi.toLowerCase().includes(searchTerm.toLowerCase()))
       );
       setFilteredReports(filtered);
@@ -133,7 +272,9 @@ function DailyReport() {
   const changeDate = (days) => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() + days);
-    setSelectedDate(newDate.toISOString().split('T')[0]);
+    const newDateStr = newDate.toISOString().split('T')[0];
+    setSelectedDate(newDateStr);
+    setSearchParams({ view: "list", tanggal: newDateStr });
   };
 
   const formatDate = (dateString) => {
@@ -204,7 +345,7 @@ function DailyReport() {
                     </div>
                   </div>
                   <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 via-teal-800 to-blue-800 bg-clip-text text-transparent">
-                    Daily Report
+                    Presensi & Daily Report
                   </h1>
                 </div>
                 <p className="text-sm text-slate-500">
@@ -340,10 +481,11 @@ function DailyReport() {
                         rows="3"
                       />
                       <button 
+                        onClick={submitFeedback}
                         disabled={submitting || !reviewText.trim()}
                         className="absolute bottom-3 right-3 p-2 rounded-lg bg-gradient-to-r from-teal-500 to-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition-all duration-200"
                       >
-                        <Send size="14" />
+                        {submitting ? <Loader2 size="14" className="animate-spin" /> : <Send size="14" />}
                       </button>
                     </div>
                   </div>
@@ -381,13 +523,16 @@ function DailyReport() {
                 </div>
                 <div>
                   <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 via-teal-800 to-blue-800 bg-clip-text text-transparent">
-                    Daily Report
+                    Presensi & Daily Report
                   </h1>
                   <p className="text-sm text-slate-500 mt-0.5">Rekap check-in, check-out, dan laporan harian peserta</p>
                 </div>
               </div>
             </div>
-            <button className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300">
+            <button 
+              onClick={exportToExcel}
+              className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300"
+            >
               <span className="relative z-10 flex items-center gap-2"><Download size="14" />Export Excel</span>
               <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
             </button>
@@ -402,11 +547,28 @@ function DailyReport() {
               <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-xl blur-md opacity-0 group-hover:opacity-30 transition-opacity duration-300"></div>
               <div className="relative flex items-center gap-3 px-5 py-2.5 bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 shadow-sm group-hover:border-teal-200 transition-all duration-200">
                 <Calendar size="18" className="text-teal-500" />
-                <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="text-sm text-slate-700 focus:outline-none bg-transparent font-medium" />
+                <input 
+                  type="date" 
+                  value={selectedDate} 
+                  onChange={(e) => {
+                    setSelectedDate(e.target.value);
+                    setSearchParams({ view: "list", tanggal: e.target.value });
+                  }} 
+                  className="text-sm text-slate-700 focus:outline-none bg-transparent font-medium" 
+                />
               </div>
             </div>
             <button onClick={() => changeDate(1)} className="p-2.5 rounded-xl bg-white/80 backdrop-blur-sm border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-teal-200 transition-all duration-200 shadow-sm"><ChevronRight size="18" /></button>
-            <button onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])} className="relative overflow-hidden px-4 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-md hover:shadow-lg transition-all duration-300">Hari Ini</button>
+            <button 
+              onClick={() => {
+                const today = new Date().toISOString().split('T')[0];
+                setSelectedDate(today);
+                setSearchParams({ view: "list", tanggal: today });
+              }} 
+              className="relative overflow-hidden px-4 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-md hover:shadow-lg transition-all duration-300"
+            >
+              Hari Ini
+            </button>
           </div>
           <div className="relative flex-1 max-w-md">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-slate-400" /></div>
@@ -461,7 +623,7 @@ function DailyReport() {
                         <div className="flex items-center gap-3">
                           <div className="relative">
                             <div className={`absolute inset-0 bg-gradient-to-r ${rankGradient} rounded-lg blur-sm opacity-0 group-hover:opacity-50 transition-opacity duration-300`}></div>
-                            <div className={`relative w-10 h-10 rounded-lg bg-gradient-to-r ${rankGradient} flex items-center justify-center text-white font-bold text-sm shadow-md`}>{report.peserta_nama.charAt(0)}</div>
+                            <div className={`relative w-10 h-10 rounded-lg bg-gradient-to-r ${rankGradient} flex items-center justify-center text-white font-bold text-sm shadow-md`}>{report.peserta_nama?.charAt(0) || "P"}</div>
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-slate-800 group-hover:text-teal-600 transition-colors">{report.peserta_nama}</p>
@@ -511,7 +673,7 @@ function DailyReport() {
             </table>
           </div>
 
-          {filteredReports.length === 0 && (
+          {filteredReports.length === 0 && !loading && (
             <div className="py-16 text-center">
               <div className="relative inline-block">
                 <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-full blur-xl opacity-30 animate-pulse"></div>

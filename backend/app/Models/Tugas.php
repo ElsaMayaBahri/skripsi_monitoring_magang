@@ -53,6 +53,24 @@ class Tugas extends Model
     }
 
     /**
+     * Relasi ke PengumpulanTugas yang sudah dinilai
+     */
+    public function pengumpulanDinilai()
+    {
+        return $this->hasMany(PengumpulanTugas::class, 'id_tugas', 'id_tugas')
+                    ->where('status', 'selesai');
+    }
+
+    /**
+     * Relasi ke PengumpulanTugas yang belum dinilai
+     */
+    public function pengumpulanBelumDinilai()
+    {
+        return $this->hasMany(PengumpulanTugas::class, 'id_tugas', 'id_tugas')
+                    ->where('status', 'dikumpulkan');
+    }
+
+    /**
      * Cek apakah tugas sudah melewati deadline
      */
     public function getIsTerlambatAttribute()
@@ -115,7 +133,16 @@ class Tugas extends Model
      */
     public function getJumlahDinilaiAttribute()
     {
-        return $this->pengumpulan()->where('status', 'dinilai')->count();
+        return $this->pengumpulan()->where('status', 'selesai')->count();
+    }
+
+    /**
+     * Mendapatkan jumlah peserta yang belum mengumpulkan
+     */
+    public function getJumlahBelumKumpulAttribute()
+    {
+        // Ini perlu dihitung dari jumlah peserta bimbingan
+        return 0; // placeholder
     }
 
     /**
@@ -168,5 +195,31 @@ class Tugas extends Model
         return $this->pengumpulan()
                     ->where('id_peserta', $idPeserta)
                     ->first();
+    }
+
+    /**
+     * Mendapatkan status tugas (active/closed)
+     */
+    public function getStatusTugasAttribute()
+    {
+        return $this->is_terlambat ? 'closed' : 'active';
+    }
+
+    /**
+     * Mendapatkan bobot tugas (default 0, bisa ditambahkan nanti)
+     */
+    public function getBobotAttribute()
+    {
+        return 0;
+    }
+
+    /**
+     * Mendapatkan deskripsi singkat
+     */
+    public function getDeskripsiSingkatAttribute()
+    {
+        return strlen($this->deskripsi) > 100 
+            ? substr($this->deskripsi, 0, 100) . '...' 
+            : $this->deskripsi;
     }
 }

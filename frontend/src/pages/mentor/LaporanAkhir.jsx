@@ -24,6 +24,7 @@ import {
   Send,
   TrendingUp
 } from "lucide-react";
+import api from "../../utils/api";
 
 function LaporanAkhir() {
   const [loading, setLoading] = useState(false);
@@ -49,157 +50,38 @@ function LaporanAkhir() {
     revisi: 0
   });
 
-  useEffect(() => {
-    loadDummyData();
-  }, []);
-
-  const loadDummyData = () => {
+  // Fetch laporan dari backend
+  const fetchLaporan = async () => {
     setLoading(true);
-    setTimeout(() => {
-      const dummyLaporan = [
-        {
-          id: 1,
-          peserta_id: 1,
-          peserta_nama: "Ahmad Firmansyah",
-          peserta_divisi: "Frontend Development",
-          judul: "Laporan Magang - Frontend Development",
-          file_url: "/uploads/laporan-ahmad.pdf",
-          file_size: "2.5 MB",
-          uploaded_at: "2024-12-15 14:30:00",
-          status: "pending",
-          catatan: null,
-          dinilai_oleh: null,
-          dinilai_pada: null,
-          progress: 85,
-          nilai_akhir: null
-        },
-        {
-          id: 2,
-          peserta_id: 2,
-          peserta_nama: "Siti Nurhaliza",
-          peserta_divisi: "Backend Development",
-          judul: "Laporan Akhir Magang - Backend",
-          file_url: "/uploads/laporan-siti.pdf",
-          file_size: "3.1 MB",
-          uploaded_at: "2024-12-14 10:15:00",
-          status: "approved",
-          catatan: "Laporan sangat baik, lengkap dan terstruktur dengan rapi",
-          dinilai_oleh: "Mentor",
-          dinilai_pada: "2024-12-16 09:00:00",
-          progress: 92,
-          nilai_akhir: 92
-        },
-        {
-          id: 3,
-          peserta_id: 3,
-          peserta_nama: "Budi Santoso",
-          peserta_divisi: "UI/UX Design",
-          judul: "Laporan Magang - UI/UX Design",
-          file_url: "/uploads/laporan-budi.pdf",
-          file_size: "1.8 MB",
-          uploaded_at: "2024-12-13 09:45:00",
-          status: "revision",
-          catatan: "Perbaiki bagian dokumentasi design system dan lampirkan portfolio",
-          dinilai_oleh: "Mentor",
-          dinilai_pada: "2024-12-15 14:00:00",
-          progress: 68,
-          nilai_akhir: 65
-        },
-        {
-          id: 4,
-          peserta_id: 4,
-          peserta_nama: "Dewi Lestari",
-          peserta_divisi: "Mobile Development",
-          judul: "Laporan Akhir - Mobile Dev",
-          file_url: "/uploads/laporan-dewi.pdf",
-          file_size: "2.2 MB",
-          uploaded_at: "2024-12-14 16:20:00",
-          status: "pending",
-          catatan: null,
-          dinilai_oleh: null,
-          dinilai_pada: null,
-          progress: 78,
-          nilai_akhir: null
-        },
-        {
-          id: 5,
-          peserta_id: 5,
-          peserta_nama: "Eko Prasetyo",
-          peserta_divisi: "Quality Assurance",
-          judul: null,
-          file_url: null,
-          file_size: null,
-          uploaded_at: null,
-          status: "not_uploaded",
-          catatan: null,
-          dinilai_oleh: null,
-          dinilai_pada: null,
-          progress: 71,
-          nilai_akhir: null
-        },
-        {
-          id: 6,
-          peserta_id: 6,
-          peserta_nama: "Fitri Amelia",
-          peserta_divisi: "Data Analyst",
-          judul: "Laporan Magang - Data Analyst",
-          file_url: "/uploads/laporan-fitri.pdf",
-          file_size: "4.2 MB",
-          uploaded_at: "2024-12-15 11:00:00",
-          status: "approved",
-          catatan: "Analisis data sangat mendalam, good job!",
-          dinilai_oleh: "Mentor",
-          dinilai_pada: "2024-12-16 10:30:00",
-          progress: 89,
-          nilai_akhir: 90
-        },
-        {
-          id: 7,
-          peserta_id: 7,
-          peserta_nama: "Gilang Permana",
-          peserta_divisi: "DevOps Engineer",
-          judul: null,
-          file_url: null,
-          file_size: null,
-          uploaded_at: null,
-          status: "not_uploaded",
-          catatan: null,
-          dinilai_oleh: null,
-          dinilai_pada: null,
-          progress: 64,
-          nilai_akhir: null
-        },
-        {
-          id: 8,
-          peserta_id: 8,
-          peserta_nama: "Hana Kirana",
-          peserta_divisi: "Frontend Development",
-          judul: "Laporan Akhir - Frontend",
-          file_url: "/uploads/laporan-hana.pdf",
-          file_size: "1.9 MB",
-          uploaded_at: "2024-12-14 13:45:00",
-          status: "revision",
-          catatan: "Tambah screenshot aplikasi dan penjelasan lebih detail",
-          dinilai_oleh: "Mentor",
-          dinilai_pada: "2024-12-15 16:00:00",
-          progress: 95,
-          nilai_akhir: 78
-        }
-      ];
-      setLaporan(dummyLaporan);
-      setFilteredLaporan(dummyLaporan);
-      
-      const sudahUpload = dummyLaporan.filter(l => l.status !== "not_uploaded").length;
-      setSummary({
-        total: dummyLaporan.length,
-        sudahUpload: sudahUpload,
-        belumUpload: dummyLaporan.length - sudahUpload,
-        disetujui: dummyLaporan.filter(l => l.status === "approved").length,
-        revisi: dummyLaporan.filter(l => l.status === "revision").length
+    try {
+      const response = await api.getMentorLaporanAkhir({
+        search: searchTerm,
+        status: filterStatus
       });
+      
+      if (response.success) {
+        setLaporan(response.data);
+        setFilteredLaporan(response.data);
+        if (response.summary) {
+          setSummary(response.summary);
+        }
+      } else {
+        console.error("Failed to fetch laporan:", response.message);
+        setLaporan([]);
+        setFilteredLaporan([]);
+      }
+    } catch (error) {
+      console.error("Error fetching laporan:", error);
+      setLaporan([]);
+      setFilteredLaporan([]);
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
+
+  useEffect(() => {
+    fetchLaporan();
+  }, []);
 
   useEffect(() => {
     let filtered = [...laporan];
@@ -232,40 +114,32 @@ function LaporanAkhir() {
     setShowModal(true);
   };
 
-  const handleSubmitReview = () => {
+  const handleSubmitReview = async () => {
     if (reviewForm.status === "pending") {
       alert("Pilih status terlebih dahulu (Setujui atau Revisi)");
       return;
     }
     
     setSubmitting(true);
-    setTimeout(() => {
-      const updatedLaporan = laporan.map(l => 
-        l.id === selectedLaporan.id 
-          ? { 
-              ...l, 
-              status: reviewForm.status, 
-              catatan: reviewForm.catatan,
-              dinilai_oleh: "Mentor",
-              dinilai_pada: new Date().toISOString().slice(0, 19).replace('T', ' ')
-            }
-          : l
-      );
-      setLaporan(updatedLaporan);
-      setSubmitting(false);
-      setShowModal(false);
-      
-      const sudahUpload = updatedLaporan.filter(l => l.status !== "not_uploaded").length;
-      setSummary({
-        total: updatedLaporan.length,
-        sudahUpload: sudahUpload,
-        belumUpload: updatedLaporan.length - sudahUpload,
-        disetujui: updatedLaporan.filter(l => l.status === "approved").length,
-        revisi: updatedLaporan.filter(l => l.status === "revision").length
+    try {
+      const response = await api.submitLaporanReview(selectedLaporan.id, {
+        status: reviewForm.status,
+        catatan: reviewForm.catatan
       });
       
-      alert(`Laporan ${reviewForm.status === "approved" ? "disetujui" : "direvisi"}`);
-    }, 1000);
+      if (response.success) {
+        await fetchLaporan();
+        setShowModal(false);
+        alert(`Laporan ${reviewForm.status === "approved" ? "disetujui" : "direvisi"}`);
+      } else {
+        alert(response.message || "Gagal menyimpan review");
+      }
+    } catch (error) {
+      console.error("Error submitting review:", error);
+      alert("Terjadi kesalahan saat menyimpan review");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -332,8 +206,19 @@ function LaporanAkhir() {
                 <button className="relative group overflow-hidden px-5 py-2.5 bg-white/80 backdrop-blur-sm border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm">
                   <span className="relative z-10 flex items-center gap-2"><Printer size="14" />Cetak Laporan</span>
                 </button>
-                <button className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300">
-                  <span className="relative z-10 flex items-center gap-2"><Download size="14" />Export Excel</span>
+                <button onClick={async () => {
+                  const response = await api.exportLaporanAkhir();
+                  if (response.success && response.data) {
+                    const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'laporan_akhir_export.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }
+                }} className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300">
+                  <span className="relative z-10 flex items-center gap-2"><Download size="14" />Export</span>
                   <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                 </button>
               </div>
@@ -362,10 +247,10 @@ function LaporanAkhir() {
           </div>
 
           <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div className="relative p-4 text-center">
-              <div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center mx-auto mb-2"><AlertCircle size="16" className="text-teal-600" /></div>
-              <p className="text-2xl font-bold text-teal-600">{summary.belumUpload}</p>
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mx-auto mb-2"><AlertCircle size="16" className="text-amber-600" /></div>
+              <p className="text-2xl font-bold text-amber-600">{summary.belumUpload}</p>
               <p className="text-[10px] text-slate-500 mt-1">Belum Upload</p>
             </div>
           </div>
@@ -430,11 +315,11 @@ function LaporanAkhir() {
                   const isHovered = hoveredRow === item.id;
                   
                   return (
-                    <tr key={item.id} className="transition-all duration-300 group cursor-pointer" onMouseEnter={() => setHoveredRow(item.id)} onMouseLeave={() => setHoveredRow(null)} style={{ backgroundColor: isHovered ? 'rgba(20, 184, 166, 0.02)' : 'transparent' }}>
+                    <tr key={item.id || item.peserta_id} className="transition-all duration-300 group cursor-pointer" onMouseEnter={() => setHoveredRow(item.id)} onMouseLeave={() => setHoveredRow(null)} style={{ backgroundColor: isHovered ? 'rgba(20, 184, 166, 0.02)' : 'transparent' }}>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
-                            {item.peserta_nama.charAt(0)}
+                            {item.peserta_nama?.charAt(0) || "P"}
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-slate-800 group-hover:text-teal-600 transition-colors">{item.peserta_nama}</p>
@@ -452,12 +337,12 @@ function LaporanAkhir() {
                         {item.uploaded_at ? (
                           <div className="flex items-center gap-2">
                             <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center"><Calendar size="12" className="text-teal-500" /></div>
-                            <div><span className="text-xs font-medium text-slate-700">{item.uploaded_at.split(' ')[0]}</span><p className="text-[10px] text-slate-400">{item.uploaded_at.split(' ')[1]}</p></div>
+                            <div><span className="text-xs font-medium text-slate-700">{new Date(item.uploaded_at).toLocaleDateString('id-ID')}</span><p className="text-[10px] text-slate-400">{new Date(item.uploaded_at).toLocaleTimeString('id-ID')}</p></div>
                           </div>
                         ) : (
                           <span className="text-xs text-slate-400 flex items-center gap-2"><div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center"><Clock size="12" className="text-slate-400" /></div>Belum upload</span>
                         )}
-                       </td>
+                        </td>
                       <td className="px-6 py-4">
                         <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${status.bg} ${status.text} border ${status.border} shadow-sm`}><StatusIcon size="10" /><span className="text-[10px] font-semibold">{status.label}</span></div>
                         {item.catatan && (item.status === "revision" || item.status === "approved") && (
@@ -472,8 +357,12 @@ function LaporanAkhir() {
                           <span className="text-xs text-slate-400 italic flex items-center gap-1.5"><div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center"><Clock size="10" className="text-slate-400" /></div>Menunggu upload</span>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <button onClick={() => window.open(item.file_url, '_blank')} className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100 transition-all duration-200 hover:scale-105" title="Lihat Laporan"><Eye size="14" /></button>
-                            <button onClick={() => window.open(item.file_url, '_blank')} className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all duration-200 hover:scale-105" title="Download"><Download size="14" /></button>
+                            {item.file_url && (
+                              <>
+                                <button onClick={() => window.open(item.file_url, '_blank')} className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100 transition-all duration-200 hover:scale-105" title="Lihat Laporan"><Eye size="14" /></button>
+                                <button onClick={() => window.open(item.file_url, '_blank')} className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all duration-200 hover:scale-105" title="Download"><Download size="14" /></button>
+                              </>
+                            )}
                             <button onClick={() => handleOpenModal(item)} className={`relative overflow-hidden px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-300 flex items-center gap-1.5 ${
                               item.status === "approved" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : 
                               item.status === "revision" ? "bg-purple-100 text-purple-700 hover:bg-purple-200" :
@@ -492,7 +381,7 @@ function LaporanAkhir() {
             </table>
           </div>
 
-          {filteredLaporan.length === 0 && (
+          {filteredLaporan.length === 0 && !loading && (
             <div className="py-16 text-center">
               <div className="relative inline-block"><div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-full blur-xl opacity-30 animate-pulse"></div><div className="relative w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-full flex items-center justify-center mx-auto"><FileText size="32" className="text-slate-400" /></div></div>
               <p className="text-slate-600 font-semibold mt-4">Tidak ada data laporan</p><p className="text-sm text-slate-400 mt-1">Belum ada laporan yang diupload peserta</p>
@@ -537,17 +426,45 @@ function LaporanAkhir() {
             
             <div className="p-6 space-y-6">
               <div className="bg-gradient-to-r from-slate-50 to-white rounded-xl p-4 border border-slate-100 shadow-sm">
-                <div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-teal-50"><FileText size="20" className="text-teal-500" /></div><div className="flex-1"><p className="text-sm font-semibold text-slate-700">{selectedLaporan.judul || "Laporan Akhir"}</p><p className="text-xs text-slate-400">Upload: {selectedLaporan.uploaded_at} • Size: {selectedLaporan.file_size}</p></div><button onClick={() => window.open(selectedLaporan.file_url, '_blank')} className="px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-semibold hover:shadow-md transition-all duration-200 flex items-center gap-1.5"><Eye size="12" />Lihat</button><button onClick={() => window.open(selectedLaporan.file_url, '_blank')} className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 transition-all duration-200 flex items-center gap-1.5"><Download size="12" />Download</button></div>
+                <div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-teal-50"><FileText size="20" className="text-teal-500" /></div><div className="flex-1"><p className="text-sm font-semibold text-slate-700">{selectedLaporan.judul || "Laporan Akhir"}</p><p className="text-xs text-slate-400">Upload: {selectedLaporan.uploaded_at ? new Date(selectedLaporan.uploaded_at).toLocaleString('id-ID') : '-'} • Size: {selectedLaporan.file_size || '-'}</p></div>
+                  {selectedLaporan.file_url && (
+                    <>
+                      <button onClick={() => window.open(selectedLaporan.file_url, '_blank')} className="px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-semibold hover:shadow-md transition-all duration-200 flex items-center gap-1.5"><Eye size="12" />Lihat</button>
+                      <button onClick={() => window.open(selectedLaporan.file_url, '_blank')} className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 transition-all duration-200 flex items-center gap-1.5"><Download size="12" />Download</button>
+                    </>
+                  )}
+                </div>
               </div>
 
-              <div><label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2"><div className="p-1 rounded-lg bg-teal-50"><Activity size="12" className="text-teal-500" /></div>Status Review <span className="text-red-500">*</span></label>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                  <div className="p-1 rounded-lg bg-teal-50">
+                    <Activity size="12" className="text-teal-500" />
+                  </div>
+                  Status Review <span className="text-red-500">*</span>
+                </label>
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setReviewForm(prev => ({ ...prev, status: "approved" }))} className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${reviewForm.status === "approved" ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md" : "border-2 border-slate-200 text-slate-600 hover:bg-slate-50"}`}><CheckCircle size="16" />Setujui</button>
                   <button type="button" onClick={() => setReviewForm(prev => ({ ...prev, status: "revision" }))} className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${reviewForm.status === "revision" ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md" : "border-2 border-slate-200 text-slate-600 hover:bg-slate-50"}`}><AlertCircle size="16" />Revisi</button>
                 </div>
               </div>
 
-              <div><label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2"><div className="p-1 rounded-lg bg-blue-50"><MessageSquare size="12" className="text-blue-500" /></div>Catatan</label><textarea value={reviewForm.catatan} onChange={(e) => setReviewForm(prev => ({ ...prev, catatan: e.target.value }))} rows="5" placeholder="Berikan catatan atau masukan untuk perbaikan laporan..." className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200 resize-none" /><p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1"><Sparkles size="10" />Catatan akan terlihat oleh peserta</p></div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                  <div className="p-1 rounded-lg bg-blue-50">
+                    <MessageSquare size="12" className="text-blue-500" />
+                  </div>
+                  Catatan
+                </label>
+                <textarea 
+                  value={reviewForm.catatan} 
+                  onChange={(e) => setReviewForm(prev => ({ ...prev, catatan: e.target.value }))} 
+                  rows="5" 
+                  placeholder="Berikan catatan atau masukan untuk perbaikan laporan..." 
+                  className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200 resize-none" 
+                />
+                <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1"><Sparkles size="10" />Catatan akan terlihat oleh peserta</p>
+              </div>
             </div>
 
             <div className="sticky bottom-0 bg-white px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
@@ -560,14 +477,6 @@ function LaporanAkhir() {
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes zoom-in-95 { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        .animate-in { animation-duration: 0.2s; animation-fill-mode: both; }
-        .fade-in { animation-name: fade-in; }
-        .zoom-in-95 { animation-name: zoom-in-95; }
-      `}</style>
     </div>
   );
 }

@@ -36,7 +36,8 @@ import {
   Sparkles,
   Gem,
   Crown,
-  Medal
+  Medal,
+  TrendingDown
 } from "lucide-react";
 
 function MentorDashboard() {
@@ -60,6 +61,21 @@ function MentorDashboard() {
   const [recentParticipants, setRecentParticipants] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [weeklyAttendance, setWeeklyAttendance] = useState([65, 72, 78, 82, 75, 88, 92]);
+  
+  // Data tambahan untuk insight
+  const [progressStats, setProgressStats] = useState({
+    onTrack: 70,
+    behind: 30,
+    excellentCount: 3,
+    atRiskCount: 2,
+    lowAttendanceCount: 2
+  });
+  
+  const [problematicParticipants, setProblematicParticipants] = useState([
+    { id: 3, name: "Budi Santoso", issue: "Progress < 50%", progress: 48, attendance: 70 },
+    { id: 5, name: "Eko Prasetyo", issue: "Tidak hadir 3 hari", progress: 55, attendance: 45 },
+    { id: 7, name: "Gilang Permana", issue: "Progress rendah", progress: 52, attendance: 65 }
+  ]);
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -121,10 +137,12 @@ function MentorDashboard() {
           { id: 3, title: "Quiz JavaScript Lanjutan", student_name: "Budi Santoso", due_date: "besok", priority: "high" },
         ]);
         setRecentParticipants([
-          { id: 1, name: "Ahmad Firmansyah", status: "active", progress: 75, attendance: 90, divisi: "Frontend", rank: "diamond" },
-          { id: 2, name: "Siti Nurhaliza", status: "active", progress: 85, attendance: 95, divisi: "Backend", rank: "diamond" },
-          { id: 3, name: "Budi Santoso", status: "active", progress: 60, attendance: 80, divisi: "UI/UX", rank: "silver" },
-          { id: 4, name: "Dewi Lestari", status: "active", progress: 70, attendance: 85, divisi: "Mobile", rank: "gold" },
+          { id: 1, name: "Ahmad Firmansyah", status: "active", progress: 85, attendance: 90, divisi: "Frontend", rank: "diamond" },
+          { id: 2, name: "Siti Nurhaliza", status: "active", progress: 92, attendance: 95, divisi: "Backend", rank: "diamond" },
+          { id: 3, name: "Budi Santoso", status: "active", progress: 48, attendance: 70, divisi: "UI/UX", rank: "silver" },
+          { id: 4, name: "Dewi Lestari", status: "active", progress: 78, attendance: 85, divisi: "Mobile", rank: "gold" },
+          { id: 5, name: "Eko Prasetyo", status: "active", progress: 55, attendance: 45, divisi: "QA", rank: "gold" },
+          { id: 6, name: "Fitri Amelia", status: "active", progress: 89, attendance: 94, divisi: "Data", rank: "diamond" }
         ]);
         setNotifications([
           { id: 1, title: "Tugas Baru Dikumpulkan", message: "Ahmad Firmansyah mengumpulkan tugas Frontend", time: "2 jam lalu", is_read: false },
@@ -159,7 +177,7 @@ function MentorDashboard() {
       gold: "from-amber-400 to-yellow-500",
       silver: "from-slate-400 to-gray-500"
     };
-    return gradients[rank] || "from-teal-500 to-emerald-500";
+    return gradients[rank] || "from-teal-500 to-blue-600";
   };
 
   const getRankIcon = (rank) => {
@@ -174,6 +192,11 @@ function MentorDashboard() {
     { icon: Users, label: "Lihat Peserta", link: "/mentor/peserta" },
     { icon: Award, label: "Input Nilai", link: "/mentor/penilaian-manual" },
   ];
+
+  // Hitung on-track & behind dari data peserta
+  const onTrackCount = recentParticipants.filter(p => p.progress >= 70).length;
+  const behindCount = recentParticipants.filter(p => p.progress < 70).length;
+  const totalParticipants = recentParticipants.length;
 
   if (loading) {
     return (
@@ -233,7 +256,7 @@ function MentorDashboard() {
           </div>
         </div>
 
-        {/* Stats Cards Premium */}
+        {/* Stats Cards Premium - 4 Cards Utama */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Card 1 - Total Peserta */}
           <div className="group relative overflow-hidden bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
@@ -295,62 +318,107 @@ function MentorDashboard() {
             </div>
           </div>
 
-          {/* Card 3 - Deadline Mendekat */}
+          {/* Card 3 - Progress Program (BARU - menggantikan Deadline Mendekat) */}
           <div className="group relative overflow-hidden bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-red-500/10 to-pink-500/10 rounded-full -mr-20 -mt-20 group-hover:scale-150 transition-transform duration-700"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full -mr-20 -mt-20 group-hover:scale-150 transition-transform duration-700"></div>
             <div className="relative p-5">
               <div className="flex items-center justify-between mb-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-600 rounded-xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300">
-                  <AlertTriangle className="w-6 h-6 text-white" />
+                <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300">
+                  <Target className="w-6 h-6 text-white" />
                 </div>
-                <div className="flex items-center gap-1 px-2.5 py-1 bg-red-50 rounded-full">
-                  <Timer className="w-2.5 h-2.5 text-red-500" />
-                  <span className="text-[10px] font-semibold text-red-600">Mendesak</span>
+                <div className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 rounded-full">
+                  <TrendingUp className="w-2.5 h-2.5 text-emerald-500" />
+                  <span className="text-[10px] font-semibold text-emerald-600">Program</span>
                 </div>
               </div>
               <div className="space-y-1">
-                <p className="text-3xl font-bold text-slate-800">{stats.approachingDeadline}</p>
-                <p className="text-xs text-slate-500">Tugas Mendekati Deadline</p>
+                <p className="text-3xl font-bold text-emerald-600">{Math.round((onTrackCount / totalParticipants) * 100)}%</p>
+                <p className="text-xs text-slate-500">Peserta On Track</p>
               </div>
               <div className="mt-3 pt-2 border-t border-slate-100">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="h-1 w-10 bg-gradient-to-r from-red-500 to-pink-500 rounded-full"></div>
-                    <span className="text-[10px] text-slate-400">Deadline</span>
+                    <div className="h-1 w-10 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full"></div>
+                    <span className="text-[10px] text-slate-400">Tertinggal</span>
                   </div>
-                  <span className="text-[10px] font-semibold text-red-600">&lt; 3 hari</span>
+                  <span className="text-[10px] font-semibold text-amber-600">{behindCount} peserta</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Card 4 - Kehadiran Hari Ini */}
-          <div className="group relative overflow-hidden bg-gradient-to-br from-teal-500 to-blue-600 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          {/* Card 4 - Rata-rata Nilai (BARU - menggantikan Kehadiran Hari Ini) */}
+          <div className="group relative overflow-hidden bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="relative p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm group-hover:scale-110 transition-transform duration-300">
-                  <UserCheck className="w-6 h-6 text-white" />
+                  <Award className="w-6 h-6 text-white" />
                 </div>
                 <div className="flex items-center gap-1 px-2.5 py-1 bg-white/20 backdrop-blur-sm rounded-full">
-                  <Activity className="w-2.5 h-2.5 text-white" />
-                  <span className="text-[10px] font-semibold text-white">Hari Ini</span>
+                  <Star className="w-2.5 h-2.5 text-white" />
+                  <span className="text-[10px] font-semibold text-white">Prestasi</span>
                 </div>
               </div>
               <div className="space-y-1">
-                <p className="text-3xl font-bold text-white">{stats.presentToday}/{stats.totalMentees}</p>
-                <p className="text-xs text-white/80">Hadir hari ini</p>
+                <p className="text-3xl font-bold text-white">{stats.averageScore}</p>
+                <p className="text-xs text-white/80">Rata-rata Nilai</p>
               </div>
               <div className="mt-3 pt-2 border-t border-white/20">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="h-1 w-10 bg-white/30 rounded-full"></div>
-                    <span className="text-[10px] text-white/70">Absen</span>
+                    <span className="text-[10px] text-white/70">Kinerja</span>
                   </div>
-                  <span className="text-[10px] font-semibold text-white/90">{stats.absentToday} belum hadir</span>
+                  <span className="text-[10px] font-semibold text-white/90">
+                    {stats.averageScore >= 85 ? "Sangat Baik" : stats.averageScore >= 70 ? "Baik" : "Perlu Ditingkatkan"}
+                  </span>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Alert Peserta Bermasalah - Card Baru (Perlu Perhatian) */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-1 h-6 bg-gradient-to-b from-red-500 to-rose-500 rounded-full"></div>
+            <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">⚠️ Perlu Perhatian Khusus</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {problematicParticipants.map((participant, idx) => (
+              <div key={idx} className="bg-white/90 backdrop-blur-sm rounded-xl shadow-md border border-red-100 p-4 hover:shadow-lg transition-all duration-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
+                      <AlertTriangle size="14" className="text-red-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{participant.name}</p>
+                      <p className="text-[10px] text-red-600">{participant.issue}</p>
+                    </div>
+                  </div>
+                  <Link to={`/mentor/peserta/${participant.id}`}>
+                    <button className="text-xs text-teal-600 hover:text-teal-700 font-medium">Lihat →</button>
+                  </Link>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <div className="flex justify-between text-[10px] text-slate-500 mb-0.5">
+                      <span>Progress</span>
+                      <span className="text-red-600 font-semibold">{participant.progress}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-red-500 to-orange-500 rounded-full" style={{ width: `${participant.progress}%` }}></div>
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-slate-500">Kehadiran</span>
+                    <span className={`font-semibold ${participant.attendance < 70 ? 'text-red-600' : 'text-amber-600'}`}>{participant.attendance}%</span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -474,7 +542,7 @@ function MentorDashboard() {
         {/* Bottom Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           
-          {/* Statistik Kehadiran */}
+          {/* Statistik Kehadiran (Turun ke bawah sesuai prioritas) */}
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-100">
             <div className="relative h-1.5 bg-gradient-to-r from-blue-500 to-cyan-500"></div>
             <div className="p-5">
@@ -527,7 +595,7 @@ function MentorDashboard() {
             </div>
           </div>
 
-          {/* Deadline Penting */}
+          {/* Deadline Penting (Pertahankan yang bawah, hapus card atas) */}
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-100">
             <div className="relative h-1.5 bg-gradient-to-r from-red-500 to-pink-500"></div>
             <div className="p-5">
@@ -599,7 +667,7 @@ function MentorDashboard() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {recentParticipants.map((participant, idx) => {
+              {recentParticipants.slice(0, 4).map((participant, idx) => {
                 const rankGradient = getRankGradient(participant.rank);
                 return (
                   <Link key={idx} to={`/mentor/peserta/${participant.id}`}>
@@ -624,7 +692,7 @@ function MentorDashboard() {
                         <div>
                           <div className="flex justify-between text-[10px] text-slate-500 mb-1">
                             <span>Progress Tugas</span>
-                            <span className="font-semibold text-teal-600">{participant.progress}%</span>
+                            <span className={`font-semibold ${participant.progress < 70 ? 'text-red-600' : 'text-teal-600'}`}>{participant.progress}%</span>
                           </div>
                           <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                             <div className={`h-full bg-gradient-to-r ${rankGradient} rounded-full`} style={{ width: `${participant.progress}%` }}></div>
@@ -635,7 +703,7 @@ function MentorDashboard() {
                             <UserCheck size={10} className="text-emerald-500" />
                             <span className="text-[9px] text-slate-500">Kehadiran</span>
                           </div>
-                          <span className="text-[10px] font-semibold text-emerald-600">{participant.attendance}%</span>
+                          <span className={`text-[10px] font-semibold ${participant.attendance < 70 ? 'text-red-600' : 'text-emerald-600'}`}>{participant.attendance}%</span>
                         </div>
                       </div>
                     </div>

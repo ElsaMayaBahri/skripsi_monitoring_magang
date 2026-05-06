@@ -59,8 +59,18 @@ const handleResponse = async (response) => {
 const getFileUrl = (filePath) => {
   if (!filePath) return null;
   if (filePath.startsWith('http')) return filePath;
+  if (filePath.includes('videos/') || filePath.includes('documents/')) {
+    return `http://localhost:8000/storage/${filePath}`;
+  }
   const filename = filePath.split('/').pop();
   return `http://localhost:8000/api/materi-file/${filename}`;
+};
+
+// Helper untuk mendapatkan URL video
+const getVideoUrl = (filePath) => {
+  if (!filePath) return null;
+  if (filePath.startsWith('http')) return filePath;
+  return `http://localhost:8000/storage/${filePath}`;
 };
 
 // ================= API =================
@@ -206,6 +216,290 @@ export const api = {
     return handleResponse(response);
   },
 
+  // ================= MENTOR - PESERTA BIMBINGAN =================
+  
+  async getMyPesertas() {
+    const response = await fetch(`${API_URL}/mentor/pesertas`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async getDetailPeserta(id_peserta) {
+    const response = await fetch(`${API_URL}/mentor/pesertas/${id_peserta}`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  // ================= MENTOR - FILTERS & PESERTA LIST =================
+  
+  async getMentorFilters() {
+    const response = await fetch(`${API_URL}/mentor/filters`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async getMentorPesertaList(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const url = `${API_URL}/mentor/peserta-list${queryString ? `?${queryString}` : ''}`;
+    const response = await fetch(url, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  // ================= DAILY REPORT =================
+  
+  async getDailyReport(pesertaId, tanggal) {
+    const response = await fetch(`${API_URL}/daily-report/${pesertaId}?tanggal=${tanggal}`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async submitDailyReportFeedback(pesertaId, tanggal, feedback) {
+    const response = await fetch(`${API_URL}/daily-report/${pesertaId}/feedback`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ tanggal, feedback }),
+    });
+    return handleResponse(response);
+  },
+
+  async exportDailyReport(tanggal) {
+    const response = await fetch(`${API_URL}/daily-report/export?tanggal=${tanggal}`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  // ================= MATERI MENTOR (untuk Mentor membuat materi) =================
+  
+  async getMentorMateri(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const url = `${API_URL}/mentor/materi${queryString ? `?${queryString}` : ''}`;
+    const response = await fetch(url, {
+      headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    
+    if (result.success && result.data) {
+      result.data = result.data.map(item => ({
+        ...item,
+        file_url: item.file_materi ? getVideoUrl(item.file_materi) : null,
+        video_url: item.tipe_materi === 'video' && item.file_materi ? getVideoUrl(item.file_materi) : null,
+      }));
+    }
+    return result;
+  },
+
+  async getMentorMateriById(id) {
+    const response = await fetch(`${API_URL}/mentor/materi/${id}`, {
+      headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    
+    if (result.success && result.data) {
+      result.data.file_url = result.data.file_materi ? getVideoUrl(result.data.file_materi) : null;
+      result.data.video_url = result.data.tipe_materi === 'video' && result.data.file_materi ? getVideoUrl(result.data.file_materi) : null;
+    }
+    return result;
+  },
+
+  async createMentorMateri(formData) {
+    const token = getToken();
+    const response = await fetch(`${API_URL}/mentor/materi`, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: formData,
+    });
+    return handleResponse(response);
+  },
+
+  async updateMentorMateri(id, formData) {
+    formData.append('_method', 'PUT');
+    
+    const token = getToken();
+    const response = await fetch(`${API_URL}/mentor/materi/${id}`, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: formData,
+    });
+    return handleResponse(response);
+  },
+
+  async deleteMentorMateri(id) {
+    const response = await fetch(`${API_URL}/mentor/materi/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async getMentorMateriDivisiList() {
+    const response = await fetch(`${API_URL}/mentor/materi/divisi-list`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  // ================= TUGAS MENTOR =================
+  
+  async getMentorTugas(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const url = `${API_URL}/mentor/tugas${queryString ? `?${queryString}` : ''}`;
+    const response = await fetch(url, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async getMentorTugasById(id) {
+    const response = await fetch(`${API_URL}/mentor/tugas/${id}`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async createMentorTugas(formData) {
+    const token = getToken();
+    const response = await fetch(`${API_URL}/mentor/tugas`, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: formData,
+    });
+    return handleResponse(response);
+  },
+
+  async updateMentorTugas(id, data) {
+    if (data instanceof FormData) {
+      data.append('_method', 'PUT');
+      const token = getToken();
+      const response = await fetch(`${API_URL}/mentor/tugas/${id}`, {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: data,
+      });
+      return handleResponse(response);
+    } else {
+      const response = await fetch(`${API_URL}/mentor/tugas/${id}`, {
+        method: "PUT",
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      });
+      return handleResponse(response);
+    }
+  },
+
+  async deleteMentorTugas(id) {
+    const response = await fetch(`${API_URL}/mentor/tugas/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async sendTugasReminder(tugasId = null) {
+    const url = tugasId ? `${API_URL}/mentor/tugas/${tugasId}/reminder` : `${API_URL}/mentor/tugas/reminder`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async getTugasSubmissions(tugasId) {
+    const response = await fetch(`${API_URL}/mentor/tugas/${tugasId}/submissions`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async updateTugasSubmission(submissionId, data) {
+    const response = await fetch(`${API_URL}/mentor/tugas/submissions/${submissionId}`, {
+      method: "PUT",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+  },
+
+  // ================= LAPORAN AKHIR (MENTOR) =================
+  
+  async getMentorLaporanAkhir(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const url = `${API_URL}/mentor/laporan-akhir${queryString ? `?${queryString}` : ''}`;
+    const response = await fetch(url, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async submitLaporanReview(id, data) {
+    const response = await fetch(`${API_URL}/mentor/laporan-akhir/${id}/review`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+  },
+
+  async exportLaporanAkhir() {
+    const response = await fetch(`${API_URL}/mentor/laporan-akhir/export`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  // ================= NILAI (MENTOR) =================
+  
+  async getMentorNilai(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const url = `${API_URL}/mentor/nilai${queryString ? `?${queryString}` : ''}`;
+    const response = await fetch(url, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async saveMentorNilai(data) {
+    const response = await fetch(`${API_URL}/mentor/nilai`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+  },
+
+  async finalizeMentorNilai(id) {
+    const response = await fetch(`${API_URL}/mentor/nilai/${id}/finalize`, {
+      method: "POST",
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async exportMentorNilai() {
+    const response = await fetch(`${API_URL}/mentor/nilai/export`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
   // ================= JAM KERJA (WORKING HOURS) =================
   async getJamKerja() {
     const response = await fetch(`${API_URL}/jam-kerja`, {
@@ -274,7 +568,7 @@ export const api = {
     return handleResponse(response);
   },
 
-  // ================= MATERI PELATIHAN =================
+  // ================= MATERI PELATIHAN (untuk COO/Admin) =================
   
   async getMateri() {
     const response = await fetch(`${API_URL}/materi-pelatihan`, {
@@ -414,6 +708,7 @@ export const api = {
   },
 
   getFileUrl,
+  getVideoUrl,
 
   // ================= QUIZ =================
   
