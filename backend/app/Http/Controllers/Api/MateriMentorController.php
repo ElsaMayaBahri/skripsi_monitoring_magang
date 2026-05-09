@@ -23,7 +23,7 @@ class MateriMentorController extends Controller
         try {
             $user = Auth::user();
             
-            if ($user->role !== 'mentor') {
+            if (!$user || $user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized. Anda bukan mentor.'
@@ -87,12 +87,12 @@ class MateriMentorController extends Controller
      * Get single materi by ID
      * GET /api/mentor/materi/{id}
      */
-    public function show(int $id)
+    public function show($id)
     {
         try {
             $user = Auth::user();
             
-            if ($user->role !== 'mentor') {
+            if (!$user || $user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized'
@@ -157,7 +157,7 @@ class MateriMentorController extends Controller
         try {
             $user = Auth::user();
             
-            if ($user->role !== 'mentor') {
+            if (!$user || $user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized'
@@ -173,7 +173,6 @@ class MateriMentorController extends Controller
                 ], 404);
             }
 
-            // Validasi berdasarkan tipe materi
             $rules = [
                 'judul' => 'required|string|max:255',
                 'deskripsi' => 'nullable|string',
@@ -182,9 +181,9 @@ class MateriMentorController extends Controller
             ];
 
             if ($request->tipe_materi === 'dokumen') {
-                $rules['file_materi'] = 'required|file|mimes:pdf,doc,docx,ppt,pptx|max:10240';
+                $rules['file'] = 'required|file|mimes:pdf,doc,docx,ppt,pptx|max:10240';
             } elseif ($request->tipe_materi === 'video') {
-                $rules['file_materi'] = 'required|file|mimes:mp4,mov,avi,webm|max:51200';
+                $rules['file'] = 'required|file|mimes:mp4,mov,avi,webm|max:51200';
             } elseif ($request->tipe_materi === 'link') {
                 $rules['link'] = 'required|url|max:500';
             }
@@ -198,22 +197,18 @@ class MateriMentorController extends Controller
                 'judul' => $request->judul,
                 'deskripsi' => $request->deskripsi,
                 'tipe_materi' => $request->tipe_materi,
-                'id_divisi' => $request->id_divisi ?? $mentor->id_divisi,
+                'id_divisi' => $request->id_divisi,
                 'views' => 0,
             ];
 
-            // Handle file upload untuk dokumen atau video
-            if (in_array($request->tipe_materi, ['dokumen', 'video']) && $request->hasFile('file_materi')) {
-                $file = $request->file('file_materi');
-                $extension = $file->getClientOriginalExtension();
-                $filename = time() . '_' . uniqid() . '.' . $extension;
-                
+            if (in_array($request->tipe_materi, ['dokumen', 'video']) && $request->hasFile('file')) {
+                $file = $request->file('file');
+                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
                 $folder = $request->tipe_materi === 'video' ? 'materi_mentor/videos' : 'materi_mentor/documents';
                 $path = $file->storeAs($folder, $filename, 'public');
                 $data['file_materi'] = $path;
             }
 
-            // Handle link untuk tipe link
             if ($request->tipe_materi === 'link') {
                 $data['link'] = $request->link;
             }
@@ -225,11 +220,7 @@ class MateriMentorController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Materi berhasil ditambahkan',
-                'data' => [
-                    'id_materi' => $materi->id_materi,
-                    'judul' => $materi->judul,
-                    'tipe_materi' => $materi->tipe_materi,
-                ]
+                'data' => $materi
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -252,12 +243,12 @@ class MateriMentorController extends Controller
      * Update materi
      * PUT /api/mentor/materi/{id}
      */
-    public function update(Request $request, int $id)
+    public function update(Request $request, $id)
     {
         try {
             $user = Auth::user();
             
-            if ($user->role !== 'mentor') {
+            if (!$user || $user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized'
@@ -292,9 +283,9 @@ class MateriMentorController extends Controller
             ];
 
             if ($request->tipe_materi === 'dokumen') {
-                $rules['file_materi'] = 'nullable|file|mimes:pdf,doc,docx,ppt,pptx|max:10240';
+                $rules['file'] = 'nullable|file|mimes:pdf,doc,docx,ppt,pptx|max:10240';
             } elseif ($request->tipe_materi === 'video') {
-                $rules['file_materi'] = 'nullable|file|mimes:mp4,mov,avi,webm|max:51200';
+                $rules['file'] = 'nullable|file|mimes:mp4,mov,avi,webm|max:51200';
             } elseif ($request->tipe_materi === 'link') {
                 $rules['link'] = 'nullable|url|max:500';
             }
@@ -307,29 +298,24 @@ class MateriMentorController extends Controller
                 'judul' => $request->judul,
                 'deskripsi' => $request->deskripsi,
                 'tipe_materi' => $request->tipe_materi,
-                'id_divisi' => $request->id_divisi ?? $mentor->id_divisi,
+                'id_divisi' => $request->id_divisi,
             ];
 
-            // Handle file upload untuk dokumen atau video
-            if (in_array($request->tipe_materi, ['dokumen', 'video'])) {
-                if ($request->hasFile('file_materi')) {
-                    // Delete old file
-                    if ($materi->file_materi && Storage::disk('public')->exists($materi->file_materi)) {
-                        Storage::disk('public')->delete($materi->file_materi);
-                    }
-                    
-                    $file = $request->file('file_materi');
-                    $extension = $file->getClientOriginalExtension();
-                    $filename = time() . '_' . uniqid() . '.' . $extension;
-                    
-                    $folder = $request->tipe_materi === 'video' ? 'materi_mentor/videos' : 'materi_mentor/documents';
-                    $path = $file->storeAs($folder, $filename, 'public');
-                    $data['file_materi'] = $path;
-                    $data['link'] = null;
+            if (in_array($request->tipe_materi, ['dokumen', 'video']) && $request->hasFile('file')) {
+                if ($materi->file_materi && Storage::disk('public')->exists($materi->file_materi)) {
+                    Storage::disk('public')->delete($materi->file_materi);
                 }
+                
+                $file = $request->file('file');
+                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $folder = $request->tipe_materi === 'video' ? 'materi_mentor/videos' : 'materi_mentor/documents';
+                $path = $file->storeAs($folder, $filename, 'public');
+                $data['file_materi'] = $path;
+                $data['link'] = null;
+            } else {
+                $data['file_materi'] = $materi->file_materi;
             }
 
-            // Handle link untuk tipe link
             if ($request->tipe_materi === 'link') {
                 $data['link'] = $request->link;
                 $data['file_materi'] = null;
@@ -363,12 +349,12 @@ class MateriMentorController extends Controller
      * Delete materi
      * DELETE /api/mentor/materi/{id}
      */
-    public function destroy(int $id)
+    public function destroy($id)
     {
         try {
             $user = Auth::user();
             
-            if ($user->role !== 'mentor') {
+            if (!$user || $user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized'
@@ -423,23 +409,16 @@ class MateriMentorController extends Controller
         try {
             $user = Auth::user();
             
-            if ($user->role !== 'mentor') {
+            if (!$user || $user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized'
                 ], 403);
             }
 
-            $mentor = Mentor::where('id_user', $user->id_user)->first();
-            
-            if (!$mentor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Data mentor tidak ditemukan'
-                ], 404);
-            }
-
-            $divisilist = Divisi::all(['id_divisi', 'nama_divisi']);
+            $divisilist = Divisi::where('status', 'aktif')
+                ->orWhere('status_akun', 'aktif')
+                ->get(['id_divisi', 'nama_divisi']);
 
             return response()->json([
                 'success' => true,

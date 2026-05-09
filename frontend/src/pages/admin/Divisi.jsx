@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react"
 import { useLocation } from "react-router-dom"
-import { api } from "../../utils/api"
+import { getDivisi, createDivisi, updateDivisi, deleteDivisi } from "../../api/admin/divisiService"
+import { getMentors } from "../../api/admin/dashboardService"
+import { getPeserta } from "../../api/admin/dashboardService"
 import { logActivity } from "../../utils/activityLogger"
 import {
   Building2,
@@ -79,7 +81,7 @@ function Divisi() {
     setLoading(true)
     setError("")
     try {
-      const divisiResponse = await api.getDivisi()
+      const divisiResponse = await getDivisi()
       console.log("Divisi response from API:", divisiResponse)
       
       let divisiData = []
@@ -97,8 +99,8 @@ function Divisi() {
       setDivisi(divisiWithStatus)
       
       const [mentorsRes, pesertaRes] = await Promise.all([
-        api.getMentors(),
-        api.getPeserta()
+        getMentors(),
+        getPeserta()
       ])
       
       let mentorsData = []
@@ -183,7 +185,7 @@ function Divisi() {
         }
         
         console.log("Updating divisi:", { id: editId, ...updateData })
-        const response = await api.updateDivisi(editId, updateData)
+        const response = await updateDivisi(editId, updateData)
         console.log("Update response:", response)
         
         if (response && response.success === false) {
@@ -203,7 +205,7 @@ function Divisi() {
         }
         
         console.log("Adding new divisi:", addData)
-        const response = await api.addDivisi(addData)
+        const response = await createDivisi(addData)
         console.log("Add response:", response)
         
         if (response && response.success === false) {
@@ -248,7 +250,7 @@ function Divisi() {
     
     setDeleteLoading(true)
     try {
-      await api.deleteDivisi(deleteTarget.id_divisi)
+      await deleteDivisi(deleteTarget.id_divisi)
       
       logActivity("delete", "divisi", deleteTarget.nama_divisi)
       

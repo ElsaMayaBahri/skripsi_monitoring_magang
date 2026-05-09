@@ -40,7 +40,7 @@ class LaporanAkhirController extends Controller
             }
 
             // Get all peserta under this mentor
-            $pesertas = Peserta::with('user')
+            $pesertas = Peserta::with('user', 'divisi')
                 ->where('id_mentor', $mentor->id_mentor)
                 ->get();
 
@@ -60,10 +60,10 @@ class LaporanAkhirController extends Controller
                 $dinilaiPada = null;
 
                 if ($laporan) {
-                    $status = $laporan->status;
+                    $status = $laporan->status ?? 'pending';
                     $fileUrl = $laporan->file_laporan ? Storage::url($laporan->file_laporan) : null;
                     $fileSize = $laporan->file_size;
-                    $uploadedAt = $laporan->created_at;
+                    $uploadedAt = $laporan->tanggal_upload ?? $laporan->created_at;
                     $judul = $laporan->judul;
                     $catatan = $laporan->catatan_mentor;
                     $nilai = $laporan->nilai_akhir;
@@ -113,7 +113,7 @@ class LaporanAkhirController extends Controller
             }
 
             $summary = [
-                'total' => $laporanListCount = count($laporanList),
+                'total' => count($laporanList),
                 'sudahUpload' => collect($laporanList)->filter(function ($item) {
                     return $item['status'] !== 'not_uploaded';
                 })->count(),
@@ -125,6 +125,9 @@ class LaporanAkhirController extends Controller
                 })->count(),
                 'revisi' => collect($laporanList)->filter(function ($item) {
                     return $item['status'] === 'revision';
+                })->count(),
+                'pending' => collect($laporanList)->filter(function ($item) {
+                    return $item['status'] === 'pending';
                 })->count(),
             ];
 
@@ -171,7 +174,7 @@ class LaporanAkhirController extends Controller
 
             $request->validate([
                 'status' => 'required|in:pending,approved,revision',
-                'catatan' => 'nullable|string',
+                'catatan' => 'nullable|string|max:1000',
             ]);
 
             $laporan = LaporanAkhir::find($id);
@@ -195,17 +198,25 @@ class LaporanAkhirController extends Controller
                 ], 403);
             }
 
-            $laporan->update([
+            $updateData = [
                 'status' => $request->status,
                 'catatan_mentor' => $request->catatan,
                 'dinilai_oleh' => $user->nama,
                 'dinilai_pada' => now(),
-            ]);
+            ];
+
+            // Jika disetujui, berikan nilai default 85
+            if ($request->status === 'approved' && !$laporan->nilai_akhir) {
+                $updateData['nilai_akhir'] = 85;
+            }
+
+            $laporan->update($updateData);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Review berhasil disimpan',
+                'message' => $request->status === 'approved' ? 'Laporan berhasil disetujui' : 'Review berhasil disimpan',
                 'data' => [
+                    'id' => $laporan->id_laporan,
                     'status' => $laporan->status,
                     'catatan' => $laporan->catatan_mentor,
                 ]
@@ -227,7 +238,7 @@ class LaporanAkhirController extends Controller
     }
 
     /**
-     * Export laporan akhir to Excel
+     * Export laporan akhir
      * GET /api/mentor/laporan-akhir/export
      */
     public function export(Request $request)
@@ -251,7 +262,7 @@ class LaporanAkhirController extends Controller
                 ], 404);
             }
 
-            $pesertas = Peserta::with('user')
+            $pesertas = Peserta::with('user', 'divisi')
                 ->where('id_mentor', $mentor->id_mentor)
                 ->get();
 
@@ -264,23 +275,106 @@ class LaporanAkhirController extends Controller
                     'Nama Peserta' => $peserta->user->nama ?? 'Unknown',
                     'Divisi' => $peserta->divisi ? $peserta->divisi->nama_divisi : '-',
                     'Judul Laporan' => $laporan ? $laporan->judul : '-',
-                    'Tanggal Upload' => $laporan ? $laporan->created_at->format('Y-m-d H:i') : '-',
+                    'Tanggal Upload' => $laporan && $laporan->tanggal_upload ? $laporan->tanggal_upload->format('Y-m-d H:i') : ($laporan ? $laporan->created_at->format('Y-m-d H:i') : '-'),
                     'Status' => $laporan ? $this->getStatusText($laporan->status) : 'Belum Upload',
                     'Catatan Mentor' => $laporan ? $laporan->catatan_mentor : '-',
                     'Nilai Akhir' => $laporan ? $laporan->nilai_akhir : '-',
+                    'Dinilai Oleh' => $laporan ? $laporan->dinilai_oleh : '-',
+                    'Dinilai Pada' => $laporan && $laporan->dinilai_pada ? $laporan->dinilai_pada->format('Y-m-d H:i') : '-',
                 ];
+            }
+
+            // Apply filters if any
+            if ($request->has('status') && !empty($request->status) && $request->status !== 'all') {
+                if ($request->status === 'uploaded') {
+                    $exportData = array_filter($exportData, function($item) {
+                        return $item['Status'] !== 'Belum Upload';
+                    });
+                } else {
+                    $statusMap = [
+                        'pending' => 'Menunggu Review',
+                        'approved' => 'Disetujui',
+                        'revision' => 'Revisi',
+                    ];
+                    $filterStatus = $statusMap[$request->status] ?? $request->status;
+                    $exportData = array_filter($exportData, function($item) use ($filterStatus) {
+                        return $item['Status'] === $filterStatus;
+                    });
+                }
+            }
+
+            if ($request->has('search') && !empty($request->search)) {
+                $search = $request->search;
+                $exportData = array_filter($exportData, function($item) use ($search) {
+                    return stripos($item['Nama Peserta'], $search) !== false ||
+                           ($item['Judul Laporan'] && stripos($item['Judul Laporan'], $search) !== false);
+                });
             }
 
             return response()->json([
                 'success' => true,
-                'data' => $exportData,
+                'data' => array_values($exportData),
+                'count' => count($exportData),
                 'message' => 'Data berhasil diexport'
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Laporan Akhir Export Error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal export data: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get single laporan detail
+     * GET /api/mentor/laporan-akhir/{id}
+     */
+    public function show($id)
+    {
+        try {
+            $user = Auth::user();
+            
+            if ($user->role !== 'mentor') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+
+            $laporan = LaporanAkhir::with('peserta.user', 'peserta.divisi')->find($id);
+            
+            if (!$laporan) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Laporan tidak ditemukan'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $laporan->id_laporan,
+                    'peserta_nama' => $laporan->peserta->user->nama ?? 'Unknown',
+                    'peserta_divisi' => $laporan->peserta->divisi->nama_divisi ?? '-',
+                    'judul' => $laporan->judul,
+                    'file_url' => $laporan->file_laporan ? Storage::url($laporan->file_laporan) : null,
+                    'file_size' => $laporan->file_size,
+                    'uploaded_at' => $laporan->tanggal_upload ?? $laporan->created_at,
+                    'status' => $laporan->status,
+                    'catatan' => $laporan->catatan_mentor,
+                    'nilai_akhir' => $laporan->nilai_akhir,
+                    'dinilai_oleh' => $laporan->dinilai_oleh,
+                    'dinilai_pada' => $laporan->dinilai_pada,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Laporan Akhir Show Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan: ' . $e->getMessage()
             ], 500);
         }
     }

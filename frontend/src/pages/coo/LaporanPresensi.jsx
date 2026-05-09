@@ -5,23 +5,20 @@ import {
   Calendar, 
   Users, 
   FileText, 
-  Printer,
-  Mail,
   BarChart3,
   TrendingUp,
   Award,
   Sparkles,
   UserCheck,
-  UserX,
-  Clock,
   ChevronLeft,
   ChevronRight,
   Search,
-  Filter,
-  CheckCircle,
   AlertCircle,
-  XCircle
+  CheckCircle,
+  XCircle,
+  Loader2
 } from "lucide-react"
+import axiosInstance from "../../api/axios"
 
 function LaporanPresensi() {
   const [presensiData, setPresensiData] = useState([])
@@ -29,119 +26,154 @@ function LaporanPresensi() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedDivisi, setSelectedDivisi] = useState("all")
+  const [divisiList, setDivisiList] = useState([])
   const [isExporting, setIsExporting] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   
   const itemsPerPage = 10
 
-  // Data dummy laporan presensi
-  const dummyLaporan = [
-    {
-      id: 1,
-      nama: "Rizky Darmawan",
-      divisi: "CREATIVE TECHNOLOGY",
-      totalHadir: 22,
-      totalTerlambat: 2,
-      totalIzin: 1,
-      totalAbsen: 0,
-      persenKehadiran: 92,
-      rataRataCheckIn: "07:58",
-      rataRataCheckOut: "17:05"
-    },
-    {
-      id: 2,
-      nama: "Anita Nur",
-      divisi: "SCHOOL DESIGN",
-      totalHadir: 20,
-      totalTerlambat: 4,
-      totalIzin: 1,
-      totalAbsen: 0,
-      persenKehadiran: 83,
-      rataRataCheckIn: "08:12",
-      rataRataCheckOut: "17:00"
-    },
-    {
-      id: 3,
-      nama: "Citra Dewi",
-      divisi: "FINANCE",
-      totalHadir: 24,
-      totalTerlambat: 1,
-      totalIzin: 0,
-      totalAbsen: 0,
-      persenKehadiran: 96,
-      rataRataCheckIn: "07:50",
-      rataRataCheckOut: "17:10"
-    },
-    {
-      id: 4,
-      nama: "Doni Saputra",
-      divisi: "ENGINEERING",
-      totalHadir: 18,
-      totalTerlambat: 3,
-      totalIzin: 2,
-      totalAbsen: 2,
-      persenKehadiran: 75,
-      rataRataCheckIn: "08:05",
-      rataRataCheckOut: "17:15"
-    },
-    {
-      id: 5,
-      nama: "Eka Prasetya",
-      divisi: "FRAMES",
-      totalHadir: 23,
-      totalTerlambat: 1,
-      totalIzin: 1,
-      totalAbsen: 0,
-      persenKehadiran: 92,
-      rataRataCheckIn: "07:55",
-      rataRataCheckOut: "16:55"
-    },
-    {
-      id: 6,
-      nama: "Fajar Hidayat",
-      divisi: "PPTX",
-      totalHadir: 21,
-      totalTerlambat: 2,
-      totalIzin: 1,
-      totalAbsen: 1,
-      persenKehadiran: 84,
-      rataRataCheckIn: "08:00",
-      rataRataCheckOut: "17:08"
-    },
-    {
-      id: 7,
-      nama: "Gita Lestari",
-      divisi: "CREATIVE TECHNOLOGY",
-      totalHadir: 25,
-      totalTerlambat: 0,
-      totalIzin: 0,
-      totalAbsen: 0,
-      persenKehadiran: 100,
-      rataRataCheckIn: "07:45",
-      rataRataCheckOut: "17:20"
-    },
-    {
-      id: 8,
-      nama: "Hendra Wijaya",
-      divisi: "ENGINEERING",
-      totalHadir: 19,
-      totalTerlambat: 3,
-      totalIzin: 2,
-      totalAbsen: 1,
-      persenKehadiran: 76,
-      rataRataCheckIn: "08:10",
-      rataRataCheckOut: "17:00"
+  // Fetch divisi list
+  const fetchDivisi = async () => {
+    try {
+      const response = await axiosInstance.get("/divisi")
+      let divisiData = []
+      if (response.data && response.data.success && response.data.data) {
+        divisiData = response.data.data
+      } else if (response.data && Array.isArray(response.data)) {
+        divisiData = response.data
+      }
+      setDivisiList(divisiData)
+    } catch (err) {
+      console.error("Error fetching divisi:", err)
     }
-  ]
+  }
+
+  // Fetch presensi data from backend
+  const fetchPresensi = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      let url = "/presensi"
+      const params = new URLSearchParams()
+      
+      // Filter by date range (month/year)
+      if (selectedMonth && selectedYear) {
+        const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
+        const lastDay = new Date(selectedYear, selectedMonth, 0).getDate()
+        const endDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${lastDay}`
+        params.append("tanggal_mulai", startDate)
+        params.append("tanggal_selesai", endDate)
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`
+      }
+      
+      const response = await axiosInstance.get(url)
+      
+      let presensiList = []
+      if (response.data && response.data.success && response.data.data) {
+        presensiList = response.data.data
+      } else if (response.data && Array.isArray(response.data)) {
+        presensiList = response.data
+      }
+      
+      // Process data to calculate summary per participant
+      const participantMap = new Map()
+      
+      presensiList.forEach(item => {
+        const nama = item.peserta?.nama || item.nama || "-"
+        const divisi = item.peserta?.divisi || item.divisi || "-"
+        const status = item.status || ""
+        const checkIn = item.check_in
+        const checkOut = item.check_out
+        
+        if (!participantMap.has(nama)) {
+          participantMap.set(nama, {
+            id: item.id,
+            nama: nama,
+            divisi: divisi,
+            totalHadir: 0,
+            totalTerlambat: 0,
+            totalIzin: 0,
+            totalAbsen: 0,
+            totalCheckIn: 0,
+            totalCheckOut: 0,
+            daysCount: 0
+          })
+        }
+        
+        const participant = participantMap.get(nama)
+        participant.daysCount++
+        
+        if (status === "Hadir") {
+          participant.totalHadir++
+          if (checkIn) participant.totalCheckIn += parseTimeToMinutes(checkIn)
+          if (checkOut) participant.totalCheckOut += parseTimeToMinutes(checkOut)
+        } else if (status === "Terlambat") {
+          participant.totalTerlambat++
+          participant.totalHadir++
+          if (checkIn) participant.totalCheckIn += parseTimeToMinutes(checkIn)
+          if (checkOut) participant.totalCheckOut += parseTimeToMinutes(checkOut)
+        } else if (status === "Izin") {
+          participant.totalIzin++
+        } else if (status === "Tidak Hadir") {
+          participant.totalAbsen++
+        }
+      })
+      
+      // Calculate percentages and averages
+      const processedData = Array.from(participantMap.values()).map(p => {
+        const totalKehadiran = p.totalHadir
+        const persenKehadiran = p.daysCount > 0 ? Math.round((totalKehadiran / p.daysCount) * 100) : 0
+        
+        const rataRataCheckIn = p.totalCheckIn > 0 ? minutesToTime(Math.round(p.totalCheckIn / p.totalHadir)) : "-"
+        const rataRataCheckOut = p.totalCheckOut > 0 ? minutesToTime(Math.round(p.totalCheckOut / p.totalHadir)) : "-"
+        
+        return {
+          ...p,
+          persenKehadiran,
+          rataRataCheckIn,
+          rataRataCheckOut
+        }
+      })
+      
+      setPresensiData(processedData)
+    } catch (err) {
+      console.error("Error fetching presensi:", err)
+      setError("Gagal memuat data presensi")
+      setPresensiData([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Helper: Parse time string to minutes
+  const parseTimeToMinutes = (timeStr) => {
+    if (!timeStr) return 0
+    const parts = timeStr.split(':')
+    if (parts.length >= 2) {
+      return parseInt(parts[0]) * 60 + parseInt(parts[1])
+    }
+    return 0
+  }
+
+  // Helper: Convert minutes to time string
+  const minutesToTime = (minutes) => {
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`
+  }
 
   useEffect(() => {
-    const savedData = localStorage.getItem("laporan_presensi")
-    if (savedData) {
-      setPresensiData(JSON.parse(savedData))
-    } else {
-      setPresensiData(dummyLaporan)
-    }
+    fetchDivisi()
   }, [])
+
+  useEffect(() => {
+    fetchPresensi()
+  }, [selectedMonth, selectedYear])
 
   useEffect(() => {
     let filtered = [...presensiData]
@@ -154,12 +186,46 @@ function LaporanPresensi() {
     setCurrentPage(1)
   }, [selectedDivisi, presensiData])
 
-  const handleExportPDF = async () => {
+  const handleExport = async () => {
     setIsExporting(true)
-    setTimeout(() => {
+    try {
+      let url = "/presensi/export"
+      const params = new URLSearchParams()
+      
+      if (selectedMonth && selectedYear) {
+        const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
+        const lastDay = new Date(selectedYear, selectedMonth, 0).getDate()
+        const endDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${lastDay}`
+        params.append("tanggal_mulai", startDate)
+        params.append("tanggal_selesai", endDate)
+      }
+      
+      if (selectedDivisi !== "all") {
+        params.append("divisi", selectedDivisi)
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`
+      }
+      
+      const response = await axiosInstance.get(url, {
+        responseType: "blob",
+      })
+      
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.setAttribute('download', `laporan_presensi_${getMonthName(selectedMonth)}_${selectedYear}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(blobUrl)
+    } catch (err) {
+      console.error("Error exporting:", err)
+      alert("Gagal mengunduh laporan")
+    } finally {
       setIsExporting(false)
-      alert(`Laporan rekap presensi ${getMonthName(selectedMonth)} ${selectedYear} berhasil diunduh!`)
-    }, 1500)
+    }
   }
 
   const getMonthName = (month) => {
@@ -184,13 +250,22 @@ function LaporanPresensi() {
     currentPage * itemsPerPage
   )
 
-  const divisiList = ["all", "CREATIVE TECHNOLOGY", "SCHOOL DESIGN", "FINANCE", "ENGINEERING", "FRAMES", "PPTX"]
-
   const getKehadiranBadge = (persen) => {
     if (persen >= 95) return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-medium"><Award size={10} /> Excellent</span>
     if (persen >= 80) return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-medium"><CheckCircle size={10} /> Baik</span>
     if (persen >= 60) return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-medium"><AlertCircle size={10} /> Cukup</span>
     return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-medium"><XCircle size={10} /> Kurang</span>
+  }
+
+  if (loading && presensiData.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
+          <p className="text-slate-500">Memuat data laporan...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -218,16 +293,16 @@ function LaporanPresensi() {
             </div>
             
             <button
-              onClick={handleExportPDF}
-              disabled={isExporting}
+              onClick={handleExport}
+              disabled={isExporting || filteredData.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 disabled:opacity-50"
             >
               {isExporting ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <Loader2 size={16} className="animate-spin" />
               ) : (
                 <Download size={16} />
               )}
-              Unduh Laporan PDF
+              Unduh Laporan
             </button>
           </div>
         </div>
@@ -274,7 +349,7 @@ function LaporanPresensi() {
               </div>
               <span className="text-2xl font-bold text-slate-800">{stats.pesertaExcellent}</span>
             </div>
-            <p className="text-xs text-slate-500">Excellent {"("}&gt;95%{")"}</p>
+            <p className="text-xs text-slate-500">Excellent (≥95%)</p>
             <div className="mt-2 h-1 w-8 bg-amber-500 rounded-full"></div>
           </div>
         </div>
@@ -282,19 +357,18 @@ function LaporanPresensi() {
         {/* ===== FILTERS ===== */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
-            <div className="w-full md:w-48">
+            <div className="w-full md:w-56">
               <select
                 value={selectedDivisi}
                 onChange={(e) => setSelectedDivisi(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
               >
                 <option value="all">Semua Divisi</option>
-                <option value="CREATIVE TECHNOLOGY">Creative Technology</option>
-                <option value="SCHOOL DESIGN">School Design</option>
-                <option value="FINANCE">Finance</option>
-                <option value="ENGINEERING">Engineering</option>
-                <option value="FRAMES">FRAMES</option>
-                <option value="PPTX">PPTX</option>
+                {divisiList.map((div) => (
+                  <option key={div.id_divisi || div.id} value={div.nama_divisi || div.nama}>
+                    {div.nama_divisi || div.nama}
+                  </option>
+                ))}
               </select>
             </div>
             
@@ -318,10 +392,11 @@ function LaporanPresensi() {
               >
                 <option value={2024}>2024</option>
                 <option value={2025}>2025</option>
+                <option value={2026}>2026</option>
               </select>
             </div>
             
-            {selectedDivisi !== "all" && (
+            {(selectedDivisi !== "all") && (
               <button
                 onClick={() => setSelectedDivisi("all")}
                 className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700 transition"
@@ -331,6 +406,15 @@ function LaporanPresensi() {
             )}
           </div>
         </div>
+
+        {/* ===== ERROR MESSAGE ===== */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+            <AlertCircle size={16} className="text-red-500" />
+            <p className="text-sm text-red-600 flex-1">{error}</p>
+            <button onClick={fetchPresensi} className="text-red-600 hover:text-red-700 text-sm font-medium">Coba Lagi</button>
+          </div>
+        )}
 
         {/* ===== TABLE ===== */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -349,7 +433,7 @@ function LaporanPresensi() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {paginatedData.length === 0 ? (
+                {paginatedData.length === 0 && !loading ? (
                   <tr>
                     <td colSpan="8" className="px-5 py-12 text-center">
                       <div className="flex flex-col items-center gap-2">
@@ -455,7 +539,7 @@ function LaporanPresensi() {
           <div className="flex items-center gap-2">
             <BarChart3 size={14} className="text-blue-500" />
             <p className="text-xs text-blue-700">
-              <strong className="font-semibold">Informasi:</strong> Laporan ini dihitung berdasarkan data presensi harian peserta magang.
+              <strong className="font-semibold">Informasi:</strong> Laporan ini dihitung berdasarkan data presensi harian peserta magang untuk periode {getMonthName(selectedMonth)} {selectedYear}.
             </p>
           </div>
         </div>

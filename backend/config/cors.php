@@ -1,13 +1,14 @@
 <?php
 
 return [
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout', 'register', 'me', 'materi-file/*'],
 
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
         'http://localhost:5173',
         'http://localhost:5174',
+        'http://localhost:8000',
     ],
 
     'allowed_origins_patterns' => [],
@@ -18,6 +19,6 @@ return [
 
     'max_age' => 0,
 
-    // Kalau login kamu pakai Bearer token, sebaiknya false
-    'supports_credentials' => false,
+    // Ubah ke true untuk mendukung credentials/token
+    'supports_credentials' => true,
 ];

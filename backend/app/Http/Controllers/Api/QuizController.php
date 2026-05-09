@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Kuis;
+use App\Models\JawabanKuis;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema; // TAMBAHKAN INI
 
 class QuizController extends Controller
 {
@@ -52,6 +55,48 @@ class QuizController extends Controller
                 'success' => false,
                 'message' => 'Gagal mengambil data kuis: ' . $e->getMessage()
             ], 500);
+        }
+    }
+    
+    /**
+     * Get all quiz results for dashboard
+     */
+    public function getAllResults()
+    {
+        try {
+            // Cek apakah tabel jawaban_kuis ada
+            if (!Schema::hasTable('jawaban_kuis')) {
+                return response()->json([
+                    'success' => true,
+                    'data' => []
+                ]);
+            }
+            
+            $results = JawabanKuis::with(['user', 'quiz'])
+                ->select('user_id', 'quiz_id', DB::raw('AVG(score) as score'))
+                ->groupBy('user_id', 'quiz_id')
+                ->get()
+                ->map(function($item) {
+                    return [
+                        'user_id' => $item->user_id,
+                        'quiz_id' => $item->quiz_id,
+                        'score' => round($item->score, 2),
+                        'divisi' => $item->user->divisi ?? $item->quiz->divisi ?? 'Umum',
+                        'user_name' => $item->user->nama ?? 'Pengguna',
+                        'quiz_title' => $item->quiz->judul_kuis ?? 'Kuis'
+                    ];
+                });
+            
+            return response()->json([
+                'success' => true,
+                'data' => $results
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error getAllResults: ' . $e->getMessage());
+            return response()->json([
+                'success' => true,
+                'data' => []
+            ]);
         }
     }
     

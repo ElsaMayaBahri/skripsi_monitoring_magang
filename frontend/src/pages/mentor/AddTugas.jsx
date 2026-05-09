@@ -28,7 +28,7 @@ import {
   Upload,
   Paperclip
 } from "lucide-react";
-import api from "../../utils/api";
+import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
 
 function AddTugas() {
   const navigate = useNavigate();

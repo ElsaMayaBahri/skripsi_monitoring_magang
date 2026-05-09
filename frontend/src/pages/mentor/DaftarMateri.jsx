@@ -19,10 +19,12 @@ import {
   List,
   Sparkles,
   Shield,
-  Zap,
   TrendingUp
 } from "lucide-react";
-import api from "../../utils/api";
+import {
+  getMentorMateri,
+  deleteMentorMateri
+} from "../../api/mentor/materiMentorService";
 
 function DaftarMateri() {
   const [loading, setLoading] = useState(true);
@@ -40,15 +42,15 @@ function DaftarMateri() {
   const fetchMateri = async () => {
     setLoading(true);
     try {
-      const response = await api.getMentorMateri();
+      const response = await getMentorMateri();
       console.log("Fetched materi:", response);
       
-      if (response.success && response.data) {
+      if (response && response.success && response.data) {
         const transformed = response.data.map(item => ({
-          id: item.id_materi,
+          id: item.id_materi || item.id,
           judul: item.judul,
           deskripsi: item.deskripsi || "-",
-          tipe: item.tipe_materi || "dokumen",
+          tipe: item.tipe_materi || item.tipe || "dokumen",
           link: item.link,
           file_url: item.file_url,
           created_at: item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
@@ -92,8 +94,8 @@ function DaftarMateri() {
     if (!selectedMateri) return;
     setDeleting(true);
     try {
-      const response = await api.deleteMentorMateri(selectedMateri.id);
-      if (response.success) {
+      const response = await deleteMentorMateri(selectedMateri.id);
+      if (response && response.success) {
         setMateri(prev => prev.filter(m => m.id !== selectedMateri.id));
         setShowDeleteModal(false);
         setSelectedMateri(null);
@@ -101,6 +103,7 @@ function DaftarMateri() {
         alert("Gagal menghapus materi");
       }
     } catch (error) {
+      console.error("Error deleting materi:", error);
       alert("Gagal menghapus materi");
     } finally {
       setDeleting(false);
@@ -273,8 +276,8 @@ function DaftarMateri() {
                     <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500">Tipe</th>
                     <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500">Tanggal</th>
                     <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500">Dilihat</th>
-                    <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500"></th>
-                   </tr>
+                    <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500">Aksi</th>
+                  </tr>
                 </thead>
                 <tbody className="divide-y">
                   {currentItems.map((item) => {
@@ -295,16 +298,37 @@ function DaftarMateri() {
                         </td>
                         <td className="px-6 py-4">
                           <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full ${style.bg} ${style.text} text-xs font-semibold`}>
-                            <Icon size="10" /><span>{style.label}</span>
+                            <Icon size="10" />
+                            <span>{style.label}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4"><span className="text-sm text-slate-600">{item.created_at}</span></td>
-                        <td className="px-6 py-4"><span className="text-sm font-semibold text-teal-600">{item.views}</span></td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm text-slate-600">{item.created_at}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm font-semibold text-teal-600">{item.views}</span>
+                        </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
-                            <Link to={`/mentor/materi/${item.id}`}><button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white"><Eye size="14" /></button></Link>
-                            <Link to={`/mentor/edit-materi/${item.id}`}><button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white"><Edit size="14" /></button></Link>
-                            <button onClick={() => { setSelectedMateri(item); setShowDeleteModal(true); }} className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-red-500 hover:text-white"><Trash2 size="14" /></button>
+                            <Link to={`/mentor/materi/${item.id}`}>
+                              <button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white">
+                                <Eye size="14" />
+                              </button>
+                            </Link>
+                            <Link to={`/mentor/edit-materi/${item.id}`}>
+                              <button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white">
+                                <Edit size="14" />
+                              </button>
+                            </Link>
+                            <button 
+                              onClick={() => { 
+                                setSelectedMateri(item); 
+                                setShowDeleteModal(true); 
+                              }} 
+                              className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-red-500 hover:text-white"
+                            >
+                              <Trash2 size="14" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -367,7 +391,7 @@ function DaftarMateri() {
       </div>
 
       {/* Delete Modal */}
-      {showDeleteModal && (
+      {showDeleteModal && selectedMateri && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6">
             <div className="flex items-center justify-between mb-4">

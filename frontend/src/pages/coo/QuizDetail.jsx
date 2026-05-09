@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { api } from "../../utils/api"
+import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService"
+import axiosInstance from "../../api/axios"  // ← TAMBAHKAN INI
 import {
   ArrowLeft,
   BookOpen,

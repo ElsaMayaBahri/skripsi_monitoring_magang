@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { api } from "../../utils/api";
+import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
 import { logActivity } from "../../utils/activityLogger";
 import {
   Users as UsersIcon,
@@ -145,9 +145,9 @@ function Users() {
     
     try {
       const [divisiRes, mentorRes, pesertaRes] = await Promise.all([
-        api.getDivisi(),
-        api.getMentors(),
-        api.getPeserta()
+        getDivisi(),
+        getMentors(),
+        getPeserta()
       ]);
       
       let divisiData = [];

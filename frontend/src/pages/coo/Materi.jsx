@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../utils/api";
-
+import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
+import axiosInstance from "../../api/axios";
 import {
   FileText, Video, File, Eye, Edit2, Trash2, Plus, Search,
   Calendar, HardDrive, BookOpen, Users, ChevronRight,
@@ -47,43 +47,52 @@ function Materi() {
     return `${BASE_URL}/api/materi-file/${filename}`;
   };
 
+  // Fungsi fetch materi menggunakan axiosInstance
   const fetchMateri = async () => {
     setLoading(true);
     try {
-      const response = await api.getMateri();
-      if (response.success && response.data) {
-        const enrichedData = response.data.map(item => {
-          let kategori = item.kategori || item.type || "File";
-          return {
-            id_materi: item.id_materi_pelatihan || item.id_materi || item.id,
-            judul: item.judul || item.title || "Tanpa Judul",
-            deskripsi: item.deskripsi || item.description || "",
-            divisi: item.divisi || "Umum",
-            kategori: kategori,
-            file_materi: cleanUrl(item.file_materi || item.file_url || item.file_path),
-            views: item.views || 0,
-            created_at: item.created_at,
-          };
-        });
-        setMateri(enrichedData);
+      const response = await axiosInstance.get("/materi-pelatihan");
+      let materiData = [];
+      
+      if (response.data && response.data.success && response.data.data) {
+        materiData = response.data.data;
+      } else if (response.data && Array.isArray(response.data)) {
+        materiData = response.data;
+      } else if (Array.isArray(response)) {
+        materiData = response;
       }
+      
+      const enrichedData = materiData.map(item => ({
+        id_materi: item.id_materi_pelatihan || item.id_materi || item.id,
+        judul: item.judul || item.title || "Tanpa Judul",
+        deskripsi: item.deskripsi || item.description || "",
+        divisi: item.divisi || "Umum",
+        kategori: item.kategori || item.type || "File",
+        file_materi: cleanUrl(item.file_materi || item.file_url || item.file_path),
+        views: item.views || 0,
+        created_at: item.created_at,
+      }));
+      setMateri(enrichedData);
     } catch (error) {
       console.error("Error fetch materi:", error);
+      setMateri([]);
     } finally {
       setLoading(false);
     }
   };
 
+  // Fungsi fetch quiz menggunakan axiosInstance
   const fetchQuiz = async () => {
     try {
-      const response = await api.getQuiz();
+      const response = await axiosInstance.get("/quiz");
       let quizData = [];
-      if (response && response.success && response.data) {
+      
+      if (response.data && response.data.success && response.data.data) {
+        quizData = response.data.data;
+      } else if (response.data && Array.isArray(response.data)) {
+        quizData = response.data.data;
+      } else if (Array.isArray(response.data)) {
         quizData = response.data;
-      } else if (response && response.data && Array.isArray(response.data)) {
-        quizData = response.data;
-      } else if (Array.isArray(response)) {
-        quizData = response;
       }
       
       const transformedData = quizData.map(q => ({
@@ -105,27 +114,34 @@ function Materi() {
     }
   };
 
+  // Fungsi fetch divisi menggunakan axiosInstance
   const fetchDivisi = async () => {
     try {
-      const response = await api.getDivisi();
+      const response = await axiosInstance.get("/divisi");
       let divisiData = [];
-      if (response.success && response.data) {
+      
+      if (response.data && response.data.success && response.data.data) {
+        divisiData = response.data.data;
+      } else if (response.data && Array.isArray(response.data)) {
         divisiData = response.data;
       }
       setDivisiList(divisiData);
     } catch (error) {
       console.error("Error fetch divisi:", error);
+      setDivisiList([]);
     }
   };
 
+  // Fungsi delete materi menggunakan axiosInstance
   const handleDelete = async (id, index) => {
     if (!confirm("Yakin ingin menghapus materi ini?")) return;
     try {
-      await api.deleteMateri(id);
+      await axiosInstance.delete(`/materi-pelatihan/${id}`);
       const updated = [...materi];
       updated.splice(index, 1);
       setMateri(updated);
     } catch (error) {
+      console.error("Error delete materi:", error);
       alert("Gagal menghapus materi");
     }
   };
@@ -398,7 +414,7 @@ function Materi() {
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => setSelectedDivisi("all")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${selectedDivisi === "all" ? "bg-blue-500 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Semua</button>
                   {divisiList.map(div => (
-                    <button key={div.id_divisi} onClick={() => setSelectedDivisi(div.nama_divisi)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${selectedDivisi === div.nama_divisi ? "bg-blue-500 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{div.nama_divisi}</button>
+                    <button key={div.id_divisi || div.id} onClick={() => setSelectedDivisi(div.nama_divisi || div.nama)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${selectedDivisi === (div.nama_divisi || div.nama) ? "bg-blue-500 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{div.nama_divisi || div.nama}</button>
                   ))}
                 </div>
               </div>

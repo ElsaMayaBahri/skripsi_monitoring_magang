@@ -35,7 +35,7 @@ import {
   Image,
   FileArchive
 } from "lucide-react";
-import api from "../../utils/api";
+import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
 
 function DaftarTugas() {
   const [loading, setLoading] = useState(false);

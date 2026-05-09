@@ -1,4 +1,3 @@
-// src/pages/mentor/DaftarPeserta.jsx
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -25,7 +24,14 @@ import {
   TrendingUp,
   Eye
 } from "lucide-react";
-import api from "../../utils/api";
+import axiosInstance from "../../api/axios";
+
+// ✅ IMPORT DARI pesertaService.js (yang sudah ada)
+import {
+  getMentorPesertaList,
+  getMentorFilters
+} from "../../api/mentor/pesertaService";
+
 
 function DaftarPeserta() {
   const [loading, setLoading] = useState(true);
@@ -45,15 +51,16 @@ function DaftarPeserta() {
     fetchPeserta();
   }, []);
 
-  // Fetch filter options
+  // Fetch filter options menggunakan service
   const fetchFilters = async () => {
     try {
-      const response = await api.getMentorFilters();
+      const response = await getMentorFilters();
       
       if (response.success) {
         setPeriodeList(response.data.periode || []);
         setDivisiList(response.data.divisi || []);
       } else {
+        // Fallback data
         setPeriodeList(["2024", "2025"]);
         setDivisiList([]);
       }
@@ -64,6 +71,7 @@ function DaftarPeserta() {
     }
   };
 
+  // Fetch peserta menggunakan service
   const fetchPeserta = async () => {
     setLoading(true);
     try {
@@ -72,7 +80,7 @@ function DaftarPeserta() {
       if (selectedPeriode !== 'all' && selectedPeriode !== '') params.periode = selectedPeriode;
       if (selectedDivisi !== 'all' && selectedDivisi !== '') params.divisi = selectedDivisi;
       
-      const response = await api.getMentorPesertaList(params);
+      const response = await getMentorPesertaList(params);
       
       if (response.success && response.data) {
         const transformedData = response.data.map(pesertaItem => ({

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { api } from '../../utils/api';
+// SESUDAHNYA (BENAR):
+import { useState, useEffect } from "react";
 import { 
   Calendar, 
   Clock, 
@@ -19,6 +19,17 @@ import {
   Moon,
   Loader2
 } from 'lucide-react';
+
+// Import service functions
+import {
+  getJamKerja,
+  createJamKerja,
+  updateJamKerja,
+  getHariLibur,
+  createHariLibur,
+  updateHariLibur,
+  deleteHariLibur
+} from "../../api/coo/settingsAttendanceService";
 
 const SettingsAttendance = () => {
   const [activeTab, setActiveTab] = useState('jam-kerja');
@@ -82,9 +93,10 @@ const SettingsAttendance = () => {
     }
   };
 
+  // 🟢 PERBAIKAN: Ganti api.getJamKerja() dengan getJamKerja()
   const fetchJamKerja = async () => {
     try {
-      const response = await api.getJamKerja();
+      const response = await getJamKerja();
       console.log('Jam kerja response:', response);
       
       if (response && response.success && response.data) {
@@ -109,9 +121,10 @@ const SettingsAttendance = () => {
     }
   };
 
+  // 🟢 PERBAIKAN: Ganti api.getHariLibur() dengan getHariLibur()
   const fetchHariLibur = async () => {
     try {
-      const response = await api.getHariLibur();
+      const response = await getHariLibur();
       console.log('Hari libur response:', response);
       
       let dataLibur = [];
@@ -136,6 +149,7 @@ const SettingsAttendance = () => {
     }
   };
 
+  // 🟢 PERBAIKAN: Ganti api.updateJamKerja() dan api.createJamKerja()
   const saveJamKerja = async () => {
     if (!jamKerja.jam_masuk || !jamKerja.jam_pulang) {
       showPremiumPopup('Validasi Gagal', 'Jam masuk dan jam pulang harus diisi', 'error');
@@ -156,9 +170,9 @@ const SettingsAttendance = () => {
       };
       
       if (idJamKerja) {
-        response = await api.updateJamKerja(idJamKerja, dataToSend);
+        response = await updateJamKerja(idJamKerja, dataToSend);
       } else {
-        response = await api.createJamKerja(dataToSend);
+        response = await createJamKerja(dataToSend);
       }
       
       if (response && response.success) {
@@ -179,6 +193,7 @@ const SettingsAttendance = () => {
     }
   };
 
+  // 🟢 PERBAIKAN: Ganti api.updateHariLibur() dan api.createHariLibur()
   const addHariLibur = async () => {
     if (!formLibur.tanggal || !formLibur.keterangan) {
       showPremiumPopup('Validasi Gagal', 'Tanggal dan keterangan hari libur wajib diisi', 'error');
@@ -188,9 +203,9 @@ const SettingsAttendance = () => {
     try {
       let response;
       if (editingLibur) {
-        response = await api.updateHariLibur(editingLibur.id, formLibur);
+        response = await updateHariLibur(editingLibur.id, formLibur);
       } else {
-        response = await api.createHariLibur(formLibur);
+        response = await createHariLibur(formLibur);
       }
       
       if (response && response.success) {
@@ -223,12 +238,13 @@ const SettingsAttendance = () => {
     setShowDeleteConfirm(true);
   };
 
-  const deleteHariLibur = async () => {
+  // 🟢 PERBAIKAN: Ganti api.deleteHariLibur() dengan deleteHariLibur()
+  const deleteHariLiburItem = async () => {
     if (!deleteTarget) return;
     
     setLoading(true);
     try {
-      const response = await api.deleteHariLibur(deleteTarget.id);
+      const response = await deleteHariLibur(deleteTarget.id);
       if (response && response.success) {
         showPremiumPopup('Hari Libur Dihapus', `${deleteTarget.keterangan} berhasil dihapus dari daftar`, 'success');
         await fetchHariLibur();
@@ -369,7 +385,7 @@ const SettingsAttendance = () => {
                     Batal
                   </button>
                   <button
-                    onClick={deleteHariLibur}
+                    onClick={deleteHariLiburItem}
                     disabled={loading}
                     className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-xl text-white font-medium hover:shadow-lg transition-all disabled:opacity-50"
                   >
@@ -478,7 +494,6 @@ const SettingsAttendance = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-2xl border border-blue-100 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
                 <div className="flex items-center gap-3 mb-6">
-                  {/* ICON WAKTU OPERASIONAL - WARNA ABU */}
                   <div className="p-2.5 bg-slate-100 rounded-xl shadow-sm">
                     <Clock className="w-5 h-5 text-slate-500" />
                   </div>
@@ -511,7 +526,6 @@ const SettingsAttendance = () => {
 
               <div className="bg-white rounded-2xl border border-blue-100 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
                 <div className="flex items-center gap-3 mb-6">
-                  {/* ICON BATAS & TOLERANSI - WARNA ABU */}
                   <div className="p-2.5 bg-slate-100 rounded-xl shadow-sm">
                     <AlertCircle className="w-5 h-5 text-slate-500" />
                   </div>
@@ -733,7 +747,7 @@ const SettingsAttendance = () => {
       {showModalLibur && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="flex justify-between items-center p-6 border-b border-blue-100">
+            <div className="flex justify-between items-center p-6 border-t border-blue-100">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl">
                   {editingLibur ? <Edit2 className="w-5 h-5 text-white" /> : <Plus className="w-5 h-5 text-white" />}

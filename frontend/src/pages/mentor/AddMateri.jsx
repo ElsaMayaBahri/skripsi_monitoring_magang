@@ -19,7 +19,7 @@ import {
   Shield,
   PlayCircle
 } from "lucide-react";
-import api from "../../utils/api";
+import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
 
 function AddMateri() {
   const navigate = useNavigate();

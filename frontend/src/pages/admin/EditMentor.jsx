@@ -1,6 +1,6 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { api } from "../../utils/api";
+import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
 import { logActivity } from "../../utils/activityLogger";
 import {
   ArrowLeft,
@@ -57,7 +57,7 @@ function EditMentor() {
       setError(null);
       try {
         // Load divisi list
-        const divisiResult = await api.getDivisi();
+        const divisiResult = await getDivisi();
         let divisiData = [];
         if (divisiResult && divisiResult.success && Array.isArray(divisiResult.data)) {
           divisiData = divisiResult.data;
@@ -76,7 +76,7 @@ function EditMentor() {
 
         // 🔥 PERBAIKAN: Ambil data mentor dari getMentors (tanpa getMentorById)
         console.log("Fetching mentors list...");
-        const response = await api.getMentors();
+        const response = await getMentors();
         console.log("Mentors API response:", response);
         
         let mentorsList = [];

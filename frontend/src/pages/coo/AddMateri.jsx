@@ -20,7 +20,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../utils/api";
+import axiosInstance from "../../api/axios";
 
 // Mapping kategori ke konfigurasi file yang diizinkan
 const KATEGORI_FILE_CONFIG = {
@@ -73,9 +73,15 @@ function AddMateri() {
   const [success, setSuccess] = useState(null);
   const [divisiList, setDivisiList] = useState([]);
   const [loadingDivisi, setLoadingDivisi] = useState(false);
+  
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [selectedDivisi, setSelectedDivisi] = useState("all");
+  const [selectedKategori, setSelectedKategori] = useState("all");
 
-  useEffect(() => { 
-    fetchDivisi(); 
+  const BASE_URL = "http://localhost:8000";
+
+  useEffect(() => {
+    fetchDivisi();
   }, []);
 
   useEffect(() => {
@@ -92,18 +98,19 @@ function AddMateri() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.kategori]);
 
+  // Fungsi fetch divisi menggunakan axiosInstance
   const fetchDivisi = async () => {
     setLoadingDivisi(true);
     try {
-      const response = await api.getDivisi();
+      const response = await axiosInstance.get("/divisi");
       
       let divisiData = [];
-      if (response.success && response.data) {
-        divisiData = response.data;
-      } else if (Array.isArray(response)) {
-        divisiData = response;
+      if (response.data && response.data.success && response.data.data) {
+        divisiData = response.data.data;
       } else if (response.data && Array.isArray(response.data)) {
         divisiData = response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        divisiData = response.data.data;
       }
       
       setDivisiList(divisiData);
@@ -196,6 +203,7 @@ function AddMateri() {
     return { icon: File, color: "text-emerald-500", bg: "bg-emerald-50" };
   };
 
+  // Fungsi submit menggunakan axiosInstance
   const handleSubmit = async () => {
     if (!form.judul.trim()) { 
       setError("Judul materi wajib diisi"); 
@@ -226,15 +234,19 @@ function AddMateri() {
       formData.append("kategori", form.kategori);
       formData.append("file", file);
 
-      const response = await api.addMateri(formData);
+      const response = await axiosInstance.post("/materi-pelatihan", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
       
-      if (response.success) {
+      if (response.data && response.data.success) {
         setSuccess("Materi berhasil ditambahkan! Mengalihkan...");
         setTimeout(() => {
           navigate("/coo/materi");
         }, 1500);
       } else {
-        setError(response.message || "Gagal menambahkan materi");
+        setError(response.data?.message || "Gagal menambahkan materi");
       }
     } catch (err) {
       console.error("Error adding materi:", err);

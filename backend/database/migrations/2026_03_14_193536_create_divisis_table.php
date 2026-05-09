@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -10,14 +10,12 @@ return new class extends Migration
     {
         Schema::create('divisis', function (Blueprint $table) {
             $table->id('id_divisi');
-            // TAMBAHKAN KOLOM id_mentor (nullable karena akan diisi setelah mentors dibuat)
             $table->unsignedBigInteger('id_mentor')->nullable();
             $table->string('nama_divisi', 100);
             $table->text('deskripsi')->nullable();
+            $table->enum('status', ['aktif', 'non_aktif'])->default('aktif');
             $table->timestamps();
-            
-            // JANGAN tambahkan foreign key dulu di sini
-            // Hanya buat index saja
+
             $table->index('id_mentor');
         });
     }

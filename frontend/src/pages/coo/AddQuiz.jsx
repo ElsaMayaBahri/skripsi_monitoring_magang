@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { api } from "../../utils/api"
+import axiosInstance from "../../api/axios"
 import { 
   ArrowLeft, 
   Plus, 
@@ -31,6 +31,12 @@ import {
   Eye,
   Lightbulb
 } from "lucide-react"
+
+// Import service functions
+import {
+  createQuiz,
+  downloadQuizTemplate
+} from "../../api/coo/quizService"
 
 function AddQuiz() {
   const navigate = useNavigate()
@@ -90,18 +96,19 @@ function AddQuiz() {
     fetchDivisi()
   }, [])
 
+  // 🟢 PERBAIKAN: Ganti api.getDivisi() dengan axiosInstance
   const fetchDivisi = async () => {
     setLoadingDivisi(true)
     try {
-      const response = await api.getDivisi()
+      const response = await axiosInstance.get("/divisi")
       
       let divisiData = []
-      if (response.success && response.data) {
-        divisiData = response.data
-      } else if (Array.isArray(response)) {
-        divisiData = response
+      if (response.data && response.data.success && response.data.data) {
+        divisiData = response.data.data
       } else if (response.data && Array.isArray(response.data)) {
         divisiData = response.data
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        divisiData = response.data.data
       }
       
       const aktifDivisi = divisiData.filter(div => {
@@ -233,10 +240,11 @@ function AddQuiz() {
     setImportFile(file)
   }
 
+  // 🟢 PERBAIKAN: Ganti api.downloadQuizTemplate() dengan downloadQuizTemplate()
   const handleDownloadTemplate = async () => {
     setDownloadingTemplate(true)
     try {
-      const blob = await api.downloadQuizTemplate()
+      const blob = await downloadQuizTemplate()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -496,6 +504,7 @@ function AddQuiz() {
     })
   }
 
+  // 🟢 PERBAIKAN: Ganti api.createQuiz() dengan createQuiz()
   const handleSubmit = async () => {
     if (quiz.questions.length === 0) {
       setError("Minimal 1 soal harus ditambahkan")
@@ -524,7 +533,7 @@ function AddQuiz() {
         total_soal: quiz.questions.length
       }
       
-      const response = await api.createQuiz(formData)
+      const response = await createQuiz(formData)
       
       if (response.success) {
         showPremiumPopup("Kuis Berhasil Dibuat", `${quiz.judul} · ${quiz.questions.length} soal · ${quiz.durasi} menit`, "quiz")
@@ -1450,7 +1459,8 @@ function AddQuiz() {
         </div>
       )}
 
-      <style jsx>{`
+      {/* PERBAIKAN: Hapus 'jsx' dari tag style */}
+      <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }

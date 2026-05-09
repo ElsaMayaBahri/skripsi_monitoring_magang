@@ -1,4 +1,4 @@
-// src/pages/mentor/NilaiAkhir.jsx
+// src/pages/mentor/NilaiAkhir.jsx - Bagian import (baris 1-32)
 import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -29,7 +29,8 @@ import {
   Users2,
   Heart
 } from "lucide-react";
-import api from "../../utils/api";
+import { getMentorPesertaList } from "../../api/mentor/pesertaService";
+import { getMentorNilai, finalizeMentorNilai, exportMentorNilai } from "../../api/mentor/nilaiService";
 
 function NilaiAkhir() {
   const [loading, setLoading] = useState(false);
@@ -58,18 +59,18 @@ function NilaiAkhir() {
     try {
       console.log("Fetching data...");
       
-      const pesertaResponse = await api.getMentorPesertaList({});
+      const pesertaResponse = await getMentorPesertaList({});
       console.log("Peserta Response:", pesertaResponse);
       
       if (pesertaResponse.success && pesertaResponse.data) {
-        const nilaiResponse = await api.getMentorNilai({});
+        const nilaiResponse = await getMentorNilai({});
         console.log("Nilai Response:", nilaiResponse);
         
         const nilaiMap = new Map();
         
         if (nilaiResponse.success && nilaiResponse.data) {
           nilaiResponse.data.forEach(n => {
-            nilaiMap.set(n.id, n);
+            nilaiMap.set(n.id_peserta, n);
           });
         }
         
@@ -173,7 +174,7 @@ function NilaiAkhir() {
     setFinalizing(true);
     try {
       console.log("Finalizing peserta ID:", selectedPeserta.id);
-      const response = await api.finalizeMentorNilai(selectedPeserta.id);
+      const response = await finalizeMentorNilai(selectedPeserta.id);
       console.log("Finalize Response:", response);
       
       if (response.success) {
@@ -189,6 +190,36 @@ function NilaiAkhir() {
       alert("Terjadi kesalahan saat finalisasi");
     } finally {
       setFinalizing(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      const response = await exportMentorNilai({});
+      if (response) {
+        let blob;
+        if (response instanceof Blob) {
+          blob = response;
+        } else if (response.data instanceof Blob) {
+          blob = response.data;
+        } else {
+          blob = new Blob([JSON.stringify(response, null, 2)], { type: 'application/json' });
+        }
+        
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `nilai_akhir_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        alert("Export berhasil");
+      }
+    } catch (error) {
+      console.error("Error exporting:", error);
+      alert("Gagal mengekspor data");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -255,18 +286,7 @@ function NilaiAkhir() {
                 <button onClick={fetchData} className="relative group overflow-hidden px-5 py-2 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm flex items-center gap-2">
                   <Sparkles size="14" /> Refresh
                 </button>
-                <button onClick={async () => {
-                  const response = await api.exportMentorNilai();
-                  if (response.success && response.data) {
-                    const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'nilai_akhir_export.json';
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }
-                }} className="relative group overflow-hidden px-5 py-2 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm">
+                <button onClick={handleExport} className="relative group overflow-hidden px-5 py-2 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm">
                   <span className="relative z-10 flex items-center gap-2"><Download size="14" />Export Excel</span>
                 </button>
                 <button className="relative group overflow-hidden px-5 py-2 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm">
@@ -524,14 +544,6 @@ function NilaiAkhir() {
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes zoom-in-95 { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        .animate-in { animation-duration: 0.2s; animation-fill-mode: both; }
-        .fade-in { animation-name: fade-in; }
-        .zoom-in-95 { animation-name: zoom-in-95; }
-      `}</style>
     </div>
   );
 }

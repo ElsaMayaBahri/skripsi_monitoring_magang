@@ -41,9 +41,9 @@ import MentorLayout from "./layouts/MentorLayout";
 import DashboardMentor from "./pages/mentor/Dashboard";
 import DaftarPeserta from "./pages/mentor/DaftarPeserta";
 import PresensiMentor from "./pages/mentor/Presensi";
-import DailyReport from "./pages/mentor/DailyReport";
+import PresensiDailyReport from "./pages/mentor/PresensiDailyReport";
 import DaftarMateri from "./pages/mentor/DaftarMateri";
-import AddMateriMentor from "./pages/mentor/AddMateri";
+import AddMateri from "./pages/mentor/AddMateri";  // ← ubah dari AddMateriMentor menjadi AddMateri
 import DaftarTugasMentor from "./pages/mentor/DaftarTugas";
 import AddTugas from "./pages/mentor/AddTugas";
 import ValidasiTugas from "./pages/mentor/ValidasiTugas";
@@ -205,34 +205,36 @@ function App() {
         </Route>
 
         {/* MENTOR ROUTES */}
-        <Route
-          path="/mentor"
-          element={
-            <ProtectedRoute allowedRoles={["mentor"]}>
-              <MentorLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardMentor />} />
-          <Route path="daftar-peserta" element={<DaftarPeserta />} />
-          <Route path="peserta" element={<DaftarPeserta />} />
-          <Route path="presensi" element={<PresensiMentor />} />
-          <Route path="daily-report" element={<DailyReport />} />
-          <Route path="materi" element={<DaftarMateri />} />
-          <Route path="add-materi" element={<AddMateriMentor />} />
-          <Route path="tugas" element={<DaftarTugasMentor />} />
-          <Route path="add-tugas" element={<AddTugas />} />
-          <Route path="validasi-tugas" element={<ValidasiTugas />} />
-          <Route path="validasi-tugas/:id" element={<ValidasiTugas />} />
-          <Route path="laporan-akhir" element={<LaporanAkhir />} />
-          <Route path="input-nilai-manual" element={<InputNilaiManual />} />
-          <Route path="penilaian-manual" element={<InputNilaiManual />} />
-          <Route path="nilai-akhir" element={<NilaiAkhirMentor />} />
-          <Route path="/mentor/edit-materi/:id" element={<EditMateri />} />
-          <Route path="materi/:id" element={<LihatMateri />} />
-        </Route>
-
+<Route
+  path="/mentor"
+  element={
+    <ProtectedRoute allowedRoles={["mentor"]}>
+      <MentorLayout />
+    </ProtectedRoute>
+  }
+>
+  <Route index element={<Navigate to="dashboard" replace />} />
+  <Route path="dashboard" element={<DashboardMentor />} />
+  <Route path="daftar-peserta" element={<DaftarPeserta />} />
+  <Route path="peserta" element={<DaftarPeserta />} />
+  <Route path="presensi" element={<PresensiMentor />} />
+  <Route path="presensi-daily-report" element={<PresensiDailyReport />} />
+  
+  {/* MATERI MENTOR ROUTES - TAMBAHKAN INI */}
+  <Route path="materi" element={<DaftarMateri />} />
+  <Route path="add-materi" element={<AddMateri />} />
+  <Route path="edit-materi/:id" element={<EditMateri />} />
+  <Route path="materi/:id" element={<LihatMateri />} />
+  
+  <Route path="tugas" element={<DaftarTugasMentor />} />
+  <Route path="add-tugas" element={<AddTugas />} />
+  <Route path="validasi-tugas" element={<ValidasiTugas />} />
+  <Route path="validasi-tugas/:id" element={<ValidasiTugas />} />
+  <Route path="laporan-akhir" element={<LaporanAkhir />} />
+  <Route path="input-nilai-manual" element={<InputNilaiManual />} />
+  <Route path="penilaian-manual" element={<InputNilaiManual />} />
+  <Route path="nilai-akhir" element={<NilaiAkhirMentor />} />
+</Route>
        // PESERTA ROUTES - Tambahkan route untuk daftar kuis
 <Route
   path="/peserta"

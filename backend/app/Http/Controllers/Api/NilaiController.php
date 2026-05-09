@@ -53,7 +53,9 @@ class NilaiController extends Controller
                 
                 $nilaiList[] = [
                     'id' => $peserta->id_peserta,
+                    'id_peserta' => $peserta->id_peserta,
                     'nama' => $peserta->user->nama ?? 'Unknown',
+                    'nama_peserta' => $peserta->user->nama ?? 'Unknown',
                     'divisi' => $peserta->divisi ? $peserta->divisi->nama_divisi : '-',
                     'sikap' => $nilai ? $nilai->sikap : null,
                     'kualitas_kerja' => $nilai ? $nilai->kualitas_kerja : null,
@@ -67,6 +69,7 @@ class NilaiController extends Controller
                     'nilai_akhir' => $nilai ? $nilai->nilai_akhir : null,
                     'status' => $nilai && $nilai->status === 'final' ? 'sudah_final' : 'belum_final',
                     'catatan' => $nilai ? $nilai->catatan_mentor : null,
+                    'catatan_mentor' => $nilai ? $nilai->catatan_mentor : null,
                 ];
             }
 
@@ -90,95 +93,117 @@ class NilaiController extends Controller
      * POST /api/mentor/nilai
      */
     public function store(Request $request)
-    {
-        try {
-            $user = Auth::user();
-            
-            if ($user->role !== 'mentor') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized'
-                ], 403);
-            }
-
-            $mentor = Mentor::where('id_user', $user->id_user)->first();
-            
-            if (!$mentor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Data mentor tidak ditemukan'
-                ], 404);
-            }
-
-            $request->validate([
-                'id_peserta' => 'required|exists:pesertas,id_peserta',
-                'sikap' => 'required|integer|min:0|max:100',
-                'kualitas_kerja' => 'required|integer|min:0|max:100',
-                'komunikasi' => 'nullable|integer|min:0|max:100',
-                'kreativitas' => 'nullable|integer|min:0|max:100',
-                'kerjasama' => 'nullable|integer|min:0|max:100',
-                'inisiatif' => 'nullable|integer|min:0|max:100',
-                'catatan' => 'nullable|string',
-            ]);
-
-            $peserta = Peserta::where('id_peserta', $request->id_peserta)
-                ->where('id_mentor', $mentor->id_mentor)
-                ->first();
-
-            if (!$peserta) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Peserta tidak ditemukan atau bukan bimbingan Anda'
-                ], 404);
-            }
-
-            DB::beginTransaction();
-
-            $nilai = NilaiPeserta::updateOrCreate(
-                ['id_peserta' => $request->id_peserta],
-                [
-                    'sikap' => $request->sikap,
-                    'kualitas_kerja' => $request->kualitas_kerja,
-                    'komunikasi' => $request->komunikasi,
-                    'kreativitas' => $request->kreativitas,
-                    'kerjasama' => $request->kerjasama,
-                    'inisiatif' => $request->inisiatif,
-                    'catatan_mentor' => $request->catatan,
-                    'dinilai_oleh' => $user->nama,
-                    'dinilai_pada' => now(),
-                    'status' => 'pending',
-                ]
-            );
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Nilai berhasil disimpan',
-                'data' => [
-                    'id' => $peserta->id_peserta,
-                    'nama' => $peserta->user->nama,
-                    'sikap' => $nilai->sikap,
-                    'kualitas_kerja' => $nilai->kualitas_kerja,
-                ]
-            ]);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
+{
+    try {
+        $user = Auth::user();
+        
+        Log::info('=== STORE NILAI START ===');
+        Log::info('Request data:', $request->all());
+        Log::info('User ID: ' . ($user->id_user ?? 'null'));
+        Log::info('User Role: ' . ($user->role ?? 'null'));
+        
+        if ($user->role !== 'mentor') {
             return response()->json([
                 'success' => false,
-                'message' => 'Validasi gagal',
-                'errors' => $e->errors()
-            ], 422);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Nilai Store Error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal menyimpan nilai: ' . $e->getMessage()
-            ], 500);
+                'message' => 'Unauthorized'
+            ], 403);
         }
-    }
 
+        $mentor = Mentor::where('id_user', $user->id_user)->first();
+        
+        Log::info('Mentor found: ' . ($mentor ? 'yes' : 'no'));
+        
+        if (!$mentor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data mentor tidak ditemukan'
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'id_peserta' => 'required|exists:pesertas,id_peserta',
+            'sikap' => 'nullable|integer|min:0|max:100',
+            'kualitas_kerja' => 'nullable|integer|min:0|max:100',
+            'komunikasi' => 'nullable|integer|min:0|max:100',
+            'kreativitas' => 'nullable|integer|min:0|max:100',
+            'kerjasama' => 'nullable|integer|min:0|max:100',
+            'inisiatif' => 'nullable|integer|min:0|max:100',
+            'catatan' => 'nullable|string|max:1000',
+        ]);
+
+        Log::info('Validation passed');
+
+        $peserta = Peserta::where('id_peserta', $request->id_peserta)
+            ->where('id_mentor', $mentor->id_mentor)
+            ->first();
+
+        Log::info('Peserta found: ' . ($peserta ? 'yes, id=' . $peserta->id_peserta : 'no'));
+
+        if (!$peserta) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Peserta tidak ditemukan atau bukan bimbingan Anda'
+            ], 404);
+        }
+
+        // Cari atau buat data nilai
+        $nilai = NilaiPeserta::firstOrNew(['id_peserta' => $request->id_peserta]);
+        
+        Log::info('Nilai record - existing: ' . ($nilai->exists ? 'yes' : 'no'));
+        
+        // Update nilai
+        $nilai->sikap = $request->sikap;
+        $nilai->kualitas_kerja = $request->kualitas_kerja;
+        $nilai->komunikasi = $request->komunikasi;
+        $nilai->kreativitas = $request->kreativitas;
+        $nilai->kerjasama = $request->kerjasama;
+        $nilai->inisiatif = $request->inisiatif;
+        $nilai->catatan_mentor = $request->catatan;
+        $nilai->dinilai_oleh = $user->nama;
+        $nilai->dinilai_pada = now();
+        
+        // Jangan ubah status jika sudah final
+        if ($nilai->status !== 'final') {
+            $nilai->status = 'pending';
+        }
+        
+        $nilai->save();
+        
+        Log::info('Nilai saved successfully');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Nilai berhasil disimpan',
+            'data' => [
+                'id_peserta' => $peserta->id_peserta,
+                'nama' => $peserta->user->nama,
+                'sikap' => $nilai->sikap,
+                'kualitas_kerja' => $nilai->kualitas_kerja,
+                'status' => $nilai->status,
+            ]
+        ]);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        Log::error('Validation Error: ' . json_encode($e->errors()));
+        return response()->json([
+            'success' => false,
+            'message' => 'Validasi gagal',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\Exception $e) {
+        Log::error('Store Error: ' . $e->getMessage());
+        Log::error('Store Error Line: ' . $e->getLine());
+        Log::error('Store Error File: ' . $e->getFile());
+        Log::error('Stack trace: ' . $e->getTraceAsString());
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Gagal menyimpan nilai: ' . $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => $e->getFile()
+        ], 500);
+    }
+}
     /**
      * Finalize nilai for a peserta
      * POST /api/mentor/nilai/{id}/finalize
@@ -216,18 +241,17 @@ class NilaiController extends Controller
                 ], 404);
             }
 
-            // Cek atau buat data nilai jika belum ada
+            // Cek data nilai
             $nilai = NilaiPeserta::where('id_peserta', $id)->first();
             
             if (!$nilai) {
-                // Buat data nilai baru jika belum ada
-                $nilai = NilaiPeserta::create([
-                    'id_peserta' => $id,
-                    'status' => 'pending'
-                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Data nilai tidak ditemukan, input nilai terlebih dahulu'
+                ], 404);
             }
 
-            // Validasi nilai sikap dan kualitas kerja
+            // Validasi nilai manual (minimal sikap dan kualitas kerja)
             if ($nilai->sikap === null || $nilai->kualitas_kerja === null) {
                 return response()->json([
                     'success' => false,
@@ -235,74 +259,36 @@ class NilaiController extends Controller
                 ], 422);
             }
 
-            DB::beginTransaction();
-
             // Dapatkan id_user dari peserta
             $idUser = $peserta->id_user;
             
             // Hitung nilai kehadiran
             $kehadiran = $this->hitungKehadiran($idUser);
             
-            // Hitung nilai tugas berdasarkan ketepatan waktu
+            // Hitung nilai tugas
             $nilaiTugas = $this->hitungNilaiTugas($idUser);
             
             // Hitung nilai kuis
             $nilaiKuis = $this->hitungNilaiKuis($idUser);
             
-            $bobotKehadiran = 20;
-            $bobotTugas = 25;
-            $bobotKuis = 15;
-            $bobotManual = 40;
-            
-            $manualValues = [
+            // Hitung nilai akhir menggunakan method dari model
+            $nilaiAkhir = NilaiPeserta::hitungNilaiAkhir(
+                $kehadiran, $nilaiTugas, $nilaiKuis,
                 $nilai->sikap ?? 0,
                 $nilai->kualitas_kerja ?? 0,
                 $nilai->komunikasi ?? 0,
                 $nilai->kreativitas ?? 0,
                 $nilai->kerjasama ?? 0,
                 $nilai->inisiatif ?? 0
-            ];
-            $nilaiManual = round(array_sum($manualValues) / 6, 2);
-            
-            $nilaiAkhir = round(
-                ($kehadiran * $bobotKehadiran / 100) +
-                ($nilaiTugas * $bobotTugas / 100) +
-                ($nilaiKuis * $bobotKuis / 100) +
-                ($nilaiManual * $bobotManual / 100),
-                2
             );
             
-            // UPDATE menggunakan model (lebih reliable)
-            $updateData = [
-                'nilai_kehadiran' => $kehadiran,
-                'nilai_tugas' => $nilaiTugas,
-                'nilai_kuis' => $nilaiKuis,
-                'nilai_akhir' => $nilaiAkhir,
-                'status' => 'final',
-                'finalized_at' => now(),
-                'updated_at' => now()
-            ];
-            
-            // Update menggunakan model
-            $updated = NilaiPeserta::where('id_peserta', $id)->update($updateData);
-            
-            Log::info('Finalizing peserta ID: ' . $id);
-            Log::info('Update data: ', $updateData);
-            Log::info('Update result (rows affected): ' . ($updated ? $updated : 0));
-            
-            if ($updated === 0) {
-                // Coba insert jika update gagal
-                NilaiPeserta::updateOrCreate(
-                    ['id_peserta' => $id],
-                    $updateData
-                );
-                Log::info('Fallback: Created new record for peserta ID: ' . $id);
-            }
-
-            DB::commit();
-
-            // Ambil data terbaru setelah update
-            $updatedNilai = NilaiPeserta::where('id_peserta', $id)->first();
+            // Update data nilai
+            $nilai->nilai_kehadiran = $kehadiran;
+            $nilai->nilai_tugas = $nilaiTugas;
+            $nilai->nilai_kuis = $nilaiKuis;
+            $nilai->nilai_akhir = $nilaiAkhir;
+            $nilai->status = 'final';
+            $nilai->save();
 
             return response()->json([
                 'success' => true,
@@ -313,13 +299,12 @@ class NilaiController extends Controller
                     'nilai_tugas' => $nilaiTugas,
                     'nilai_kuis' => $nilaiKuis,
                     'nilai_akhir' => $nilaiAkhir,
-                    'grade' => $this->getGrade($nilaiAkhir),
-                    'status' => $updatedNilai ? $updatedNilai->status : 'final'
+                    'grade' => $nilai->grade,
+                    'status' => $nilai->status
                 ]
             ]);
 
         } catch (\Exception $e) {
-            DB::rollBack();
             Log::error('Nilai Finalize Error: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
             return response()->json([
@@ -330,30 +315,22 @@ class NilaiController extends Controller
     }
 
     /**
-     * Hitung kehadiran peserta (persentase) berdasarkan id_user
+     * Hitung kehadiran peserta (persentase)
      */
     private function hitungKehadiran($idUser)
     {
         try {
-            // Hitung total hari dalam periode magang (misal: 30 hari)
-            // Atau hitung dari tanggal pertama presensi sampai sekarang
-            $firstPresensi = Presensi::where('id_user', $idUser)
-                ->orderBy('tanggal', 'asc')
-                ->first();
-                
-            if (!$firstPresensi) {
+            $presensi = Presensi::where('id_user', $idUser)->get();
+            
+            if ($presensi->isEmpty()) {
                 return 0;
             }
             
-            $startDate = Carbon::parse($firstPresensi->tanggal);
-            $endDate = Carbon::now();
-            $totalHari = $startDate->diffInWeekdays($endDate) + 1; // +1 untuk include start date
+            $total = $presensi->count();
+            $hadir = $presensi->where('status_kehadiran', 'hadir')->count();
             
-            $hadir = Presensi::where('id_user', $idUser)
-                ->where('status_kehadiran', 'hadir')
-                ->count();
+            return $total > 0 ? round(($hadir / $total) * 100, 2) : 0;
             
-            return $totalHari > 0 ? round(($hadir / $totalHari) * 100, 2) : 0;
         } catch (\Exception $e) {
             Log::warning('Hitung kehadiran error: ' . $e->getMessage());
             return 0;
@@ -361,7 +338,7 @@ class NilaiController extends Controller
     }
 
     /**
-     * Hitung nilai tugas berdasarkan ketepatan waktu pengumpulan
+     * Hitung nilai tugas
      */
     private function hitungNilaiTugas($idUser)
     {
@@ -378,6 +355,14 @@ class NilaiController extends Controller
             $count = 0;
             
             foreach ($pengumpulan as $item) {
+                // Jika tugas sudah dinilai
+                if ($item->nilai !== null && $item->nilai > 0) {
+                    $totalNilai += $item->nilai;
+                    $count++;
+                    continue;
+                }
+                
+                // Jika belum kumpul
                 if (!$item->tanggal_kumpul) {
                     $totalNilai += 0;
                     $count++;
@@ -414,7 +399,7 @@ class NilaiController extends Controller
     }
 
     /**
-     * Hitung nilai kuis peserta (rata-rata dari jawaban kuis) berdasarkan id_user
+     * Hitung nilai kuis
      */
     private function hitungNilaiKuis($idUser)
     {
@@ -490,7 +475,7 @@ class NilaiController extends Controller
                     'Nilai Sikap' => $nilai ? $nilai->sikap : '-',
                     'Nilai Kualitas Kerja' => $nilai ? $nilai->kualitas_kerja : '-',
                     'Nilai Akhir' => $nilai ? $nilai->nilai_akhir : '-',
-                    'Grade' => $nilai ? $this->getGrade($nilai->nilai_akhir) : '-',
+                    'Grade' => $nilai ? $nilai->grade : '-',
                     'Status' => $nilai && $nilai->status === 'final' ? 'Sudah Final' : 'Belum Final',
                     'Catatan Mentor' => $nilai ? $nilai->catatan_mentor : '-',
                 ];
@@ -499,6 +484,7 @@ class NilaiController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $exportData,
+                'count' => count($exportData)
             ]);
 
         } catch (\Exception $e) {

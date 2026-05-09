@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
-import { api } from "../../utils/api"
+import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService"
 import { logActivity } from "../../utils/activityLogger"
 import {
   ArrowLeft,
@@ -130,7 +130,7 @@ function AddPeserta() {
   const fetchDropdownData = async () => {
     try {
       setDivisiLoading(true)
-      const divisiData = await api.getDivisi()
+      const divisiData = await getDivisi()
       let divisiArray = []
       if (Array.isArray(divisiData)) {
         divisiArray = divisiData
@@ -154,7 +154,7 @@ function AddPeserta() {
 
     try {
       setMentorLoading(true)
-      const mentorData = await api.getMentors()
+      const mentorData = await getMentors()
       
       let mentors = []
       if (Array.isArray(mentorData)) {

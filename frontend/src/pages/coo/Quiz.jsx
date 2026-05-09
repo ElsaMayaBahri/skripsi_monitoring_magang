@@ -1,7 +1,12 @@
 // Quiz.jsx - Halaman Manajemen Kuis
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { api } from "../../utils/api"
+import {
+  getAllQuiz,
+  deleteQuiz,
+  importQuiz
+} from "../../api/coo/quizService"
+import axiosInstance from "../../api/axios"  // ← TAMBAHKAN INI
 import {
   Search,
   Plus,
@@ -63,11 +68,12 @@ function Quiz() {
     fetchDivisi()
   }, [])
 
+  // 🟢 loadQuizData - menggunakan getAllQuiz()
   const loadQuizData = async () => {
     setLoading(true)
     setError(null)
     try {
-      const response = await api.getQuiz()
+      const response = await getAllQuiz()
       console.log("Quiz response:", response)
       
       let quizData = []
@@ -102,20 +108,22 @@ function Quiz() {
     }
   }
 
+  // 🟢 fetchDivisi - menggunakan axiosInstance
   const fetchDivisi = async () => {
     try {
-      const response = await api.getDivisi()
+      const response = await axiosInstance.get("/divisi")
       let divisiData = []
-      if (response.success && response.data) {
-        divisiData = response.data
-      } else if (Array.isArray(response)) {
-        divisiData = response
+      if (response.data && response.data.success && response.data.data) {
+        divisiData = response.data.data
       } else if (response.data && Array.isArray(response.data)) {
         divisiData = response.data
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        divisiData = response.data.data
       }
       setDivisiList(divisiData)
     } catch (error) {
       console.error("Error fetching divisi:", error)
+      setDivisiList([])
     }
   }
 
@@ -126,12 +134,13 @@ function Quiz() {
     setShowDeleteModal(true)
   }
 
+  // 🟢 handleDelete - menggunakan deleteQuiz()
   const handleDelete = async () => {
     if (!deletingQuizId) return
     
     setIsDeleting(true)
     try {
-      await api.deleteQuiz(deletingQuizId)
+      await deleteQuiz(deletingQuizId)
       await loadQuizData()
       setShowDeleteModal(false)
       showSuccessToastMessage("Kuis berhasil dihapus")
@@ -175,6 +184,7 @@ function Quiz() {
     }, 3000)
   }
 
+  // 🟢 handleImport - menggunakan importQuiz()
   const handleImport = async () => {
     if (!importFile) {
       setError("Pilih file Excel terlebih dahulu")
@@ -199,7 +209,7 @@ function Quiz() {
         })
       }, 200)
       
-      const response = await api.importQuiz(formData)
+      const response = await importQuiz(formData)
       
       clearInterval(interval)
       setImportProgress(100)
@@ -733,11 +743,9 @@ function Quiz() {
                       <tr
                         key={quizId}
                         className="hover:bg-gradient-to-r hover:from-slate-50 hover:to-indigo-50/30 transition-all duration-200 group cursor-pointer"
+                        onClick={() => handleViewDetail(quizId)}
                       >
-                        <td 
-                          className="text-left px-6 py-4 cursor-pointer"
-                          onClick={() => handleViewDetail(quizId)}
-                        >
+                        <td className="text-left px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-all duration-300 shadow-sm">
                               <File size={16} className="text-indigo-600" />
@@ -763,20 +771,14 @@ function Quiz() {
                             </div>
                           </div>
                         </td>
-                        <td 
-                          className="text-center px-6 py-4 cursor-pointer"
-                          onClick={() => handleViewDetail(quizId)}
-                        >
+                        <td className="text-center px-6 py-4">
                           <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">
                             <span className="text-xs font-medium text-slate-600">
                               {q.divisi}
                             </span>
                           </div>
                         </td>
-                        <td 
-                          className="text-center px-6 py-4 cursor-pointer"
-                          onClick={() => handleViewDetail(quizId)}
-                        >
+                        <td className="text-center px-6 py-4">
                           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">
                             <span className="font-bold text-slate-700 text-sm">
                               {q.total_soal}

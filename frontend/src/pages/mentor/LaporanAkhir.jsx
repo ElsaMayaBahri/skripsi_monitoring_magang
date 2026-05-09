@@ -1,6 +1,5 @@
 // src/pages/mentor/LaporanAkhir.jsx
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 import {
   FileText,
   Search,
@@ -22,9 +21,13 @@ import {
   Users,
   Loader2,
   Send,
-  TrendingUp
+  Activity
 } from "lucide-react";
-import api from "../../utils/api";
+import { 
+  getMentorLaporanAkhir, 
+  submitLaporanReview, 
+  exportLaporanAkhir 
+} from "../../api/mentor/laporanAkhirService";
 
 function LaporanAkhir() {
   const [loading, setLoading] = useState(false);
@@ -47,26 +50,35 @@ function LaporanAkhir() {
     sudahUpload: 0,
     belumUpload: 0,
     disetujui: 0,
-    revisi: 0
+    revisi: 0,
+    pending: 0
   });
 
   // Fetch laporan dari backend
   const fetchLaporan = async () => {
     setLoading(true);
     try {
-      const response = await api.getMentorLaporanAkhir({
-        search: searchTerm,
-        status: filterStatus
-      });
+      const params = {};
+      if (searchTerm) params.search = searchTerm;
+      if (filterStatus !== "all") params.status = filterStatus;
       
-      if (response.success) {
-        setLaporan(response.data);
-        setFilteredLaporan(response.data);
-        if (response.summary) {
-          setSummary(response.summary);
-        }
+      const response = await getMentorLaporanAkhir(params);
+      
+      if (response && response.success) {
+        let laporanData = response.data || [];
+        let summaryData = response.summary || {
+          total: 0,
+          sudahUpload: 0,
+          belumUpload: 0,
+          disetujui: 0,
+          revisi: 0
+        };
+        
+        setLaporan(laporanData);
+        setFilteredLaporan(laporanData);
+        setSummary(summaryData);
       } else {
-        console.error("Failed to fetch laporan:", response.message);
+        console.error("Failed to fetch laporan:", response?.message);
         setLaporan([]);
         setFilteredLaporan([]);
       }
@@ -88,14 +100,14 @@ function LaporanAkhir() {
     
     if (searchTerm) {
       filtered = filtered.filter(l => 
-        l.peserta_nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (l.peserta_nama && l.peserta_nama.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (l.judul && l.judul.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
     
     if (filterStatus !== "all") {
       if (filterStatus === "uploaded") {
-        filtered = filtered.filter(l => l.status !== "not_uploaded");
+        filtered = filtered.filter(l => l.status !== "not_uploaded" && l.uploaded_at);
       } else {
         filtered = filtered.filter(l => l.status === filterStatus);
       }
@@ -122,23 +134,53 @@ function LaporanAkhir() {
     
     setSubmitting(true);
     try {
-      const response = await api.submitLaporanReview(selectedLaporan.id, {
+      const response = await submitLaporanReview(selectedLaporan.id, {
         status: reviewForm.status,
         catatan: reviewForm.catatan
       });
       
-      if (response.success) {
+      if (response && response.success) {
         await fetchLaporan();
         setShowModal(false);
-        alert(`Laporan ${reviewForm.status === "approved" ? "disetujui" : "direvisi"}`);
+        alert(response.message || `Laporan ${reviewForm.status === "approved" ? "disetujui" : "direvisi"}`);
       } else {
-        alert(response.message || "Gagal menyimpan review");
+        alert(response?.message || "Gagal menyimpan review");
       }
     } catch (error) {
       console.error("Error submitting review:", error);
       alert("Terjadi kesalahan saat menyimpan review");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (searchTerm) params.search = searchTerm;
+      if (filterStatus !== "all") params.status = filterStatus;
+      
+      const response = await exportLaporanAkhir(params);
+      
+      if (response && response.success && response.data) {
+        // Create blob from response data
+        const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `laporan_akhir_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        alert(`Berhasil mengekspor ${response.count || response.data.length} data`);
+      } else {
+        alert(response?.message || "Gagal mengekspor laporan");
+      }
+    } catch (error) {
+      console.error("Error exporting laporan:", error);
+      alert("Terjadi kesalahan saat mengekspor laporan");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -206,18 +248,7 @@ function LaporanAkhir() {
                 <button className="relative group overflow-hidden px-5 py-2.5 bg-white/80 backdrop-blur-sm border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm">
                   <span className="relative z-10 flex items-center gap-2"><Printer size="14" />Cetak Laporan</span>
                 </button>
-                <button onClick={async () => {
-                  const response = await api.exportLaporanAkhir();
-                  if (response.success && response.data) {
-                    const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'laporan_akhir_export.json';
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }
-                }} className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300">
+                <button onClick={handleExport} className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300">
                   <span className="relative z-10 flex items-center gap-2"><Download size="14" />Export</span>
                   <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                 </button>
@@ -227,7 +258,7 @@ function LaporanAkhir() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-5 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-5 mb-8">
           <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div className="relative p-4 text-center">
@@ -264,7 +295,16 @@ function LaporanAkhir() {
             </div>
           </div>
 
-          <div className="relative group overflow-hidden bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="relative p-4 text-center">
+              <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center mx-auto mb-2"><Clock size="16" className="text-purple-600" /></div>
+              <p className="text-2xl font-bold text-purple-600">{summary.pending || 0}</p>
+              <p className="text-[10px] text-slate-500 mt-1">Menunggu</p>
+            </div>
+          </div>
+
+          <div className="relative group overflow-hidden bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="relative p-4 text-center">
               <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm mx-auto mb-2"><AlertCircle size="16" className="text-white" /></div>
               <p className="text-2xl font-bold text-white">{summary.revisi}</p>
@@ -326,7 +366,7 @@ function LaporanAkhir() {
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-[9px] text-slate-400">{item.peserta_divisi}</span>
                               <span className="text-[9px] text-slate-300">•</span>
-                              <span className="text-[9px] text-slate-400">Progress {item.progress}%</span>
+                              <span className="text-[9px] text-slate-400">Progress {item.progress || 0}%</span>
                             </div>
                             {item.judul && <p className="text-[10px] text-slate-400 truncate max-w-[200px] mt-0.5">{item.judul}</p>}
                           </div>
@@ -337,12 +377,12 @@ function LaporanAkhir() {
                         {item.uploaded_at ? (
                           <div className="flex items-center gap-2">
                             <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center"><Calendar size="12" className="text-teal-500" /></div>
-                            <div><span className="text-xs font-medium text-slate-700">{new Date(item.uploaded_at).toLocaleDateString('id-ID')}</span><p className="text-[10px] text-slate-400">{new Date(item.uploaded_at).toLocaleTimeString('id-ID')}</p></div>
+                            <div><span className="text-xs font-medium text-slate-700">{new Date(item.uploaded_at).toLocaleDateString('id-ID')}</span><p className="text-[10px] text-slate-400">{new Date(item.uploaded_at).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</p></div>
                           </div>
                         ) : (
                           <span className="text-xs text-slate-400 flex items-center gap-2"><div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center"><Clock size="12" className="text-slate-400" /></div>Belum upload</span>
                         )}
-                        </td>
+                      </td>
                       <td className="px-6 py-4">
                         <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${status.bg} ${status.text} border ${status.border} shadow-sm`}><StatusIcon size="10" /><span className="text-[10px] font-semibold">{status.label}</span></div>
                         {item.catatan && (item.status === "revision" || item.status === "approved") && (
@@ -351,7 +391,7 @@ function LaporanAkhir() {
                         {item.nilai_akhir && item.status === "approved" && (
                           <div className="flex items-center gap-1.5 mt-1.5"><div className="p-0.5 rounded-full bg-emerald-100"><Star size="8" className="text-emerald-500" /></div><span className="text-[9px] font-semibold text-emerald-600">Nilai: {item.nilai_akhir}</span></div>
                         )}
-                       </td>
+                      </td>
                       <td className="px-6 py-4">
                         {item.status === "not_uploaded" ? (
                           <span className="text-xs text-slate-400 italic flex items-center gap-1.5"><div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center"><Clock size="10" className="text-slate-400" /></div>Menunggu upload</span>
@@ -363,18 +403,20 @@ function LaporanAkhir() {
                                 <button onClick={() => window.open(item.file_url, '_blank')} className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all duration-200 hover:scale-105" title="Download"><Download size="14" /></button>
                               </>
                             )}
-                            <button onClick={() => handleOpenModal(item)} className={`relative overflow-hidden px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-300 flex items-center gap-1.5 ${
-                              item.status === "approved" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : 
-                              item.status === "revision" ? "bg-purple-100 text-purple-700 hover:bg-purple-200" :
-                              "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md hover:shadow-lg"
-                            }`}>
-                              {item.status === "approved" ? <CheckCircle size="12" /> : item.status === "revision" ? <AlertCircle size="12" /> : <Send size="12" />}
-                              {item.status === "approved" ? "Sudah" : item.status === "revision" ? "Revisi" : "Review"}
-                            </button>
+                            {item.id && (
+                              <button onClick={() => handleOpenModal(item)} className={`relative overflow-hidden px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-300 flex items-center gap-1.5 ${
+                                item.status === "approved" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : 
+                                item.status === "revision" ? "bg-purple-100 text-purple-700 hover:bg-purple-200" :
+                                "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md hover:shadow-lg"
+                              }`}>
+                                {item.status === "approved" ? <CheckCircle size="12" /> : item.status === "revision" ? <AlertCircle size="12" /> : <Send size="12" />}
+                                {item.status === "approved" ? "Sudah" : item.status === "revision" ? "Revisi" : "Review"}
+                              </button>
+                            )}
                           </div>
                         )}
-                       </td>
-                     </tr>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -428,10 +470,7 @@ function LaporanAkhir() {
               <div className="bg-gradient-to-r from-slate-50 to-white rounded-xl p-4 border border-slate-100 shadow-sm">
                 <div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-teal-50"><FileText size="20" className="text-teal-500" /></div><div className="flex-1"><p className="text-sm font-semibold text-slate-700">{selectedLaporan.judul || "Laporan Akhir"}</p><p className="text-xs text-slate-400">Upload: {selectedLaporan.uploaded_at ? new Date(selectedLaporan.uploaded_at).toLocaleString('id-ID') : '-'} • Size: {selectedLaporan.file_size || '-'}</p></div>
                   {selectedLaporan.file_url && (
-                    <>
-                      <button onClick={() => window.open(selectedLaporan.file_url, '_blank')} className="px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-semibold hover:shadow-md transition-all duration-200 flex items-center gap-1.5"><Eye size="12" />Lihat</button>
-                      <button onClick={() => window.open(selectedLaporan.file_url, '_blank')} className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 transition-all duration-200 flex items-center gap-1.5"><Download size="12" />Download</button>
-                    </>
+                    <button onClick={() => window.open(selectedLaporan.file_url, '_blank')} className="px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-semibold hover:shadow-md transition-all duration-200 flex items-center gap-1.5"><Eye size="12" />Lihat</button>
                   )}
                 </div>
               </div>

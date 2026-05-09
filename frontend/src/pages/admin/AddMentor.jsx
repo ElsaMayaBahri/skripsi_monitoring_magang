@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../utils/api";
+import { createMentor } from "../../api/admin/mentorService";
+import { getDivisi } from "../../api/admin/divisiService";
 import { logActivity } from "../../utils/activityLogger";
 import {
   ArrowLeft,
@@ -68,7 +69,7 @@ function AddMentor() {
   const loadDivisiList = async () => {
     setDivisiLoading(true);
     try {
-      const response = await api.getDivisi();
+      const response = await getDivisi();
       let divisiData = [];
       
       if (response && response.success && Array.isArray(response.data)) {
@@ -237,7 +238,7 @@ function AddMentor() {
         status: true
       };
       
-      const response = await api.addMentor(mentorData);
+      const response = await createMentor(mentorData);
       
       if (response && response.success) {
         logActivity("create", "mentor", form.name);

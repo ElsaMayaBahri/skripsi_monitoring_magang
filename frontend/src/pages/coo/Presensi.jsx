@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react"
 import { 
   Search, 
-  Filter, 
   Download, 
   Calendar, 
   Users, 
@@ -12,25 +11,16 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
-  FileText,
-  Printer,
-  Mail,
+  Laptop,
+  MapPin,
   BarChart3,
-  TrendingUp,
-  Award,
-  Zap,
   Sparkles,
   UserCheck,
-  UserX,
   Clock as ClockIcon,
-  MapPin,
-  Smartphone,
-  Laptop,
-  Globe,
-  Sun,
-  Moon,
-  Cloud
+  X,
+  Loader2
 } from "lucide-react"
+import axiosInstance from "../../api/axios"
 
 function Presensi() {
   const [presensiData, setPresensiData] = useState([])
@@ -42,163 +32,114 @@ function Presensi() {
   const [currentPage, setCurrentPage] = useState(1)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [divisiList, setDivisiList] = useState([])
+  const [stats, setStats] = useState({
+    total: 0,
+    hadir: 0,
+    terlambat: 0,
+    tidakHadir: 0,
+    persenKehadiran: 0
+  })
   
   const itemsPerPage = 8
 
-  // Data dummy presensi
-  const dummyPresensi = [
-    {
-      id: 1,
-      nama: "Rizky Darmawan",
-      divisi: "CREATIVE TECHNOLOGY",
-      tanggal: "2024-10-15",
-      checkIn: "07:58",
-      checkOut: "17:02",
-      status: "Hadir",
-      keterlambatan: 0,
-      durasi: "9 jam 4 menit",
-      device: "Web - Chrome",
-      lokasi: "WFO - Kantor Pusat",
-      dailyReport: "Menyelesaikan modul UX Research dan melakukan user testing",
-      foto: null
-    },
-    {
-      id: 2,
-      nama: "Anita Nur",
-      divisi: "SCHOOL DESIGN",
-      tanggal: "2024-10-15",
-      checkIn: "08:15",
-      checkOut: "17:00",
-      status: "Terlambat",
-      keterlambatan: 15,
-      durasi: "8 jam 45 menit",
-      device: "Mobile - Android",
-      lokasi: "WFH - Rumah",
-      dailyReport: "Mendesain 3 mockup untuk landing page baru",
-      foto: null
-    },
-    {
-      id: 3,
-      nama: "Citra Dewi",
-      divisi: "FINANCE",
-      tanggal: "2024-10-15",
-      checkIn: null,
-      checkOut: null,
-      status: "Tidak Hadir",
-      keterlambatan: null,
-      durasi: null,
-      device: null,
-      lokasi: null,
-      dailyReport: null,
-      foto: null
-    },
-    {
-      id: 4,
-      nama: "Doni Saputra",
-      divisi: "ENGINEERING",
-      tanggal: "2024-10-15",
-      checkIn: "07:45",
-      checkOut: "17:10",
-      status: "Hadir",
-      keterlambatan: 0,
-      durasi: "9 jam 25 menit",
-      device: "Web - Firefox",
-      lokasi: "WFO - Kantor Pusat",
-      dailyReport: "Fix bug pada API endpoint dan menambah unit test",
-      foto: null
-    },
-    {
-      id: 5,
-      nama: "Eka Prasetya",
-      divisi: "FRAMES",
-      tanggal: "2024-10-15",
-      checkIn: "08:05",
-      checkOut: "16:55",
-      status: "Terlambat",
-      keterlambatan: 5,
-      durasi: "8 jam 50 menit",
-      device: "Web - Edge",
-      lokasi: "WFO - Kantor Pusat",
-      dailyReport: "Menyusun laporan keuangan bulanan",
-      foto: null
-    },
-    {
-      id: 6,
-      nama: "Fajar Hidayat",
-      divisi: "PPTX",
-      tanggal: "2024-10-15",
-      checkIn: "07:55",
-      checkOut: "17:05",
-      status: "Hadir",
-      keterlambatan: 0,
-      durasi: "9 jam 10 menit",
-      device: "Mobile - iOS",
-      lokasi: "WFH - Rumah",
-      dailyReport: "Membuat presentasi untuk meeting klien",
-      foto: null
-    },
-    {
-      id: 7,
-      nama: "Gita Lestari",
-      divisi: "CREATIVE TECHNOLOGY",
-      tanggal: "2024-10-15",
-      checkIn: "08:20",
-      checkOut: "17:00",
-      status: "Terlambat",
-      keterlambatan: 20,
-      durasi: "8 jam 40 menit",
-      device: "Web - Chrome",
-      lokasi: "WFO - Kantor Pusat",
-      dailyReport: "Research trend desain 2025",
-      foto: null
-    },
-    {
-      id: 8,
-      nama: "Hendra Wijaya",
-      divisi: "ENGINEERING",
-      tanggal: "2024-10-15",
-      checkIn: null,
-      checkOut: null,
-      status: "Izin",
-      keterlambatan: null,
-      durasi: null,
-      device: null,
-      lokasi: null,
-      dailyReport: "Sakit - Istirahat di rumah",
-      foto: null
+  // Load divisi list
+  const fetchDivisi = async () => {
+    try {
+      const response = await axiosInstance.get("/divisi")
+      let divisiData = []
+      if (response.data && response.data.success && response.data.data) {
+        divisiData = response.data.data
+      } else if (response.data && Array.isArray(response.data)) {
+        divisiData = response.data
+      }
+      setDivisiList(divisiData)
+    } catch (err) {
+      console.error("Error fetching divisi:", err)
     }
-  ]
+  }
+
+  // Load presensi data dari backend
+  const fetchPresensi = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      let url = "/presensi"
+      const params = new URLSearchParams()
+      
+      if (selectedDate) {
+        params.append("tanggal", selectedDate)
+      }
+      if (selectedDivisi !== "all") {
+        params.append("divisi", selectedDivisi)
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`
+      }
+      
+      const response = await axiosInstance.get(url)
+      
+      let presensiList = []
+      if (response.data && response.data.success && response.data.data) {
+        presensiList = response.data.data
+      } else if (response.data && Array.isArray(response.data)) {
+        presensiList = response.data
+      }
+      
+      setPresensiData(presensiList)
+      calculateStats(presensiList)
+    } catch (err) {
+      console.error("Error fetching presensi:", err)
+      setError("Gagal memuat data presensi")
+      setPresensiData([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Hitung statistik
+  const calculateStats = (data) => {
+    const total = data.length
+    const hadir = data.filter(p => p.status === "Hadir" || p.status === "hadir").length
+    const terlambat = data.filter(p => p.status === "Terlambat" || p.status === "terlambat").length
+    const tidakHadir = data.filter(p => p.status === "Tidak Hadir" || p.status === "tidak_hadir" || p.status === "Izin" || p.status === "izin").length
+    
+    const persenKehadiran = total > 0 
+      ? Math.round(((hadir + terlambat) / total) * 100)
+      : 0
+    
+    setStats({
+      total,
+      hadir,
+      terlambat,
+      tidakHadir,
+      persenKehadiran
+    })
+  }
 
   useEffect(() => {
-    // Load data dari localStorage atau pakai dummy
-    const savedData = localStorage.getItem("presensi_data")
-    if (savedData) {
-      setPresensiData(JSON.parse(savedData))
-    } else {
-      setPresensiData(dummyPresensi)
-    }
+    fetchDivisi()
   }, [])
+
+  useEffect(() => {
+    fetchPresensi()
+  }, [selectedDate, selectedDivisi])
 
   useEffect(() => {
     let filtered = [...presensiData]
     
     if (searchTerm) {
       filtered = filtered.filter(p => 
-        p.nama.toLowerCase().includes(searchTerm.toLowerCase())
+        (p.nama || p.peserta?.nama || "").toLowerCase().includes(searchTerm.toLowerCase())
       )
-    }
-    
-    if (selectedDivisi !== "all") {
-      filtered = filtered.filter(p => p.divisi === selectedDivisi)
-    }
-    
-    if (selectedDate) {
-      filtered = filtered.filter(p => p.tanggal === selectedDate)
     }
     
     setFilteredData(filtered)
     setCurrentPage(1)
-  }, [searchTerm, selectedDivisi, selectedDate, presensiData])
+  }, [searchTerm, presensiData])
 
   const handleViewDetail = (presensi) => {
     setSelectedPresensi(presensi)
@@ -207,11 +148,29 @@ function Presensi() {
 
   const handleExportPDF = async () => {
     setIsExporting(true)
-    // Simulasi export PDF
-    setTimeout(() => {
+    try {
+      const params = new URLSearchParams()
+      if (selectedDate) params.append("tanggal", selectedDate)
+      if (selectedDivisi !== "all") params.append("divisi", selectedDivisi)
+      
+      const response = await axiosInstance.get(`/presensi/export${params.toString() ? `?${params.toString()}` : ''}`, {
+        responseType: "blob",
+      })
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `rekap_presensi_${new Date().toISOString().split('T')[0]}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error("Error exporting:", err)
+      alert("Gagal mengunduh laporan presensi")
+    } finally {
       setIsExporting(false)
-      alert("Laporan rekap presensi berhasil diunduh!")
-    }, 1500)
+    }
   }
 
   // Pagination
@@ -221,33 +180,46 @@ function Presensi() {
     currentPage * itemsPerPage
   )
 
-  // Statistik
-  const stats = {
-    total: filteredData.length,
-    hadir: filteredData.filter(p => p.status === "Hadir").length,
-    terlambat: filteredData.filter(p => p.status === "Terlambat").length,
-    tidakHadir: filteredData.filter(p => p.status === "Tidak Hadir" || p.status === "Izin").length,
-    persenKehadiran: filteredData.length > 0 
-      ? Math.round((filteredData.filter(p => p.status === "Hadir" || p.status === "Terlambat").length / filteredData.length) * 100)
-      : 0
-  }
-
   const getStatusBadge = (status) => {
-    switch(status) {
-      case "Hadir":
+    const statusLower = (status || "").toLowerCase()
+    switch(statusLower) {
+      case "hadir":
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-medium"><CheckCircle size={10} /> Hadir</span>
-      case "Terlambat":
+      case "terlambat":
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-medium"><AlertCircle size={10} /> Terlambat</span>
-      case "Tidak Hadir":
+      case "tidak hadir":
+      case "tidak_hadir":
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-medium"><XCircle size={10} /> Tidak Hadir</span>
-      case "Izin":
+      case "izin":
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-medium"><ClockIcon size={10} /> Izin</span>
       default:
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-[10px] font-medium">-</span>
     }
   }
 
-  const divisiList = ["all", "CREATIVE TECHNOLOGY", "SCHOOL DESIGN", "FINANCE", "ENGINEERING", "FRAMES", "PPTX"]
+  const formatDateTime = (dateTime) => {
+    if (!dateTime) return "-"
+    return dateTime
+  }
+
+  const getNamaPeserta = (item) => {
+    return item.peserta?.nama || item.nama || "-"
+  }
+
+  const getDivisiPeserta = (item) => {
+    return item.peserta?.divisi || item.divisi || "-"
+  }
+
+  if (loading && presensiData.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
+          <p className="text-slate-500">Memuat data presensi...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
@@ -275,11 +247,11 @@ function Presensi() {
             
             <button
               onClick={handleExportPDF}
-              disabled={isExporting}
+              disabled={isExporting || filteredData.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 disabled:opacity-50"
             >
               {isExporting ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <Loader2 size={16} className="animate-spin" />
               ) : (
                 <Download size={16} />
               )}
@@ -330,7 +302,7 @@ function Presensi() {
               </div>
               <span className="text-2xl font-bold text-slate-800">{stats.persenKehadiran}%</span>
             </div>
-            <p className="text-xs text-slate-500">Kehadiran Hari Ini</p>
+            <p className="text-xs text-slate-500">Kehadiran</p>
             <div className="mt-2 h-1 w-8 bg-purple-500 rounded-full"></div>
           </div>
         </div>
@@ -358,12 +330,11 @@ function Presensi() {
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
               >
                 <option value="all">Semua Divisi</option>
-                <option value="CREATIVE TECHNOLOGY">Creative Technology</option>
-                <option value="SCHOOL DESIGN">School Design</option>
-                <option value="FINANCE">Finance</option>
-                <option value="ENGINEERING">Engineering</option>
-                <option value="FRAMES">FRAMES</option>
-                <option value="PPTX">PPTX</option>
+                {divisiList.map((div) => (
+                  <option key={div.id_divisi || div.id} value={div.nama_divisi || div.nama}>
+                    {div.nama_divisi || div.nama}
+                  </option>
+                ))}
               </select>
             </div>
             
@@ -391,6 +362,15 @@ function Presensi() {
           </div>
         </div>
 
+        {/* ===== ERROR MESSAGE ===== */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+            <AlertCircle size={16} className="text-red-500" />
+            <p className="text-sm text-red-600 flex-1">{error}</p>
+            <button onClick={fetchPresensi} className="text-red-600 hover:text-red-700 text-sm font-medium">Coba Lagi</button>
+          </div>
+        )}
+
         {/* ===== TABLE ===== */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
@@ -406,7 +386,7 @@ function Presensi() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {paginatedData.length === 0 ? (
+                {paginatedData.length === 0 && !loading ? (
                   <tr>
                     <td colSpan="6" className="px-5 py-12 text-center">
                       <div className="flex flex-col items-center gap-2">
@@ -423,25 +403,25 @@ function Presensi() {
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm">
-                            {item.nama.charAt(0)}
+                            {getNamaPeserta(item).charAt(0)}
                           </div>
-                          <span className="font-medium text-slate-800 text-sm">{item.nama}</span>
+                          <span className="font-medium text-slate-800 text-sm">{getNamaPeserta(item)}</span>
                         </div>
-                       </td>
+                      </td>
                       <td className="px-5 py-3">
                         <span className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-full font-medium">
-                          {item.divisi}
+                          {getDivisiPeserta(item)}
                         </span>
-                       </td>
+                      </td>
                       <td className="px-5 py-3 text-sm text-slate-600">
-                        {item.checkIn || <span className="text-slate-400">-</span>}
-                       </td>
+                        {formatDateTime(item.check_in)}
+                      </td>
                       <td className="px-5 py-3 text-sm text-slate-600">
-                        {item.checkOut || <span className="text-slate-400">-</span>}
-                       </td>
+                        {formatDateTime(item.check_out)}
+                      </td>
                       <td className="px-5 py-3">
                         {getStatusBadge(item.status)}
-                       </td>
+                      </td>
                       <td className="px-5 py-3 text-center">
                         <button
                           onClick={() => handleViewDetail(item)}
@@ -449,8 +429,8 @@ function Presensi() {
                         >
                           <Eye size={14} />
                         </button>
-                       </td>
-                     </tr>
+                      </td>
+                    </tr>
                   ))
                 )}
               </tbody>
@@ -510,14 +490,14 @@ function Presensi() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-slate-800 text-sm">Detail Presensi</h3>
-                    <p className="text-[10px] text-slate-400">{selectedPresensi.tanggal}</p>
+                    <p className="text-[10px] text-slate-400">{selectedPresensi.tanggal || "-"}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsModalOpen(false)}
                   className="p-1.5 hover:bg-slate-100 rounded-lg transition"
                 >
-                  <XCircle size={16} className="text-slate-400" />
+                  <X size={16} className="text-slate-400" />
                 </button>
               </div>
               
@@ -525,11 +505,11 @@ function Presensi() {
                 {/* Info Peserta */}
                 <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
                   <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md">
-                    {selectedPresensi.nama.charAt(0)}
+                    {getNamaPeserta(selectedPresensi).charAt(0)}
                   </div>
                   <div>
-                    <h4 className="font-semibold text-slate-800">{selectedPresensi.nama}</h4>
-                    <p className="text-xs text-slate-500">{selectedPresensi.divisi}</p>
+                    <h4 className="font-semibold text-slate-800">{getNamaPeserta(selectedPresensi)}</h4>
+                    <p className="text-xs text-slate-500">{getDivisiPeserta(selectedPresensi)}</p>
                   </div>
                 </div>
 
@@ -538,12 +518,12 @@ function Presensi() {
                   <div className="bg-blue-50 rounded-lg p-3 text-center">
                     <ClockIcon size={14} className="text-blue-500 mx-auto mb-1" />
                     <p className="text-[10px] text-slate-500">Check-In</p>
-                    <p className="text-sm font-semibold text-slate-700">{selectedPresensi.checkIn || "-"}</p>
+                    <p className="text-sm font-semibold text-slate-700">{formatDateTime(selectedPresensi.check_in)}</p>
                   </div>
                   <div className="bg-indigo-50 rounded-lg p-3 text-center">
                     <ClockIcon size={14} className="text-indigo-500 mx-auto mb-1" />
                     <p className="text-[10px] text-slate-500">Check-Out</p>
-                    <p className="text-sm font-semibold text-slate-700">{selectedPresensi.checkOut || "-"}</p>
+                    <p className="text-sm font-semibold text-slate-700">{formatDateTime(selectedPresensi.check_out)}</p>
                   </div>
                 </div>
 
@@ -554,20 +534,10 @@ function Presensi() {
                     <div className="mt-1">{getStatusBadge(selectedPresensi.status)}</div>
                   </div>
                   <div className="bg-slate-50 rounded-lg p-2">
-                    <p className="text-[10px] text-slate-500">Durasi Kerja</p>
-                    <p className="text-sm font-medium text-slate-700">{selectedPresensi.durasi || "-"}</p>
+                    <p className="text-[10px] text-slate-500">Keterlambatan</p>
+                    <p className="text-sm font-medium text-slate-700">{selectedPresensi.keterlambatan || 0} menit</p>
                   </div>
                 </div>
-
-                {/* Info Tambahan */}
-                {selectedPresensi.keterlambatan > 0 && (
-                  <div className="bg-amber-50 rounded-lg p-2 border border-amber-100">
-                    <p className="text-[10px] text-amber-600 flex items-center gap-1">
-                      <AlertCircle size={10} />
-                      Terlambat {selectedPresensi.keterlambatan} menit
-                    </p>
-                  </div>
-                )}
 
                 {/* Device & Lokasi */}
                 <div className="space-y-2">
@@ -586,10 +556,10 @@ function Presensi() {
                 </div>
 
                 {/* Daily Report */}
-                {selectedPresensi.dailyReport && (
+                {selectedPresensi.daily_report && (
                   <div className="bg-slate-50 rounded-lg p-3">
                     <p className="text-[10px] font-medium text-slate-500 mb-1">Daily Report</p>
-                    <p className="text-sm text-slate-700">{selectedPresensi.dailyReport}</p>
+                    <p className="text-sm text-slate-700">{selectedPresensi.daily_report}</p>
                   </div>
                 )}
               </div>
