@@ -495,7 +495,7 @@ function AddPeserta() {
                   <div className="relative">
                     <Lock size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${getFieldError('password') ? 'text-red-400' : 'text-slate-400'}`} />
                     <input name="password" type={showPassword ? "text" : "password"} placeholder="Minimal 8 karakter" value={form.password} onChange={handleChange} onBlur={() => handleBlur('password')} disabled={loading} className={`w-full pl-9 pr-10 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 transition ${getFieldError('password') ? 'border-red-300 focus:border-red-400 focus:ring-red-500/30 bg-red-50/30' : form.password && isPasswordValid() ? 'border-emerald-300 focus:border-emerald-400 focus:ring-emerald-500/30' : 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-500/30'}`} />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">{showPassword ? <EyeOff size={14} /> : <Eye size={14} />}</button>
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">{showPassword ? <Eye size={14} /> : <EyeOff size={14} />}</button>
                     {form.password && isPasswordValid() && !getFieldError('password') && <CheckCircle size={14} className="absolute right-9 top-1/2 -translate-y-1/2 text-emerald-500" />}
                   </div>
                   {form.password && (
@@ -510,15 +510,44 @@ function AddPeserta() {
                   <p className="text-[10px] text-slate-400 mt-1">Password harus mengandung: huruf besar, huruf kecil, angka, dan minimal 8 karakter</p>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Konfirmasi Password <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <Lock size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${getFieldError('password_confirmation') ? 'text-red-400' : 'text-slate-400'}`} />
-                    <input name="password_confirmation" type={showConfirmPassword ? "text" : "password"} placeholder="Konfirmasi password" value={form.password_confirmation} onChange={handleChange} onBlur={() => handleBlur('password_confirmation')} disabled={loading} className={`w-full pl-9 pr-10 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 transition ${getFieldError('password_confirmation') ? 'border-red-300 focus:border-red-400 focus:ring-red-500/30 bg-red-50/30' : form.password_confirmation && isPasswordMatch() ? 'border-emerald-300 focus:border-emerald-400 focus:ring-emerald-500/30' : 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-500/30'}`} />
-                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">{showConfirmPassword ? <EyeOff size={14} /> : <Eye size={14} />}</button>
-                    {form.password_confirmation && isPasswordMatch() && !getFieldError('password_confirmation') && <CheckCircle size={14} className="absolute right-9 top-1/2 -translate-y-1/2 text-emerald-500" />}
-                  </div>
-                  {getFieldError('password_confirmation') && <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1"><AlertTriangle size={10} /> {getFieldError('password_confirmation')}</p>}
-                </div>
+  <label className="block text-xs font-medium text-slate-600 mb-1.5">
+    Konfirmasi Password <span className="text-red-500">*</span>
+  </label>
+  <div className="relative">
+    <Lock size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${getFieldError('password_confirmation') ? 'text-red-400' : 'text-slate-400'}`} />
+    <input 
+      name="password_confirmation" 
+      type={showConfirmPassword ? "text" : "password"} 
+      placeholder="Konfirmasi password" 
+      value={form.password_confirmation} 
+      onChange={handleChange} 
+      onBlur={() => handleBlur('password_confirmation')} 
+      disabled={loading} 
+      className={`w-full pl-9 pr-10 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 transition ${
+        getFieldError('password_confirmation') 
+          ? 'border-red-300 focus:border-red-400 focus:ring-red-500/30 bg-red-50/30' 
+          : form.password_confirmation && isPasswordMatch() 
+            ? 'border-emerald-300 focus:border-emerald-400 focus:ring-emerald-500/30' 
+            : 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-500/30'
+      }`} 
+    />
+    <button 
+  type="button" 
+  onClick={() => setShowConfirmPassword(!showConfirmPassword)} 
+  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+>
+  {showConfirmPassword ? <Eye size={14} /> : <EyeOff size={14} />}
+</button>
+    {form.password_confirmation && isPasswordMatch() && !getFieldError('password_confirmation') && 
+      <CheckCircle size={14} className="absolute right-9 top-1/2 -translate-y-1/2 text-emerald-500" />
+    }
+  </div>
+  {getFieldError('password_confirmation') && 
+    <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1">
+      <AlertTriangle size={10} /> {getFieldError('password_confirmation')}
+    </p>
+  }
+</div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">Divisi <span className="text-red-500">*</span></label>
                   <div className="relative">

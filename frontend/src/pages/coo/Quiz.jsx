@@ -6,7 +6,7 @@ import {
   deleteQuiz,
   importQuiz
 } from "../../api/coo/quizService"
-import axiosInstance from "../../api/axios"  // ← TAMBAHKAN INI
+import axiosInstance from "../../api/axios"
 import {
   Search,
   Plus,
@@ -49,10 +49,10 @@ function Quiz() {
   const [showSuccessToast, setShowSuccessToast] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   
-  // Filter states
+  // Filter states - MULTIPLE SELECT
   const [showFilter, setShowFilter] = useState(false)
-  const [selectedDivisi, setSelectedDivisi] = useState("all")
-  const [selectedStatus, setSelectedStatus] = useState("all")
+  const [selectedDivisis, setSelectedDivisis] = useState([]) // Array untuk multiple divisi
+  const [selectedStatus, setSelectedStatus] = useState("all") // Status: all, aktif, nonaktif
   const [divisiList, setDivisiList] = useState([])
   
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -68,7 +68,6 @@ function Quiz() {
     fetchDivisi()
   }, [])
 
-  // 🟢 loadQuizData - menggunakan getAllQuiz()
   const loadQuizData = async () => {
     setLoading(true)
     setError(null)
@@ -94,7 +93,8 @@ function Quiz() {
         total_soal: q.total_soal || q.questions?.length || 0,
         questions: q.questions || [],
         created_at: q.created_at || q.createdAt,
-        status: q.status || "aktif",
+        // Konversi status ke aktif/nonaktif
+        status: q.status === "aktif" || q.status === "active" ? "aktif" : "nonaktif",
         passing: q.passing || 75
       }))
       
@@ -108,7 +108,6 @@ function Quiz() {
     }
   }
 
-  // 🟢 fetchDivisi - menggunakan axiosInstance
   const fetchDivisi = async () => {
     try {
       const response = await axiosInstance.get("/divisi")
@@ -127,6 +126,24 @@ function Quiz() {
     }
   }
 
+  // Fungsi untuk toggle pilihan divisi
+  const toggleDivisi = (divisiName) => {
+    setSelectedDivisis(prev => {
+      if (prev.includes(divisiName)) {
+        return prev.filter(d => d !== divisiName)
+      } else {
+        return [...prev, divisiName]
+      }
+    })
+    setPage(1)
+  }
+
+  // Fungsi untuk reset semua filter divisi
+  const resetDivisiFilters = () => {
+    setSelectedDivisis([])
+    setPage(1)
+  }
+
   const openDeleteModal = (id, title, e) => {
     e.stopPropagation()
     setDeletingQuizId(id)
@@ -134,7 +151,6 @@ function Quiz() {
     setShowDeleteModal(true)
   }
 
-  // 🟢 handleDelete - menggunakan deleteQuiz()
   const handleDelete = async () => {
     if (!deletingQuizId) return
     
@@ -168,7 +184,7 @@ function Quiz() {
     if (!file) return
     
     const extension = file.name.split('.').pop().toLowerCase()
-    if (!['xlsx', 'xls', 'csv'].includes(extension)) {
+    if (!['xlsx', 'ls', 'csv'].includes(extension)) {
       setError("Format file harus .xlsx, .xls, atau .csv")
       return
     }
@@ -184,7 +200,6 @@ function Quiz() {
     }, 3000)
   }
 
-  // 🟢 handleImport - menggunakan importQuiz()
   const handleImport = async () => {
     if (!importFile) {
       setError("Pilih file Excel terlebih dahulu")
@@ -233,9 +248,10 @@ function Quiz() {
   }
 
   const resetFilters = () => {
-    setSelectedDivisi("all")
+    setSelectedDivisis([])
     setSelectedStatus("all")
     setSearch("")
+    setPage(1)
   }
 
   const formatDate = (dateString) => {
@@ -256,11 +272,17 @@ function Quiz() {
     }
   }
 
-  // Filter logic
+  // Filter logic dengan multiple divisi dan status (aktif/nonaktif)
   const filtered = quiz.filter(q => {
     const matchesSearch = q.judul?.toLowerCase().includes(search.toLowerCase())
-    const matchesDivisi = selectedDivisi === "all" || q.divisi === selectedDivisi
-    const matchesStatus = selectedStatus === "all" || q.status?.toLowerCase() === selectedStatus.toLowerCase()
+    
+    // Filter divisi: jika tidak ada divisi yang dipilih, tampilkan semua
+    // jika ada, cek apakah q.divisi termasuk dalam selectedDivisis
+    const matchesDivisi = selectedDivisis.length === 0 || selectedDivisis.includes(q.divisi)
+    
+    // Filter status: all, aktif, nonaktif
+    const matchesStatus = selectedStatus === "all" || q.status === selectedStatus
+    
     return matchesSearch && matchesDivisi && matchesStatus
   })
 
@@ -448,7 +470,7 @@ function Quiz() {
               >
                 <SlidersHorizontal size={16} />
                 Filter
-                {(selectedDivisi !== "all" || selectedStatus !== "all") && (
+                {(selectedDivisis.length > 0 || selectedStatus !== "all") && (
                   <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
                 )}
               </button>
@@ -472,7 +494,7 @@ function Quiz() {
           </div>
         </div>
 
-        {/* FILTER PANEL */}
+        {/* FILTER PANEL - MULTIPLE SELECT */}
         {showFilter && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-lg p-5 mb-6 animate-in fade-in duration-200">
             <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
@@ -487,40 +509,75 @@ function Quiz() {
                 className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-indigo-50 transition"
               >
                 <X size={12} />
-                Reset Filter
+                Reset Semua Filter
               </button>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Filter Divisi */}
+              {/* Filter Divisi - MULTIPLE SELECT */}
               <div>
-                <label className="text-xs font-semibold text-slate-600 flex items-center gap-1 mb-2">
-                  <Building2 size={12} />
-                  Divisi
-                </label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                    <Building2 size={12} />
+                    Divisi (Bisa pilih lebih dari 1)
+                  </label>
+                  {selectedDivisis.length > 0 && (
+                    <button 
+                      onClick={resetDivisiFilters}
+                      className="text-[10px] text-red-500 hover:text-red-600 flex items-center gap-1"
+                    >
+                      <X size={10} />
+                      Hapus semua
+                    </button>
+                  )}
+                </div>
+                
+                {/* Selected Divisi Chips */}
+                {selectedDivisis.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {selectedDivisis.map(div => (
+                      <span 
+                        key={div}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[10px]"
+                      >
+                        <Building2 size={10} />
+                        {div}
+                        <button 
+                          onClick={() => toggleDivisi(div)}
+                          className="hover:text-indigo-900 ml-0.5"
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
                   <button
                     onClick={() => {
-                      setSelectedDivisi("all")
-                      setPage(1)
+                      if (selectedDivisis.length === divisiList.length && divisiList.length > 0) {
+                        resetDivisiFilters()
+                      } else {
+                        setSelectedDivisis(divisiList.map(d => d.nama_divisi || d.nama))
+                        setPage(1)
+                      }
                     }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      selectedDivisi === "all"
+                      selectedDivisis.length === divisiList.length && divisiList.length > 0
                         ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
-                    Semua Divisi
+                    {selectedDivisis.length === divisiList.length && divisiList.length > 0 ? "Semua" : "Pilih Semua"}
                   </button>
+                  
                   {divisiList.map(div => (
                     <button
                       key={div.id_divisi}
-                      onClick={() => {
-                        setSelectedDivisi(div.nama_divisi)
-                        setPage(1)
-                      }}
+                      onClick={() => toggleDivisi(div.nama_divisi)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                        selectedDivisi === div.nama_divisi
+                        selectedDivisis.includes(div.nama_divisi)
                           ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm"
                           : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                       }`}
@@ -529,9 +586,12 @@ function Quiz() {
                     </button>
                   ))}
                 </div>
+                <p className="text-[10px] text-slate-400 mt-2">
+                  Pilih {selectedDivisis.length} dari {divisiList.length} divisi
+                </p>
               </div>
               
-              {/* Filter Status */}
+              {/* Filter Status - Hanya AKTIF dan NONAKTIF */}
               <div>
                 <label className="text-xs font-semibold text-slate-600 flex items-center gap-1 mb-2">
                   <Tag size={12} />
@@ -562,57 +622,53 @@ function Quiz() {
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1"></div>
                     Aktif
                   </button>
                   <button
                     onClick={() => {
-                      setSelectedStatus("draft")
+                      setSelectedStatus("nonaktif")
                       setPage(1)
                     }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      selectedStatus === "draft"
-                        ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-sm"
+                      selectedStatus === "nonaktif"
+                        ? "bg-gradient-to-r from-slate-500 to-slate-600 text-white shadow-sm"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
-                    Draft
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedStatus("arsip")
-                      setPage(1)
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      selectedStatus === "arsip"
-                        ? "bg-gradient-to-r from-slate-600 to-slate-700 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    Arsip
+                    <div className="w-1.5 h-1.5 bg-slate-400 rounded-full mr-1"></div>
+                    Nonaktif
                   </button>
                 </div>
+                <p className="text-[10px] text-slate-400 mt-2">
+                  Filter berdasarkan status kuis (Aktif = dapat dikerjakan, Nonaktif = tidak dapat dikerjakan)
+                </p>
               </div>
             </div>
             
             {/* Filter info */}
-            {(selectedDivisi !== "all" || selectedStatus !== "all" || search) && (
+            {(selectedDivisis.length > 0 || selectedStatus !== "all" || search) && (
               <div className="mt-4 pt-3 border-t border-slate-100">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] text-slate-500">Filter aktif:</span>
-                  {selectedDivisi !== "all" && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[10px]">
+                  {selectedDivisis.map(div => (
+                    <span key={div} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[10px]">
                       <Building2 size={10} />
-                      {selectedDivisi}
-                      <button onClick={() => setSelectedDivisi("all")} className="hover:text-indigo-900">
+                      {div}
+                      <button onClick={() => toggleDivisi(div)} className="hover:text-indigo-900">
                         <X size={10} />
                       </button>
                     </span>
-                  )}
+                  ))}
                   {selectedStatus !== "all" && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px]">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${
+                      selectedStatus === "aktif" 
+                        ? "bg-emerald-100 text-emerald-700" 
+                        : "bg-slate-100 text-slate-700"
+                    }`}>
                       <Tag size={10} />
-                      {selectedStatus}
-                      <button onClick={() => setSelectedStatus("all")} className="hover:text-purple-900">
+                      {selectedStatus === "aktif" ? "Aktif" : "Nonaktif"}
+                      <button onClick={() => setSelectedStatus("all")} className="hover:text-gray-900">
                         <X size={10} />
                       </button>
                     </span>
@@ -626,6 +682,12 @@ function Quiz() {
                       </button>
                     </span>
                   )}
+                  <button 
+                    onClick={resetFilters}
+                    className="text-[10px] text-red-500 hover:text-red-600 ml-2"
+                  >
+                    Hapus semua filter
+                  </button>
                 </div>
               </div>
             )}
@@ -648,7 +710,7 @@ function Quiz() {
             <div className="mt-4 pt-3 border-t border-slate-100">
               <div className="flex items-center gap-1">
                 <TrendingUp size={12} className="text-indigo-500" />
-                <span className="text-[10px] text-indigo-600 font-semibold">Aktif</span>
+                <span className="text-[10px] text-indigo-600 font-semibold">Tersedia</span>
               </div>
             </div>
           </div>
@@ -714,6 +776,7 @@ function Quiz() {
                   <th className="text-left px-6 py-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Kuis</th>
                   <th className="text-center px-6 py-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Divisi</th>
                   <th className="text-center px-6 py-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Soal</th>
+                  <th className="text-center px-6 py-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
                   <th className="text-center px-6 py-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Dibuat</th>
                   <th className="text-center px-6 py-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Aksi</th>
                 </tr>
@@ -721,7 +784,7 @@ function Quiz() {
               <tbody className="divide-y divide-slate-100">
                 {isEmpty ? (
                   <tr>
-                    <td colSpan="5" className="text-center px-6 py-16">
+                    <td colSpan="6" className="text-center px-6 py-16">
                       <div className="flex flex-col items-center gap-3">
                         <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl flex items-center justify-center">
                           <File size="32" className="text-slate-400" />
@@ -785,6 +848,19 @@ function Quiz() {
                             </span>
                             <span className="text-xs text-slate-500">soal</span>
                           </div>
+                        </td>
+                        <td className="text-center px-6 py-4">
+                          {q.status === "aktif" ? (
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 shadow-sm">
+                              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                              <span className="text-xs font-medium text-emerald-600">Aktif</span>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">
+                              <div className="w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
+                              <span className="text-xs font-medium text-slate-500">Nonaktif</span>
+                            </div>
+                          )}
                         </td>
                         <td className="text-center px-6 py-4">
                           <div className="flex items-center justify-center gap-2">
@@ -912,8 +988,8 @@ function Quiz() {
               <p className="text-xs text-slate-600 leading-relaxed">
                 Klik ikon mata untuk melihat detail kuis, ikon pensil untuk mengedit, 
                 dan ikon tempat sampah untuk menghapus kuis. Gunakan tombol Filter untuk 
-                menyaring berdasarkan divisi atau status. Gunakan tombol Import Excel 
-                untuk mengimport banyak kuis sekaligus dengan file CSV/Excel.
+                menyaring berdasarkan divisi (bisa pilih lebih dari 1) atau status (Aktif/Nonaktif). 
+                Gunakan tombol Import Excel untuk mengimport banyak kuis sekaligus dengan file CSV/Excel.
               </p>
             </div>
           </div>

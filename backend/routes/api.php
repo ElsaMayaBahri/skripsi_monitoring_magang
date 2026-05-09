@@ -206,7 +206,22 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/materi-pelatihan/{id}', [MateriPelatihanController::class, 'destroy']);
     Route::get('/materi-pelatihan/{id}/download', [MateriPelatihanController::class, 'download']);
     Route::get('/materi-pelatihan/divisi/{divisi}', [MateriPelatihanController::class, 'getByDivisi']);
+/*
+|--------------------------------------------------------------------------
+| COO DETAIL PESERTA ROUTES
+|--------------------------------------------------------------------------
+*/
 
+Route::prefix('coo')->group(function () {
+    // Detail peserta untuk COO
+    Route::get('/peserta/{id}/detail', [PesertaController::class, 'getDetailForCOO']);
+    Route::get('/peserta/{id}/kehadiran', [PesertaController::class, 'getKehadiranForCOO']);
+    Route::get('/peserta/{id}/progress-tugas', [PesertaController::class, 'getProgressTugasForCOO']);
+    Route::get('/peserta/{id}/hasil-kuis', [PesertaController::class, 'getHasilKuisForCOO']);
+    Route::get('/peserta/{id}/laporan-akhir', [PesertaController::class, 'getLaporanAkhirForCOO']);
+    Route::get('/peserta/{id}/statistik', [PesertaController::class, 'getStatistikForCOO']);
+    Route::get('/peserta/{id}/aktivitas', [PesertaController::class, 'getAktivitasForCOO']);
+});
     /*
     |--------------------------------------------------------------------------
     | PRESENSI (COO)
@@ -228,6 +243,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/quiz/{id}', [QuizController::class, 'show']);
     Route::put('/quiz/{id}', [QuizController::class, 'update']);
     Route::delete('/quiz/{id}', [QuizController::class, 'destroy']);
+    // Download template import kuis
+Route::get('/quiz/template', [QuizController::class, 'downloadTemplate']);
 
     /*
     |--------------------------------------------------------------------------

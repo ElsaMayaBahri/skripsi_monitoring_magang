@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService"
-import axiosInstance from "../../api/axios"  // ← TAMBAHKAN INI
+import { getQuizDetail, updateQuiz, getQuiz } from "../../api/coo/quizService"
+import { getDivisi } from "../../api/admin/dashboardService"
 import { 
   ArrowLeft, 
   Save, 
@@ -21,7 +21,10 @@ import {
   CheckCircle,
   X,
   Loader2,
-  Eye
+  Eye,
+  Calendar,
+  Power,
+  PowerOff
 } from "lucide-react"
 
 function EditQuiz() {
@@ -35,6 +38,9 @@ function EditQuiz() {
     divisi: "",
     durasi: 30,
     passing: 75,
+    tanggal_mulai: "",
+    tanggal_selesai: "",
+    status: "aktif",
     questions: []
   })
   const [loading, setLoading] = useState(true)
@@ -51,11 +57,29 @@ function EditQuiz() {
   const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false)
   const [deleteIndex, setDeleteIndex] = useState(null)
   
+  // Error dalam modal
+  const [modalError, setModalError] = useState("")
+  
   const [questionForm, setQuestionForm] = useState({
     text: "",
     options: ["", "", "", ""],
     correct: null
   })
+
+  // Helper function untuk format tanggal ke YYYY-MM-DD
+  const formatDateToYMD = (dateString) => {
+    if (!dateString) return ""
+    try {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        return dateString
+      }
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return ""
+      return date.toISOString().split('T')[0]
+    } catch {
+      return ""
+    }
+  }
 
   useEffect(() => {
     fetchQuiz()
@@ -66,23 +90,44 @@ function EditQuiz() {
     setLoading(true)
     setError("")
     try {
-      const response = await api.getQuiz()
+      let foundQuiz = null
       
-      let quizData = []
-      if (response.success && response.data) {
-        quizData = response.data
-      } else if (Array.isArray(response)) {
-        quizData = response
-      } else if (response.data && Array.isArray(response.data)) {
-        quizData = response.data
+      try {
+        const detailResponse = await getQuizDetail(id)
+        if (detailResponse && detailResponse.success && detailResponse.data) {
+          foundQuiz = detailResponse.data
+        }
+      } catch (detailErr) {
+        console.log("Detail not found, trying list...")
       }
       
-      const foundQuiz = quizData.find(q => 
-        q.id == id || q.id_kuis == id || q.id_quiz == id
-      )
+      if (!foundQuiz) {
+        const listResponse = await getQuiz()
+        let quizData = []
+        if (listResponse && listResponse.success && listResponse.data) {
+          quizData = listResponse.data
+        } else if (Array.isArray(listResponse)) {
+          quizData = listResponse
+        } else if (listResponse && listResponse.data && Array.isArray(listResponse.data)) {
+          quizData = listResponse.data
+        }
+        
+        foundQuiz = quizData.find(q => 
+          q.id == id || q.id_kuis == id || q.id_quiz == id
+        )
+      }
       
       if (foundQuiz) {
         const questions = Array.isArray(foundQuiz.questions) ? foundQuiz.questions : []
+        
+        const tanggalMulai = formatDateToYMD(foundQuiz.tanggal_mulai)
+        const tanggalSelesai = formatDateToYMD(foundQuiz.tanggal_selesai)
+        
+        // Konversi status
+        let statusValue = "nonaktif"
+        if (foundQuiz.status === "aktif" || foundQuiz.status === "active" || foundQuiz.is_aktif === true) {
+          statusValue = "aktif"
+        }
         
         setQuiz({
           id: foundQuiz.id || foundQuiz.id_kuis,
@@ -91,7 +136,14 @@ function EditQuiz() {
           divisi: foundQuiz.divisi || "",
           durasi: foundQuiz.durasi || 30,
           passing: foundQuiz.passing || 75,
-          questions: questions
+          tanggal_mulai: tanggalMulai,
+          tanggal_selesai: tanggalSelesai,
+          status: statusValue,
+          questions: questions.map((q, idx) => ({
+            ...q,
+            id: q.id || idx,
+            correctLetter: q.correctLetter || String.fromCharCode(65 + (q.correct || 0))
+          }))
         })
       } else {
         setError("Kuis tidak ditemukan")
@@ -107,13 +159,13 @@ function EditQuiz() {
   const fetchDivisi = async () => {
     setLoadingDivisi(true)
     try {
-      const response = await api.getDivisi()
+      const response = await getDivisi()
       let divisiData = []
-      if (response.success && response.data) {
+      if (response && response.success && response.data) {
         divisiData = response.data
       } else if (Array.isArray(response)) {
         divisiData = response
-      } else if (response.data && Array.isArray(response.data)) {
+      } else if (response && response.data && Array.isArray(response.data)) {
         divisiData = response.data
       }
       setDivisiList(divisiData)
@@ -132,6 +184,13 @@ function EditQuiz() {
     if (error) setError("")
   }
 
+  const toggleStatus = () => {
+    setQuiz(prev => ({
+      ...prev,
+      status: prev.status === "aktif" ? "nonaktif" : "aktif"
+    }))
+  }
+
   const toggleExpand = (questionId) => {
     setExpandedQuestions(prev => ({
       ...prev,
@@ -140,16 +199,18 @@ function EditQuiz() {
   }
 
   const handleAddQuestion = () => {
+    setModalError("")
+    
     if (!questionForm.text.trim()) {
-      setError("Pertanyaan harus diisi")
+      setModalError("Pertanyaan harus diisi")
       return
     }
     if (questionForm.options.some(opt => !opt.trim())) {
-      setError("Semua pilihan jawaban harus diisi")
+      setModalError("Semua pilihan jawaban harus diisi")
       return
     }
     if (questionForm.correct === null) {
-      setError("Pilih jawaban yang benar")
+      setModalError("Silakan pilih jawaban yang benar terlebih dahulu")
       return
     }
 
@@ -185,6 +246,7 @@ function EditQuiz() {
         correct: q.correct !== undefined ? q.correct : null
       })
       setEditingQuestion(index)
+      setModalError("")
       setShowQuestionModal(true)
     }
   }
@@ -210,6 +272,7 @@ function EditQuiz() {
       correct: null
     })
     setEditingQuestion(null)
+    setModalError("")
   }
 
   const handleUpdate = async () => {
@@ -221,17 +284,28 @@ function EditQuiz() {
       setError("Divisi harus dipilih")
       return
     }
+    if (!quiz.tanggal_mulai) {
+      setError("Tanggal mulai harus diisi")
+      return
+    }
+    if (!quiz.tanggal_selesai) {
+      setError("Tanggal selesai harus diisi")
+      return
+    }
 
     setSaving(true)
     setError("")
 
     try {
       const formData = {
-        judul: quiz.judul,
+        judul_kuis: quiz.judul,
         deskripsi: quiz.deskripsi || "",
         divisi: quiz.divisi,
-        durasi: quiz.durasi,
-        passing: quiz.passing,
+        durasi: parseInt(quiz.durasi),
+        passing: parseInt(quiz.passing),
+        tanggal_mulai: quiz.tanggal_mulai,
+        tanggal_selesai: quiz.tanggal_selesai,
+        status: quiz.status,
         questions: (quiz.questions || []).map(q => ({
           text: q.text,
           options: q.options,
@@ -240,16 +314,26 @@ function EditQuiz() {
         total_soal: (quiz.questions || []).length
       }
 
-      const response = await api.updateQuiz(quiz.id, formData)
+      console.log("Sending update data:", formData)
       
-      if (response.success) {
+      const response = await updateQuiz(quiz.id, formData)
+      
+      if (response && response.success) {
         setShowSuccessModal(true)
       } else {
-        setError(response.message || "Gagal mengupdate kuis")
+        setError(response?.message || "Gagal mengupdate kuis")
       }
     } catch (err) {
       console.error("Error updating quiz:", err)
-      setError(err.message || "Terjadi kesalahan saat mengupdate kuis")
+      if (err.response?.data?.errors) {
+        const errors = err.response.data.errors
+        const errorMessages = Object.values(errors).flat().join(", ")
+        setError(errorMessages)
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message)
+      } else {
+        setError(err.message || "Terjadi kesalahan saat mengupdate kuis")
+      }
     } finally {
       setSaving(false)
     }
@@ -297,15 +381,13 @@ function EditQuiz() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-5xl mx-auto">
         
-        {/* SUCCESS MODAL - PREMIUM */}
+        {/* SUCCESS MODAL */}
         {showSuccessModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300">
               <div className="relative">
-                {/* Animated confetti effect */}
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 rounded-t-2xl animate-pulse"></div>
                 
-                {/* Success Icon */}
                 <div className="pt-8 pb-4 text-center">
                   <div className="relative inline-block">
                     <div className="absolute inset-0 bg-emerald-400 rounded-full blur-xl opacity-30 animate-ping"></div>
@@ -315,7 +397,6 @@ function EditQuiz() {
                   </div>
                 </div>
                 
-                {/* Content */}
                 <div className="px-6 pb-6 text-center">
                   <h3 className="text-2xl font-bold text-slate-800 mb-2">Update Berhasil!</h3>
                   <div className="w-16 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-500 mx-auto mb-4"></div>
@@ -327,7 +408,6 @@ function EditQuiz() {
                   </p>
                 </div>
                 
-                {/* Buttons */}
                 <div className="px-6 pb-8 flex flex-col gap-3">
                   <button
                     onClick={() => navigate("/coo/quiz")}
@@ -348,7 +428,7 @@ function EditQuiz() {
           </div>
         )}
 
-        {/* DELETE CONFIRMATION MODAL - PREMIUM */}
+        {/* DELETE CONFIRMATION MODAL */}
         {showConfirmDeleteModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
@@ -546,6 +626,86 @@ function EditQuiz() {
                     />
                   </div>
                 </div>
+
+                {/* TOGGLE STATUS - FITUR BARU */}
+                <div className="pt-2">
+                  <label className="block text-xs font-medium text-slate-600 mb-2">
+                    Status Kuis
+                  </label>
+                  <div 
+                    onClick={toggleStatus}
+                    className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all duration-300 ${
+                      quiz.status === "aktif" 
+                        ? "bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200" 
+                        : "bg-gradient-to-r from-slate-50 to-gray-50 border border-slate-200"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {quiz.status === "aktif" ? (
+                        <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-md">
+                          <Power size={18} className="text-white" />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 bg-slate-400 rounded-xl flex items-center justify-center shadow-md">
+                          <PowerOff size={18} className="text-white" />
+                        </div>
+                      )}
+                      <div>
+                        <p className={`text-sm font-semibold ${quiz.status === "aktif" ? "text-emerald-700" : "text-slate-600"}`}>
+                          {quiz.status === "aktif" ? "Aktif" : "Nonaktif"}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {quiz.status === "aktif" 
+                            ? "Kuis dapat diakses dan dikerjakan oleh peserta" 
+                            : "Kuis tidak dapat diakses oleh peserta"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`relative w-12 h-6 rounded-full transition-all duration-300 ${
+                      quiz.status === "aktif" ? "bg-emerald-500" : "bg-slate-300"
+                    }`}>
+                      <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${
+                        quiz.status === "aktif" ? "right-0.5" : "left-0.5"
+                      }`}></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* TANGGAL MULAI DAN TANGGAL SELESAI */}
+            <div className="mt-6 pt-4 border-t border-slate-100">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-1.5 bg-amber-100 rounded-lg">
+                  <Calendar size={12} className="text-amber-600" />
+                </div>
+                <h3 className="text-sm font-semibold text-slate-700">Periode Pelaksanaan</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                    Tanggal Mulai <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    name="tanggal_mulai"
+                    value={quiz.tanggal_mulai || ""}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                    Tanggal Selesai <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    name="tanggal_selesai"
+                    value={quiz.tanggal_selesai || ""}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400"
+                  />
+                </div>
               </div>
             </div>
 
@@ -686,7 +846,7 @@ function EditQuiz() {
               <Shield size={14} className="text-blue-600" />
             </div>
             <p className="text-xs text-blue-700">
-              <strong className="font-semibold">Tips:</strong> Perubahan akan langsung tersimpan. Pastikan semua data sudah benar sebelum menyimpan.
+              <strong className="font-semibold">Tips:</strong> Gunakan toggle di samping untuk mengaktifkan atau menonaktifkan kuis. Kuis yang Nonaktif tidak akan terlihat oleh peserta.
             </p>
           </div>
         </div>
@@ -717,6 +877,16 @@ function EditQuiz() {
             </div>
             
             <div className="p-5 space-y-4">
+              {modalError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2">
+                  <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-600 flex-1">{modalError}</p>
+                  <button onClick={() => setModalError("")} className="text-red-500 hover:text-red-700">
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+              
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1.5">
                   Pertanyaan <span className="text-red-500">*</span>
@@ -726,7 +896,10 @@ function EditQuiz() {
                   rows={2}
                   className="w-full border border-slate-200 rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 resize-none"
                   value={questionForm.text}
-                  onChange={(e) => setQuestionForm({ ...questionForm, text: e.target.value })}
+                  onChange={(e) => {
+                    setQuestionForm({ ...questionForm, text: e.target.value })
+                    if (modalError) setModalError("")
+                  }}
                 />
               </div>
 
@@ -748,14 +921,18 @@ function EditQuiz() {
                           const newOpt = [...questionForm.options]
                           newOpt[i] = e.target.value
                           setQuestionForm({ ...questionForm, options: newOpt })
+                          if (modalError) setModalError("")
                         }}
                       />
                       <button
                         type="button"
-                        onClick={() => setQuestionForm({ ...questionForm, correct: i })}
+                        onClick={() => {
+                          setQuestionForm({ ...questionForm, correct: i })
+                          if (modalError) setModalError("")
+                        }}
                         className={`w-7 h-7 rounded-lg flex items-center justify-center transition flex-shrink-0 ${
                           questionForm.correct === i
-                            ? "bg-emerald-500 text-white shadow-sm"
+                            ? "bg-emerald-500 text-white shadow-sm scale-105"
                             : "bg-slate-100 text-slate-400 hover:bg-emerald-100 hover:text-emerald-600"
                         }`}
                       >
@@ -793,23 +970,7 @@ function EditQuiz() {
         </div>
       )}
 
-      <style jsx>{`
-        @keyframes shrink {
-          from { width: 100%; }
-          to { width: 0%; }
-        }
-        .animate-in {
-          animation: fadeIn 0.2s ease-out;
-        }
-        .fade-in {
-          animation: fadeIn 0.2s ease-out;
-        }
-        .zoom-in-95 {
-          animation: zoomIn 0.2s ease-out;
-        }
-        .bounce-in {
-          animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-        }
+      <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
@@ -839,6 +1000,15 @@ function EditQuiz() {
           100% {
             transform: scale(1);
           }
+        }
+        .animate-in {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .zoom-in-95 {
+          animation: zoomIn 0.2s ease-out;
+        }
+        .animate-bounce-in {
+          animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
         }
       `}</style>
     </div>

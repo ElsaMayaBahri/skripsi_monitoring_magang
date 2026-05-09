@@ -1,4 +1,4 @@
-// SESUDAHNYA (BENAR):
+// SettingsAttendance.jsx - VERSION FIXED
 import { useState, useEffect } from "react";
 import { 
   Calendar, 
@@ -54,14 +54,32 @@ const SettingsAttendance = () => {
   const [successDetail, setSuccessDetail] = useState("");
   const [successType, setSuccessType] = useState("");
 
+  // 🟢 PERBAIKAN 1: Fungsi timeToMinutes dengan pengecekan tipe data
   const timeToMinutes = (timeStr) => {
-    if (!timeStr) return 15;
-    const parts = timeStr.split(':');
-    if (parts.length >= 2) {
-      const jam = parseInt(parts[0]) || 0;
-      const menit = parseInt(parts[1]) || 0;
-      return (jam * 60) + menit;
+    // Jika sudah dalam bentuk number (menit), return langsung
+    if (typeof timeStr === 'number') {
+      return timeStr;
     }
+    
+    // Jika string kosong atau null/undefined
+    if (!timeStr) return 15;
+    
+    // Jika string, parse dengan split
+    if (typeof timeStr === 'string') {
+      // Cek apakah sudah dalam format HH:MM
+      if (timeStr.includes(':')) {
+        const parts = timeStr.split(':');
+        if (parts.length >= 2) {
+          const jam = parseInt(parts[0]) || 0;
+          const menit = parseInt(parts[1]) || 0;
+          return (jam * 60) + menit;
+        }
+      }
+      // Jika berupa angka dalam string
+      const num = parseInt(timeStr);
+      if (!isNaN(num)) return num;
+    }
+    
     return 15;
   };
 
@@ -93,7 +111,7 @@ const SettingsAttendance = () => {
     }
   };
 
-  // 🟢 PERBAIKAN: Ganti api.getJamKerja() dengan getJamKerja()
+  // 🟢 PERBAIKAN 2: fetchJamKerja dengan pengecekan tipe data batas_terlambat
   const fetchJamKerja = async () => {
     try {
       const response = await getJamKerja();
@@ -105,8 +123,12 @@ const SettingsAttendance = () => {
         const jamPulang = data.jam_pulang ? data.jam_pulang.substring(0, 5) : '17:00';
         
         let batasTerlambatMenit = 15;
-        if (data.batas_terlambat) {
-          batasTerlambatMenit = timeToMinutes(data.batas_terlambat);
+        if (data.batas_terlambat !== null && data.batas_terlambat !== undefined) {
+          if (typeof data.batas_terlambat === 'number') {
+            batasTerlambatMenit = data.batas_terlambat;
+          } else if (typeof data.batas_terlambat === 'string') {
+            batasTerlambatMenit = timeToMinutes(data.batas_terlambat);
+          }
         }
         
         setJamKerja({
@@ -114,14 +136,13 @@ const SettingsAttendance = () => {
           jam_pulang: jamPulang,
           batas_terlambat: batasTerlambatMenit
         });
-        setIdJamKerja(data.id_jam_kerja);
+        setIdJamKerja(data.id_jam_kerja || data.id);
       }
     } catch (error) {
       console.error('Error fetching working hours:', error);
     }
   };
 
-  // 🟢 PERBAIKAN: Ganti api.getHariLibur() dengan getHariLibur()
   const fetchHariLibur = async () => {
     try {
       const response = await getHariLibur();
@@ -139,8 +160,11 @@ const SettingsAttendance = () => {
       const formattedLibur = dataLibur.map(item => ({
         id: item.id_libur || item.id,
         tanggal: item.tanggal,
-        keterangan: item.keterangan || item.name
+        keterangan: item.keterangan || item.name || item.nama
       }));
+      
+      // Urutkan berdasarkan tanggal
+      formattedLibur.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
       
       setHariLibur(formattedLibur);
     } catch (error) {
@@ -149,7 +173,6 @@ const SettingsAttendance = () => {
     }
   };
 
-  // 🟢 PERBAIKAN: Ganti api.updateJamKerja() dan api.createJamKerja()
   const saveJamKerja = async () => {
     if (!jamKerja.jam_masuk || !jamKerja.jam_pulang) {
       showPremiumPopup('Validasi Gagal', 'Jam masuk dan jam pulang harus diisi', 'error');
@@ -193,7 +216,6 @@ const SettingsAttendance = () => {
     }
   };
 
-  // 🟢 PERBAIKAN: Ganti api.updateHariLibur() dan api.createHariLibur()
   const addHariLibur = async () => {
     if (!formLibur.tanggal || !formLibur.keterangan) {
       showPremiumPopup('Validasi Gagal', 'Tanggal dan keterangan hari libur wajib diisi', 'error');
@@ -238,7 +260,6 @@ const SettingsAttendance = () => {
     setShowDeleteConfirm(true);
   };
 
-  // 🟢 PERBAIKAN: Ganti api.deleteHariLibur() dengan deleteHariLibur()
   const deleteHariLiburItem = async () => {
     if (!deleteTarget) return;
     
@@ -298,6 +319,17 @@ const SettingsAttendance = () => {
     if (!time) return '-';
     return time.substring(0, 5);
   };
+
+  if (loading && hariLibur.length === 0 && !jamKerja.jam_masuk) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50/30 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
+          <p className="text-slate-500">Memuat pengaturan...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50/30">
@@ -400,7 +432,7 @@ const SettingsAttendance = () => {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        {/* HEADER - DIPERBAIKI JARAKNYA */}
+        {/* HEADER */}
         <div className="mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
@@ -588,7 +620,7 @@ const SettingsAttendance = () => {
         {/* HOLIDAYS TAB */}
         {activeTab === 'hari-libur' && (
           <div className="space-y-6">
-            {/* UPCOMING HOLIDAYS BANNER - WARNA MERAH */}
+            {/* UPCOMING HOLIDAYS BANNER */}
             {upcomingHariLibur.length > 0 && (
               <div className="mb-6 bg-gradient-to-r from-red-50 to-rose-50 rounded-2xl p-4 border border-red-200">
                 <div className="flex items-center gap-3">
@@ -650,15 +682,15 @@ const SettingsAttendance = () => {
                               </div>
                               <span className="text-slate-700 font-medium">{tanggalFormatted}</span>
                             </div>
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-medium rounded-full">
                               {getNamaHari(libur.tanggal)}
                             </span>
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             <span className="text-slate-800 font-medium">{libur.keterangan}</span>
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-center gap-2">
                               <button
@@ -674,7 +706,7 @@ const SettingsAttendance = () => {
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
-                          </td>
+                           </td>
                         </tr>
                       );
                     })}
@@ -728,7 +760,7 @@ const SettingsAttendance = () => {
               )}
             </div>
 
-            {/* CATATAN - WARNA BIRU */}
+            {/* CATATAN */}
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 border border-blue-100">
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5" />
@@ -747,7 +779,7 @@ const SettingsAttendance = () => {
       {showModalLibur && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="flex justify-between items-center p-6 border-t border-blue-100">
+            <div className="flex justify-between items-center p-6 border-b border-blue-100">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl">
                   {editingLibur ? <Edit2 className="w-5 h-5 text-white" /> : <Plus className="w-5 h-5 text-white" />}
@@ -802,6 +834,23 @@ const SettingsAttendance = () => {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes zoomIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .animate-zoomIn {
+          animation: zoomIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };

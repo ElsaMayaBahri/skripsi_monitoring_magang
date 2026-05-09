@@ -18,6 +18,8 @@ import {
   ArrowRight,
   Save,
   Loader2,
+  PartyPopper,
+  ExternalLink,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import axiosInstance from "../../api/axios";
@@ -73,6 +75,8 @@ function AddMateri() {
   const [success, setSuccess] = useState(null);
   const [divisiList, setDivisiList] = useState([]);
   const [loadingDivisi, setLoadingDivisi] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successData, setSuccessData] = useState(null);
   
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedDivisi, setSelectedDivisi] = useState("all");
@@ -241,10 +245,20 @@ function AddMateri() {
       });
       
       if (response.data && response.data.success) {
-        setSuccess("Materi berhasil ditambahkan! Mengalihkan...");
+        // Simpan data untuk popup modal
+        setSuccessData({
+          judul: form.judul.trim(),
+          divisi: form.divisi,
+          kategori: form.kategori,
+          file_name: file.name,
+        });
+        setShowSuccessModal(true);
+        
+        // Reset form setelah sukses
         setTimeout(() => {
-          navigate("/coo/materi");
-        }, 1500);
+          setForm({ judul: "", deskripsi: "", divisi: "", kategori: "" });
+          removeFile();
+        }, 100);
       } else {
         setError(response.data?.message || "Gagal menambahkan materi");
       }
@@ -254,6 +268,17 @@ function AddMateri() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleGoToMateri = () => {
+    setShowSuccessModal(false);
+    navigate("/coo/materi");
+  };
+
+  const handleAddAnother = () => {
+    setShowSuccessModal(false);
+    setForm({ judul: "", deskripsi: "", divisi: "", kategori: "" });
+    removeFile();
   };
 
   const fileIconData = fileInfo ? getFileIcon(fileInfo.type) : null;
@@ -306,17 +331,6 @@ function AddMateri() {
             <button onClick={() => setError(null)} className="text-red-600 hover:text-red-800">
               <X size={16} />
             </button>
-          </div>
-        )}
-
-        {/* SUCCESS ALERT */}
-        {success && (
-          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-emerald-800">Berhasil!</p>
-              <p className="text-xs text-emerald-600 mt-1">{success}</p>
-            </div>
           </div>
         )}
 
@@ -647,6 +661,88 @@ function AddMateri() {
         )}
 
       </div>
+
+      {/* SUCCESS MODAL POPUP PREMIUM */}
+      {showSuccessModal && successData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in duration-300">
+            {/* Header Modal dengan gradient */}
+            <div className="relative bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-5 text-center">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12"></div>
+              <div className="relative">
+                <div className="w-16 h-16 mx-auto bg-white/20 rounded-full flex items-center justify-center mb-3">
+                  <PartyPopper className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-white text-xl font-bold">Materi Berhasil Ditambahkan!</h3>
+                <p className="text-emerald-100 text-sm mt-1">Materi telah diterbitkan dan tersedia untuk peserta</p>
+              </div>
+            </div>
+            
+            {/* Body Modal */}
+            <div className="p-6">
+              <div className="bg-emerald-50 rounded-xl p-4 mb-5">
+                <div className="flex items-start gap-3">
+                  <div className="p-1.5 bg-emerald-100 rounded-lg">
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-emerald-800">Detail Materi</p>
+                    <div className="mt-2 space-y-1.5">
+                      <p className="text-xs text-emerald-700">
+                        <span className="font-medium">Judul:</span> {successData.judul}
+                      </p>
+                      <p className="text-xs text-emerald-700">
+                        <span className="font-medium">Divisi:</span> {successData.divisi}
+                      </p>
+                      <p className="text-xs text-emerald-700">
+                        <span className="font-medium">Kategori:</span> {successData.kategori}
+                      </p>
+                      <p className="text-xs text-emerald-700">
+                        <span className="font-medium">File:</span> {successData.file_name}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <p className="text-xs text-slate-500 text-center mb-5">
+                Materi sudah dapat diakses oleh semua peserta pelatihan di halaman materi.
+              </p>
+              
+              {/* Tombol Aksi */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddAnother}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-600 text-sm font-medium hover:bg-slate-50 transition-all"
+                >
+                  + Tambah Lagi
+                </button>
+                <button
+                  onClick={handleGoToMateri}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all flex items-center justify-center gap-2"
+                >
+                  <ExternalLink size={14} />
+                  Lihat Materi
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes zoomIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-in { animation: fadeIn 0.2s ease-out; }
+        .zoom-in { animation: zoomIn 0.3s ease-out; }
+      `}</style>
     </div>
   );
 }

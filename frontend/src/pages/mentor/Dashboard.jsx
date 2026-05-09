@@ -1,6 +1,6 @@
 // src/pages/mentor/Dashboard.jsx
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Users,
   UserCheck,
@@ -36,6 +36,7 @@ import {
 } from "../../api/mentor/dashboardService";
 
 function MentorDashboard() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   
@@ -181,6 +182,31 @@ function MentorDashboard() {
     return <Medal size="10" className="text-slate-400" />;
   };
 
+  // Fungsi navigasi untuk card statistik
+  const handleStatCardClick = (cardType) => {
+    switch(cardType) {
+      case 'totalMentees':
+        navigate('/mentor/daftar-peserta');
+        break;
+      case 'pendingReviews':
+        navigate('/mentor/tugas-perlu-review');
+        break;
+      case 'progressProgram':
+        navigate('/mentor/daftar-peserta');
+        break;
+      case 'averageScore':
+        navigate('/mentor/input-nilai-manual');
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Fungsi navigasi untuk peserta bermasalah
+  const handleProblematicClick = (participantId) => {
+    navigate(`/mentor/peserta/${participantId}`);
+  };
+
   const quickActions = [
     { icon: PlusCircle, label: "Tambah Materi", link: "/mentor/add-materi" },
     { icon: ClipboardList, label: "Buat Tugas", link: "/mentor/add-tugas" },
@@ -238,10 +264,13 @@ function MentorDashboard() {
           </div>
         </div>
 
-        {/* Stats Cards - 4 Cards Utama */}
+        {/* Stats Cards - 4 Cards Utama dengan fungsi klik */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Card 1 - Total Peserta */}
-          <div className="group relative overflow-hidden bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          <div 
+            onClick={() => handleStatCardClick('totalMentees')}
+            className="group relative overflow-hidden bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+          >
             <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
             <div className="relative p-5">
               <div className="flex items-center justify-between mb-3">
@@ -270,7 +299,10 @@ function MentorDashboard() {
           </div>
 
           {/* Card 2 - Perlu Review */}
-          <div className="group relative overflow-hidden bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          <div 
+            onClick={() => handleStatCardClick('pendingReviews')}
+            className="group relative overflow-hidden bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+          >
             <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
             <div className="relative p-5">
               <div className="flex items-center justify-between mb-3">
@@ -290,7 +322,10 @@ function MentorDashboard() {
           </div>
 
           {/* Card 3 - Progress Program */}
-          <div className="group relative overflow-hidden bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          <div 
+            onClick={() => handleStatCardClick('progressProgram')}
+            className="group relative overflow-hidden bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+          >
             <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
             <div className="relative p-5">
               <div className="flex items-center justify-between mb-3">
@@ -319,7 +354,10 @@ function MentorDashboard() {
           </div>
 
           {/* Card 4 - Rata-rata Nilai */}
-          <div className="group relative overflow-hidden bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          <div 
+            onClick={() => handleStatCardClick('averageScore')}
+            className="group relative overflow-hidden bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+          >
             <div className="relative p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm group-hover:scale-110 transition-transform duration-300">
@@ -349,7 +387,7 @@ function MentorDashboard() {
           </div>
         </div>
 
-        {/* Alert Peserta Bermasalah */}
+        {/* Alert Peserta Bermasalah - dengan fungsi klik */}
         {problematicParticipants.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
@@ -358,7 +396,11 @@ function MentorDashboard() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {problematicParticipants.slice(0, 3).map((participant, idx) => (
-                <div key={idx} className="bg-white/90 backdrop-blur-sm rounded-xl shadow-md border border-red-100 p-4 hover:shadow-lg transition-all duration-200">
+                <div 
+                  key={idx} 
+                  onClick={() => handleProblematicClick(participant.id)}
+                  className="bg-white/90 backdrop-blur-sm rounded-xl shadow-md border border-red-100 p-4 hover:shadow-lg transition-all duration-200 cursor-pointer"
+                >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
@@ -369,9 +411,9 @@ function MentorDashboard() {
                         <p className="text-[10px] text-red-600">{participant.issue}</p>
                       </div>
                     </div>
-                    <Link to={`/mentor/peserta/${participant.id}`}>
-                      <button className="text-xs text-teal-600 hover:text-teal-700 font-medium">Lihat →</button>
-                    </Link>
+                    <div className="text-xs text-teal-600 font-medium flex items-center gap-1">
+                      Lihat <ChevronRight size={10} />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <div>
@@ -394,7 +436,7 @@ function MentorDashboard() {
           </div>
         )}
 
-        {/* Quick Actions */}
+        {/* Quick Actions - sudah menggunakan Link */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-1 h-6 bg-gradient-to-b from-teal-500 to-blue-600 rounded-full"></div>
@@ -415,7 +457,7 @@ function MentorDashboard() {
           </div>
         </div>
 
-        {/* Daftar Peserta Singkat */}
+        {/* Daftar Peserta Singkat - dengan fungsi klik pada card */}
         <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-100">
           <div className="relative h-1.5 bg-gradient-to-r from-teal-500 to-blue-600"></div>
           <div className="p-5">
@@ -438,44 +480,46 @@ function MentorDashboard() {
               {recentParticipants.slice(0, 4).map((participant, idx) => {
                 const rankGradient = getRankGradient(participant.rank);
                 return (
-                  <Link key={idx} to={`/mentor/peserta/${participant.id}`}>
-                    <div className="p-4 rounded-xl bg-slate-50/50 hover:bg-slate-50 transition-all duration-200 cursor-pointer group">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="relative">
-                          <div className={`w-10 h-10 rounded-xl bg-gradient-to-r ${rankGradient} flex items-center justify-center text-white font-bold shadow-md group-hover:scale-105 transition-transform`}>
-                            {participant.name?.charAt(0) || "P"}
-                          </div>
-                          <div className="absolute -bottom-1 -right-1">
-                            {getRankIcon(participant.rank)}
-                          </div>
+                  <div 
+                    key={idx} 
+                    onClick={() => navigate(`/mentor/peserta/${participant.id}`)}
+                    className="p-4 rounded-xl bg-slate-50/50 hover:bg-slate-50 transition-all duration-200 cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="relative">
+                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-r ${rankGradient} flex items-center justify-center text-white font-bold shadow-md group-hover:scale-105 transition-transform`}>
+                          {participant.name?.charAt(0) || "P"}
                         </div>
-                        <div>
-                          <p className="text-sm font-semibold text-slate-700 group-hover:text-teal-600 transition-colors">
-                            {participant.name}
-                          </p>
-                          <p className="text-[10px] text-slate-400">{participant.divisi}</p>
+                        <div className="absolute -bottom-1 -right-1">
+                          {getRankIcon(participant.rank)}
                         </div>
                       </div>
-                      <div className="space-y-2">
-                        <div>
-                          <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                            <span>Progress Tugas</span>
-                            <span className={`font-semibold ${participant.progress < 70 ? 'text-red-600' : 'text-teal-600'}`}>{participant.progress}%</span>
-                          </div>
-                          <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                            <div className={`h-full bg-gradient-to-r ${rankGradient} rounded-full`} style={{ width: `${participant.progress}%` }}></div>
-                          </div>
-                        </div>
-                        <div className="flex justify-between items-center pt-1">
-                          <div className="flex items-center gap-1">
-                            <UserCheck size={10} className="text-emerald-500" />
-                            <span className="text-[9px] text-slate-500">Kehadiran</span>
-                          </div>
-                          <span className={`text-[10px] font-semibold ${participant.attendance < 70 ? 'text-red-600' : 'text-emerald-600'}`}>{participant.attendance}%</span>
-                        </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700 group-hover:text-teal-600 transition-colors">
+                          {participant.name}
+                        </p>
+                        <p className="text-[10px] text-slate-400">{participant.divisi}</p>
                       </div>
                     </div>
-                  </Link>
+                    <div className="space-y-2">
+                      <div>
+                        <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                          <span>Progress Tugas</span>
+                          <span className={`font-semibold ${participant.progress < 70 ? 'text-red-600' : 'text-teal-600'}`}>{participant.progress}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                          <div className={`h-full bg-gradient-to-r ${rankGradient} rounded-full`} style={{ width: `${participant.progress}%` }}></div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center pt-1">
+                        <div className="flex items-center gap-1">
+                          <UserCheck size={10} className="text-emerald-500" />
+                          <span className="text-[9px] text-slate-500">Kehadiran</span>
+                        </div>
+                        <span className={`text-[10px] font-semibold ${participant.attendance < 70 ? 'text-red-600' : 'text-emerald-600'}`}>{participant.attendance}%</span>
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
             </div>

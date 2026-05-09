@@ -21,6 +21,10 @@ import DashboardCOO from "./pages/coo/Dashboard";
 import MateriCOO from "./pages/coo/Materi";
 import AddMateriCOO from "./pages/coo/AddMateri";
 import EditMateriCOO from "./pages/coo/EditMateri";
+import DataManagement from "./pages/coo/DataManagement";
+import DetailPeserta from "./pages/coo/DetailPeserta";
+import Profile from "./pages/coo/Profile"
+import Settings from "./pages/coo/Settings"
 
 // QUIZ
 import Quiz from "./pages/coo/Quiz";
@@ -202,6 +206,10 @@ function App() {
           <Route path="presensi" element={<PresensiCOO />} />
           <Route path="laporan-presensi" element={<LaporanPresensiCOO />} />
           <Route path="settings-attendance" element={<SettingsAttendance />} />
+          <Route path="/coo/data-management" element={<DataManagement />} />
+          <Route path="peserta/:id/detail" element={<DetailPeserta />} />
+          <Route path="/coo/profile" element={<Profile />} />
+          <Route path="/coo/settings" element={<Settings />} />
         </Route>
 
         {/* MENTOR ROUTES */}

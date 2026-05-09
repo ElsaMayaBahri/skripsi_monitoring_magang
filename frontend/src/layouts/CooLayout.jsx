@@ -22,7 +22,11 @@ import {
   Download,
   Calendar,
   Clock,
-  Shield
+  Shield,
+  Layers,
+  Users,
+  BarChart3,
+  AlertCircle
 } from "lucide-react"
 
 function CooLayout() {
@@ -37,6 +41,7 @@ function CooLayout() {
   const [pengaturanOpen, setPengaturanOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
 
   const [materiCount, setMateriCount] = useState(0)
   const [quizCount, setQuizCount] = useState(0)
@@ -46,8 +51,8 @@ function CooLayout() {
   const userInitial = currentUser.nama
     ? currentUser.nama.charAt(0).toUpperCase()
     : "C"
-  const userFullName = currentUser.nama || "User"
-  const userEmail = currentUser.email || "user@kuantaacademy.com"
+  const userFullName = currentUser.nama || "COO Perusahaan"
+  const userEmail = currentUser.email || "coo@kuanta.id"
 
   useEffect(() => {
     const storedMateri = JSON.parse(localStorage.getItem("materi")) || []
@@ -85,6 +90,9 @@ function CooLayout() {
     if (path === "/coo/presensi") return location.pathname === "/coo/presensi"
     if (path === "/coo/laporan-presensi") return location.pathname === "/coo/laporan-presensi"
     if (path === "/coo/settings-attendance") return location.pathname === "/coo/settings-attendance"
+    if (path === "/coo/data-management") return location.pathname === "/coo/data-management"
+    if (path === "/coo/profile") return location.pathname === "/coo/profile"
+    if (path === "/coo/settings") return location.pathname === "/coo/settings"
     return location.pathname.includes(path)
   }
 
@@ -92,6 +100,7 @@ function CooLayout() {
     const path = location.pathname.replace("/coo/", "")
     const titles = {
       "dashboard": "Dashboard",
+      "data-management": "Manajemen Data",
       "materi": "Materi Kompetensi",
       "add-materi": "Tambah Materi",
       "edit-materi": "Edit Materi",
@@ -101,14 +110,26 @@ function CooLayout() {
       "add-question": "Tambah Pertanyaan",
       "presensi": "Data Presensi Peserta",
       "laporan-presensi": "Laporan Rekap Presensi",
-      "settings-attendance": "Pengaturan Hari Libur & Jam Kerja"
+      "settings-attendance": "Pengaturan Hari Libur & Jam Kerja",
+      "profile": "Profil Saya",
+      "settings": "Pengaturan Akun"
     }
     return titles[path] || path.charAt(0).toUpperCase() + path.slice(1)
   }
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true)
+    setProfileOpen(false)
+  }
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false)
     localStorage.clear()
     navigate("/login")
+  }
+
+  const handleCancelLogout = () => {
+    setShowLogoutModal(false)
   }
 
   const unreadCount = notifications.filter(n => !n.is_read).length
@@ -121,11 +142,6 @@ function CooLayout() {
   const handleSettings = () => {
     setProfileOpen(false)
     navigate("/coo/settings")
-  }
-
-  const handleHelp = () => {
-    setProfileOpen(false)
-    navigate("/coo/help")
   }
 
   const isMateriActive = () => {
@@ -144,6 +160,44 @@ function CooLayout() {
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden relative">
       
+      {/* LOGOUT CONFIRMATION MODAL */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-zoomIn">
+            <div className="relative">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-500 to-rose-500 rounded-t-2xl"></div>
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-red-100 rounded-xl">
+                    <LogOut className="w-6 h-6 text-red-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-slate-800">Konfirmasi Keluar</h3>
+                </div>
+                <p className="text-slate-600 mb-6">
+                  Apakah Anda yakin ingin mengakhiri sesi ini?
+                  <br />
+                  <span className="text-sm text-slate-400">Anda akan keluar dari dashboard COO dan perlu login kembali untuk mengaksesnya.</span>
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCancelLogout}
+                    className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={handleConfirmLogout}
+                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-xl text-white font-medium hover:shadow-lg transition-all"
+                  >
+                    Ya, Keluar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* DECORATIVE GRADIENT LINE */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-400 via-blue-500 to-teal-400 z-50"></div>
 
@@ -174,6 +228,7 @@ function CooLayout() {
             <div className="mb-4">
               <ul className="space-y-1 text-sm">
                 
+                {/* DASHBOARD */}
                 <Link to="/coo/dashboard">
                   <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
                     isActive("/coo/dashboard")
@@ -183,6 +238,21 @@ function CooLayout() {
                     <LayoutDashboard size={18} />
                     {!collapsed && <span className="font-medium">Dashboard</span>}
                     {isActive("/coo/dashboard") && !collapsed && (
+                      <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
+                    )}
+                  </li>
+                </Link>
+
+                {/* MANAJEMEN DATA - LANGSUNG TANPA DROPDOWN */}
+                <Link to="/coo/data-management">
+                  <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                    isActive("/coo/data-management")
+                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}>
+                    <Layers size={18} />
+                    {!collapsed && <span className="font-medium">Manajemen Data</span>}
+                    {isActive("/coo/data-management") && !collapsed && (
                       <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
                     )}
                   </li>
@@ -385,7 +455,7 @@ function CooLayout() {
           {/* LOGOUT BUTTON */}
           <div className="p-4 border-t border-gray-200">
             <button
-              onClick={handleLogout}
+              onClick={handleLogoutClick}
               className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white py-2.5 rounded-xl transition-all duration-200 shadow-md shadow-red-500/20 group"
             >
               <LogOut size={18} className="transition-transform group-hover:scale-110" />
@@ -403,7 +473,7 @@ function CooLayout() {
 
         </div>
 
-        {/* RIGHT SIDE - LANGSUNG MENYATU TANPA JARAK */}
+        {/* RIGHT SIDE */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white">
           
           {/* TOPBAR */}
@@ -431,7 +501,7 @@ function CooLayout() {
             {/* RIGHT SIDE */}
             <div className="flex items-center gap-4">
               
-              {/* DATE TIME - Compact & Premium */}
+              {/* DATE TIME */}
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-gray-50/80 rounded-xl border border-gray-200/80 shadow-sm">
                 <div className="flex items-center gap-1.5">
                   <Calendar size={14} className="text-teal-500" />
@@ -552,26 +622,13 @@ function CooLayout() {
                           <p className="text-xs text-gray-400">Atur preferensi aplikasi</p>
                         </div>
                       </button>
-                      
-                      <button 
-                        onClick={handleHelp}
-                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition group"
-                      >
-                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-teal-50 transition">
-                          <HelpCircle size={14} className="text-gray-500 group-hover:text-teal-500" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <p className="font-medium">Pusat Bantuan</p>
-                          <p className="text-xs text-gray-400">Dokumentasi & support</p>
-                        </div>
-                      </button>
                     </div>
 
                     <div className="border-t border-gray-200 my-1"></div>
 
                     <div className="py-2 pb-3">
                       <button 
-                        onClick={handleLogout}
+                        onClick={handleLogoutClick}
                         className="w-full flex items-center gap-3 px-5 py-3 text-sm text-red-600 hover:bg-red-50 transition group"
                       >
                         <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center group-hover:bg-red-100 transition">
@@ -589,7 +646,7 @@ function CooLayout() {
             </div>
           </div>
 
-          {/* PAGE CONTENT - LANGSUNG MENYATU TANPA PADDING */}
+          {/* PAGE CONTENT */}
           <div className="flex-1 overflow-y-auto">
             <Outlet />
           </div>
@@ -598,6 +655,15 @@ function CooLayout() {
 
       </div>
 
+      <style>{`
+        @keyframes zoomIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-zoomIn {
+          animation: zoomIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   )
 }

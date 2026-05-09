@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService"
-import axiosInstance from "../../api/axios"  // ← TAMBAHKAN INI
+import { getQuizDetail } from "../../api/coo/quizService"
 import {
   ArrowLeft,
   BookOpen,
@@ -17,10 +17,17 @@ import {
   XCircle,
   FileText,
   Target,
-  Star,
-  BarChart3,
   ChevronRight,
-  Edit3  // 🔥 TAMBAHKAN INI
+  CalendarRange,
+  PlayCircle,
+  Flag,
+  Building2,
+  Timer,
+  Trophy,
+  FileQuestion,
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight
 } from "lucide-react"
 
 function QuizDetail() {
@@ -31,6 +38,10 @@ function QuizDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expandedQuestions, setExpandedQuestions] = useState({})
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const questionsPerPage = 10
 
   useEffect(() => {
     fetchQuizDetail()
@@ -40,37 +51,26 @@ function QuizDetail() {
     setLoading(true)
     setError(null)
     try {
-      const response = await api.getQuiz()
-      console.log("Quiz response:", response)
+      const response = await getQuizDetail(id)
+      console.log("Quiz detail response:", response)
       
-      let quizData = []
       if (response && response.success && response.data) {
-        quizData = response.data
-      } else if (response && response.data && Array.isArray(response.data)) {
-        quizData = response.data
-      } else if (Array.isArray(response)) {
-        quizData = response
-      }
-      
-      // Cari quiz berdasarkan ID
-      const foundQuiz = quizData.find(q => 
-        q.id == id || q.id_kuis == id || q.id_quiz == id
-      )
-      
-      if (foundQuiz) {
-        // Transform data ke format yang konsisten
+        const data = response.data
+        
         setQuiz({
-          id: foundQuiz.id || foundQuiz.id_kuis,
-          judul: foundQuiz.judul || foundQuiz.title || foundQuiz.judul_kuis || "Tanpa Judul",
-          deskripsi: foundQuiz.deskripsi || "",
-          divisi: foundQuiz.divisi || "Umum",
-          durasi: foundQuiz.durasi || 30,
-          passing: foundQuiz.passing || 75,
-          total_soal: foundQuiz.total_soal || foundQuiz.questions?.length || 0,
-          questions: foundQuiz.questions || [],
-          peserta: foundQuiz.peserta || 0,
-          created_at: foundQuiz.created_at || foundQuiz.createdAt,
-          status: foundQuiz.status || "aktif"
+          id: data.id_kuis || data.id,
+          judul: data.judul || data.title || "Tanpa Judul",
+          deskripsi: data.deskripsi || "",
+          divisi: data.divisi || "Umum",
+          durasi: data.durasi || 30,
+          passing: data.passing_grade || data.passing || 75,
+          total_soal: data.total_soal || data.questions?.length || 0,
+          questions: data.questions || [],
+          peserta: data.peserta_count || data.peserta || 0,
+          created_at: data.created_at,
+          status: data.status || "aktif",
+          tanggal_mulai: data.tanggal_mulai || data.start_date || null,
+          tanggal_selesai: data.tanggal_selesai || data.end_date || null
         })
       } else {
         setError("Kuis tidak ditemukan")
@@ -91,17 +91,34 @@ function QuizDetail() {
   }
 
   const formatDate = (dateString) => {
-    if (!dateString) return "Tanggal tidak tersedia"
+    if (!dateString) return "-"
     try {
       const date = new Date(dateString)
-      if (isNaN(date.getTime())) return "Tanggal tidak valid"
+      if (isNaN(date.getTime())) return "-"
       return date.toLocaleDateString("id-ID", {
         day: "numeric",
         month: "long",
         year: "numeric"
       })
     } catch {
-      return "Tanggal error"
+      return "-"
+    }
+  }
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "-"
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return "-"
+      return date.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    } catch {
+      return "-"
     }
   }
 
@@ -110,10 +127,29 @@ function QuizDetail() {
       return { text: "Aktif", color: "text-emerald-600", bg: "bg-emerald-50", icon: CheckCircle }
     } else if (status === "akan_datang") {
       return { text: "Akan Datang", color: "text-amber-600", bg: "bg-amber-50", icon: Clock }
+    } else if (status === "selesai") {
+      return { text: "Selesai", color: "text-slate-500", bg: "bg-slate-100", icon: Flag }
     } else {
-      return { text: "Selesai", color: "text-slate-500", bg: "bg-slate-100", icon: XCircle }
+      return { text: status || "Unknown", color: "text-slate-500", bg: "bg-slate-100", icon: XCircle }
     }
   }
+
+  // Pagination logic
+  const totalQuestions = quiz?.questions?.length || 0
+  const totalPages = Math.ceil(totalQuestions / questionsPerPage)
+  const startIndex = (currentPage - 1) * questionsPerPage
+  const endIndex = startIndex + questionsPerPage
+  const currentQuestions = quiz?.questions?.slice(startIndex, endIndex) || []
+
+  const goToPage = (page) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)))
+    setExpandedQuestions({}) // Close all expanded questions when changing page
+  }
+
+  const goToFirstPage = () => goToPage(1)
+  const goToLastPage = () => goToPage(totalPages)
+  const goToNextPage = () => goToPage(currentPage + 1)
+  const goToPrevPage = () => goToPage(currentPage - 1)
 
   if (loading) {
     return (
@@ -154,28 +190,17 @@ function QuizDetail() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-6xl mx-auto">
         
-        {/* HEADER SECTION */}
+        {/* HEADER SECTION - Tanpa tombol kembali di atas */}
         <div className="mb-6">
-          <button
-            onClick={() => navigate("/coo/quiz")}
-            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 mb-3 transition text-sm"
-          >
-            <ArrowLeft size={14} />
-            Kembali ke Daftar Kuis
-          </button>
-          
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-xl shadow-md">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 via-blue-800 to-indigo-800 bg-clip-text text-transparent">
+              <h1 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-slate-800 via-blue-800 to-indigo-800 bg-clip-text text-transparent">
                 Detail Kuis
               </h1>
-              <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-emerald-500 rounded-full"></span>
-                Informasi lengkap tentang kuis
-              </p>
+              <p className="text-xs text-slate-500">Informasi lengkap tentang kuis</p>
             </div>
           </div>
         </div>
@@ -187,7 +212,8 @@ function QuizDetail() {
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="relative h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
             <div className="p-6">
-              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+              {/* Judul, Deskripsi, Status */}
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <BookOpen size={18} className="text-blue-500" />
@@ -203,48 +229,45 @@ function QuizDetail() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-4 border-t border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Users size={14} className="text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-400">Divisi</p>
-                    <p className="text-sm font-medium text-slate-700">{quiz.divisi}</p>
-                  </div>
+              {/* Grid Info - 2 kolom */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-8">
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wide">Divisi</span>
+                  <span className="text-base font-semibold text-slate-800 mt-1">{quiz.divisi}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                    <Clock size={14} className="text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-400">Durasi</p>
-                    <p className="text-sm font-medium text-slate-700">{quiz.durasi} menit</p>
-                  </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wide">Durasi</span>
+                  <span className="text-base font-semibold text-slate-800 mt-1">{quiz.durasi} menit</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <Target size={14} className="text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-400">Passing Grade</p>
-                    <p className="text-sm font-medium text-slate-700">{quiz.passing}%</p>
-                  </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wide">Passing Grade</span>
+                  <span className="text-base font-semibold text-slate-800 mt-1">{quiz.passing}%</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
-                    <Calendar size={14} className="text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-400">Dibuat</p>
-                    <p className="text-sm font-medium text-slate-700">{formatDate(quiz.created_at)}</p>
-                  </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wide">Total Soal</span>
+                  <span className="text-base font-semibold text-slate-800 mt-1">{quiz.total_soal} soal</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wide">Tanggal Mulai</span>
+                  <span className="text-base font-semibold text-slate-800 mt-1">{formatDateTime(quiz.tanggal_mulai)}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wide">Tanggal Selesai</span>
+                  <span className="text-base font-semibold text-slate-800 mt-1">{formatDateTime(quiz.tanggal_selesai)}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wide">Dibuat pada</span>
+                  <span className="text-base font-semibold text-slate-800 mt-1">{formatDate(quiz.created_at)}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-400 uppercase tracking-wide">Total Peserta</span>
+                  <span className="text-base font-semibold text-slate-800 mt-1">{quiz.peserta} peserta</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* STATS CARD */}
+          {/* STATS CARD - 3 kolom */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <div className="flex items-center justify-between">
@@ -281,111 +304,195 @@ function QuizDetail() {
             </div>
           </div>
 
-          {/* QUESTIONS SECTION */}
+          {/* QUESTIONS SECTION WITH PAGINATION */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg">
-                  <BookOpen size={14} className="text-white" />
+            <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <BookOpen size={14} className="text-purple-600" />
+                  <h3 className="font-semibold text-sm text-slate-800">Daftar Pertanyaan</h3>
+                  <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">
+                    {totalQuestions} Soal
+                  </span>
                 </div>
-                <h3 className="font-bold text-slate-800">Daftar Pertanyaan</h3>
-                <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">
-                  {quiz.questions?.length || 0} Soal
-                </span>
+                {/* Info halaman */}
+                {totalPages > 1 && (
+                  <span className="text-[10px] text-slate-400">
+                    Halaman {currentPage} dari {totalPages}
+                  </span>
+                )}
               </div>
             </div>
 
-            <div className="p-5">
+            <div className="p-4">
               {(!quiz.questions || quiz.questions.length === 0) ? (
-                <div className="border-2 border-dashed border-slate-200 rounded-xl p-10 text-center bg-slate-50/30">
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <BookOpen size={28} className="text-slate-300" />
-                  </div>
-                  <p className="text-slate-400 text-sm mb-1">Belum ada pertanyaan</p>
-                  <p className="text-xs text-slate-300">Kuis ini belum memiliki soal</p>
+                <div className="text-center py-8">
+                  <FileText size={32} className="text-slate-300 mx-auto mb-2" />
+                  <p className="text-slate-400 text-sm">Belum ada pertanyaan</p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {quiz.questions.map((q, i) => {
-                    const questionId = q.id || i
-                    const isExpanded = expandedQuestions[questionId] || false
-                    
-                    return (
-                      <div key={questionId} className="bg-slate-50 rounded-xl overflow-hidden hover:bg-slate-100 transition border border-slate-100">
-                        <div 
-                          className="flex items-center justify-between p-4 cursor-pointer"
-                          onClick={() => toggleExpand(questionId)}
-                        >
-                          <div className="flex items-center gap-3 flex-1">
-                            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center font-bold text-white text-xs shadow-sm">
-                              {i + 1}
+                <>
+                  <div className="space-y-2">
+                    {currentQuestions.map((q, i) => {
+                      const actualIndex = startIndex + i
+                      const questionId = q.id || actualIndex
+                      const isExpanded = expandedQuestions[questionId] || false
+                      
+                      return (
+                        <div key={questionId} className="border border-slate-100 rounded-lg overflow-hidden">
+                          <div 
+                            className="flex items-center justify-between p-3 cursor-pointer hover:bg-slate-50 transition"
+                            onClick={() => toggleExpand(questionId)}
+                          >
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="w-5 h-5 bg-blue-600 rounded-lg flex items-center justify-center text-white text-[10px] font-bold">
+                                {actualIndex + 1}
+                              </span>
+                              <p className="text-sm text-slate-700 flex-1 line-clamp-1">
+                                {q.text || q.question || "Pertanyaan tidak valid"}
+                              </p>
+                              <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                                {q.correctLetter || String.fromCharCode(65 + (q.correct || 0))}
+                              </span>
                             </div>
-                            <p className="font-medium text-slate-700 text-sm flex-1">
-                              {q.text || q.question || "Pertanyaan tidak valid"}
-                            </p>
-                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-                              Jawab: {q.correctLetter || String.fromCharCode(65 + (q.correct || 0))}
-                            </span>
+                            <ChevronRight size={14} className={`text-slate-400 transition-transform duration-200 ml-2 ${isExpanded ? 'rotate-90' : ''}`} />
                           </div>
-                          <div className="ml-3">
-                            {isExpanded ? <ChevronRight size={16} className="text-slate-400 rotate-90" /> : <ChevronRight size={16} className="text-slate-400" />}
-                          </div>
+                          
+                          {isExpanded && q && (
+                            <div className="p-3 border-t border-slate-100 bg-slate-50/30">
+                              <p className="text-sm text-slate-700 mb-2">{q.text || q.question}</p>
+                              <div className="space-y-1">
+                                {(q.options || []).map((opt, idx) => (
+                                  <div key={idx} className={`flex items-center gap-2 p-2 rounded-lg text-sm ${
+                                    q.correct === idx ? 'bg-emerald-50' : 'bg-white'
+                                  }`}>
+                                    <span className={`text-xs font-semibold w-5 ${q.correct === idx ? 'text-emerald-600' : 'text-slate-500'}`}>
+                                      {String.fromCharCode(65 + idx)}.
+                                    </span>
+                                    <span className="text-xs text-slate-600 flex-1">{opt}</span>
+                                    {q.correct === idx && <CheckCircle size={12} className="text-emerald-500" />}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* PAGINATION COMPONENT */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-100">
+                      <div className="text-[10px] text-slate-400">
+                        Menampilkan {startIndex + 1} - {Math.min(endIndex, totalQuestions)} dari {totalQuestions} soal
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={goToFirstPage}
+                          disabled={currentPage === 1}
+                          className={`p-1.5 rounded-lg transition ${
+                            currentPage === 1 
+                              ? 'text-slate-300 cursor-not-allowed' 
+                              : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <ChevronsLeft size={14} />
+                        </button>
+                        <button
+                          onClick={goToPrevPage}
+                          disabled={currentPage === 1}
+                          className={`p-1.5 rounded-lg transition ${
+                            currentPage === 1 
+                              ? 'text-slate-300 cursor-not-allowed' 
+                              : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <ChevronLeft size={14} />
+                        </button>
+                        
+                        {/* Page numbers */}
+                        <div className="flex items-center gap-1 mx-1">
+                          {(() => {
+                            const pages = []
+                            const maxVisible = 5
+                            let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2))
+                            let endPage = Math.min(totalPages, startPage + maxVisible - 1)
+                            
+                            if (endPage - startPage + 1 < maxVisible) {
+                              startPage = Math.max(1, endPage - maxVisible + 1)
+                            }
+                            
+                            for (let i = startPage; i <= endPage; i++) {
+                              pages.push(
+                                <button
+                                  key={i}
+                                  onClick={() => goToPage(i)}
+                                  className={`w-6 h-6 text-xs rounded-lg transition ${
+                                    currentPage === i
+                                      ? 'bg-blue-600 text-white'
+                                      : 'text-slate-600 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  {i}
+                                </button>
+                              )
+                            }
+                            return pages
+                          })()}
                         </div>
                         
-                        {isExpanded && q && (
-                          <div className="p-4 border-t border-slate-100 bg-white space-y-3">
-                            <p className="text-slate-700 text-sm">{q.text || q.question}</p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              {(q.options || []).map((opt, idx) => (
-                                <div key={idx} className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
-                                  q.correct === idx ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-100'
-                                }`}>
-                                  <span className={`font-medium w-6 ${q.correct === idx ? 'text-emerald-600' : 'text-slate-500'}`}>
-                                    {String.fromCharCode(65 + idx)}.
-                                  </span>
-                                  <span className="text-slate-600 flex-1">{opt}</span>
-                                  {q.correct === idx && <CheckCircle size={14} className="text-emerald-500" />}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                        <button
+                          onClick={goToNextPage}
+                          disabled={currentPage === totalPages}
+                          className={`p-1.5 rounded-lg transition ${
+                            currentPage === totalPages 
+                              ? 'text-slate-300 cursor-not-allowed' 
+                              : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <ChevronRight size={14} />
+                        </button>
+                        <button
+                          onClick={goToLastPage}
+                          disabled={currentPage === totalPages}
+                          className={`p-1.5 rounded-lg transition ${
+                            currentPage === totalPages 
+                              ? 'text-slate-300 cursor-not-allowed' 
+                              : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          <ChevronsRight size={14} />
+                        </button>
                       </div>
-                    )
-                  })}
-                </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
 
-          {/* ACTION BUTTONS */}
-          <div className="flex justify-end gap-3">
+          {/* ACTION BUTTON - Hanya tombol kembali di bawah */}
+          <div className="flex justify-end">
             <button
               onClick={() => navigate("/coo/quiz")}
-              className="px-5 py-2 border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-white hover:border-slate-300 transition"
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-white hover:border-slate-300 transition"
             >
-              Kembali
+              <ArrowLeft size={14} />
+              Kembali ke Daftar Kuis
             </button>
-            <button
-              onClick={() => navigate(`/coo/edit-quiz/${quiz.id}`)}
-              className="px-5 py-2 bg-gradient-to-r from-amber-600 to-orange-600 rounded-lg text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center gap-2"
-            >
-              <Edit3 size={14} />
-              Edit Kuis
-            </button>
-          </div>
-
-          {/* INFO BANNER */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100">
-            <div className="flex items-center gap-2">
-              <Shield size={14} className="text-blue-500" />
-              <p className="text-xs text-blue-700">
-                <strong className="font-semibold">Informasi:</strong> Klik pada pertanyaan untuk melihat pilihan jawaban.
-              </p>
-            </div>
           </div>
         </div>
       </div>
+
+      <style>{`
+        .line-clamp-1 {
+          display: -webkit-box;
+          -webkit-line-clamp: 1;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+      `}</style>
     </div>
   )
 }

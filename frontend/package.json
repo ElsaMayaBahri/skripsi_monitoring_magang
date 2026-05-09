@@ -14,6 +14,9 @@
     "aurochs": "^0.12.2",
     "axios": "^1.15.0",
     "exceljs": "^4.4.0",
+    "html2pdf.js": "^0.14.0",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.5.25",
     "lucide-react": "^1.8.0",
     "react": "^19.2.4",
     "react-doc-viewer-plus": "^1.0.4",
@@ -21,7 +24,8 @@
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.14.0",
     "recharts": "^3.8.1",
-    "spire.officejs": "^10.11.5"
+    "spire.officejs": "^10.11.5",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

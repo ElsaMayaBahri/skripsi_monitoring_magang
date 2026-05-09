@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { 
   Search, 
   Download, 
@@ -18,23 +18,34 @@ import {
   UserCheck,
   Clock as ClockIcon,
   X,
-  Loader2
+  Loader2,
+  FileText,
+  FileSpreadsheet,
+  ChevronDown
 } from "lucide-react"
 import axiosInstance from "../../api/axios"
+import * as XLSX from 'xlsx'
+import html2pdf from 'html2pdf.js'
+import logo from "../../assets/logo.png"
 
 function Presensi() {
   const [presensiData, setPresensiData] = useState([])
   const [filteredData, setFilteredData] = useState([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedDivisi, setSelectedDivisi] = useState("all")
-  const [selectedDate, setSelectedDate] = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
   const [selectedPresensi, setSelectedPresensi] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [showExportDropdown, setShowExportDropdown] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [exportType, setExportType] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [divisiList, setDivisiList] = useState([])
+  const dropdownRef = useRef(null)
   const [stats, setStats] = useState({
     total: 0,
     hadir: 0,
@@ -61,7 +72,57 @@ function Presensi() {
     }
   }
 
-  // Load presensi data dari backend
+  // Format tanggal dan waktu dengan rapi
+  const formatDateTime = (dateTime) => {
+    if (!dateTime) return "-"
+    try {
+      const date = new Date(dateTime)
+      if (isNaN(date.getTime())) return "-"
+      return date.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    } catch {
+      return "-"
+    }
+  }
+
+  // Format hanya tanggal
+  const formatDateOnly = (dateTime) => {
+    if (!dateTime) return "-"
+    try {
+      const date = new Date(dateTime)
+      if (isNaN(date.getTime())) return "-"
+      return date.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "short",
+        year: "numeric"
+      })
+    } catch {
+      return "-"
+    }
+  }
+
+  // Format tanggal untuk PDF
+  const formatDatePDF = (dateString) => {
+    if (!dateString) return "-"
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return "-"
+      return date.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      })
+    } catch {
+      return "-"
+    }
+  }
+
+  // Load presensi data dari backend dengan filter tanggal range
   const fetchPresensi = async () => {
     setLoading(true)
     setError(null)
@@ -69,8 +130,11 @@ function Presensi() {
       let url = "/presensi"
       const params = new URLSearchParams()
       
-      if (selectedDate) {
-        params.append("tanggal", selectedDate)
+      if (startDate) {
+        params.append("start_date", startDate)
+      }
+      if (endDate) {
+        params.append("end_date", endDate)
       }
       if (selectedDivisi !== "all") {
         params.append("divisi", selectedDivisi)
@@ -126,7 +190,7 @@ function Presensi() {
 
   useEffect(() => {
     fetchPresensi()
-  }, [selectedDate, selectedDivisi])
+  }, [startDate, endDate, selectedDivisi])
 
   useEffect(() => {
     let filtered = [...presensiData]
@@ -141,36 +205,210 @@ function Presensi() {
     setCurrentPage(1)
   }, [searchTerm, presensiData])
 
+  // Tutup dropdown saat klik di luar
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowExportDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const handleViewDetail = (presensi) => {
     setSelectedPresensi(presensi)
     setIsModalOpen(true)
   }
 
-  const handleExportPDF = async () => {
+  // Show confirm modal before export
+  const showConfirmExport = (type) => {
+    setExportType(type)
+    setShowConfirmModal(true)
+    setShowExportDropdown(false)
+  }
+
+  // Execute export after confirmation
+  const executeExport = () => {
+    setShowConfirmModal(false)
+    if (exportType === 'excel') {
+      handleExportExcel()
+    } else if (exportType === 'pdf') {
+      handleExportPDF()
+    }
+    setExportType(null)
+  }
+
+  // Export ke Excel (Client-side)
+  const handleExportExcel = () => {
     setIsExporting(true)
     try {
-      const params = new URLSearchParams()
-      if (selectedDate) params.append("tanggal", selectedDate)
-      if (selectedDivisi !== "all") params.append("divisi", selectedDivisi)
+      const exportData = filteredData.map((item, index) => ({
+        "No": index + 1,
+        "Nama Peserta": getNamaPeserta(item),
+        "Divisi": getDivisiPeserta(item),
+        "Tanggal": formatDateOnly(item.check_in || item.tanggal),
+        "Check-In": formatDateTime(item.check_in),
+        "Check-Out": formatDateTime(item.check_out),
+        "Status": item.status || "-",
+        "Keterlambatan": `${item.keterlambatan || 0} menit`,
+        "Device": item.device || "-",
+        "Lokasi": item.lokasi || "-"
+      }))
+
+      const ws = XLSX.utils.json_to_sheet(exportData)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, "Rekap Presensi")
       
-      const response = await axiosInstance.get(`/presensi/export${params.toString() ? `?${params.toString()}` : ''}`, {
-        responseType: "blob",
-      })
-      
-      const url = window.URL.createObjectURL(new Blob([response.data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `rekap_presensi_${new Date().toISOString().split('T')[0]}.csv`)
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      window.URL.revokeObjectURL(url)
+      const fileName = `rekap_presensi_${new Date().toISOString().split('T')[0]}.xlsx`
+      XLSX.writeFile(wb, fileName)
+      alert("Laporan berhasil diunduh dalam format Excel")
     } catch (err) {
-      console.error("Error exporting:", err)
-      alert("Gagal mengunduh laporan presensi")
+      console.error("Error exporting to Excel:", err)
+      alert("Gagal mengunduh laporan presensi dalam format Excel")
     } finally {
       setIsExporting(false)
     }
+  }
+
+  // Export ke PDF langsung download dengan logo
+  const handleExportPDF = () => {
+    setIsExporting(true)
+    
+    try {
+      const today = new Date().toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      })
+      
+      const startDateFormatted = startDate ? formatDatePDF(startDate) : "Semua"
+      const endDateFormatted = endDate ? formatDatePDF(endDate) : "Semua"
+      
+      // Buat elemen div untuk di-convert ke PDF
+      const element = document.createElement('div')
+      element.style.padding = '30px'
+      element.style.fontFamily = "'Times New Roman', Arial, sans-serif"
+      element.style.backgroundColor = 'white'
+      
+      element.innerHTML = `
+        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #1e3a5f; padding-bottom: 20px;">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+            <img src="${logo}" alt="Logo Perusahaan" style="height: 60px; width: auto;" />
+            <div style="text-align: left;">
+              <h1 style="color: #1e3a5f; margin: 0; font-size: 24px;">PT KUANTA PRIMA INDONESIA</h1>
+              <p style="color: #64748b; margin: 5px 0 0 0; font-size: 10px;">Jl. Gayungsari IV No. 33 Surabaya</p>
+              <p style="color: #64748b; margin: 2px 0 0 0; font-size: 10px;">+62 821-4338-0273 | partnership@kuanta.id</p>
+            </div>
+          </div>
+        </div>
+        
+        <div style="text-align: center; margin-bottom: 25px;">
+          <h2 style="color: #1e293b; margin: 0; font-size: 20px;">LAPORAN REKAP PRESENSI PESERTA MAGANG</h2>
+          <p style="color: #64748b; margin: 8px 0 0 0; font-size: 12px;">Periode: ${startDateFormatted} s/d ${endDateFormatted}</p>
+          <p style="color: #64748b; margin: 4px 0 0 0; font-size: 11px;">Divisi: ${selectedDivisi === 'all' ? 'Semua Divisi' : selectedDivisi}</p>
+        </div>
+        
+        <div style="margin-bottom: 20px; text-align: right;">
+          <p style="color: #94a3b8; font-size: 10px; margin: 0;">Dicetak: ${today}</p>
+        </div>
+        
+        <div style="display: flex; gap: 15px; margin-bottom: 25px; padding: 15px; background: #f8fafc; border-radius: 8px;">
+          <div style="flex: 1; text-align: center;">
+            <div style="font-size: 22px; font-weight: bold; color: #2563eb;">${stats.total}</div>
+            <div style="font-size: 10px; color: #64748b;">Total Presensi</div>
+          </div>
+          <div style="flex: 1; text-align: center;">
+            <div style="font-size: 22px; font-weight: bold; color: #16a34a;">${stats.hadir}</div>
+            <div style="font-size: 10px; color: #64748b;">Hadir Tepat Waktu</div>
+          </div>
+          <div style="flex: 1; text-align: center;">
+            <div style="font-size: 22px; font-weight: bold; color: #d97706;">${stats.terlambat}</div>
+            <div style="font-size: 10px; color: #64748b;">Terlambat</div>
+          </div>
+          <div style="flex: 1; text-align: center;">
+            <div style="font-size: 22px; font-weight: bold; color: #7c3aed;">${stats.persenKehadiran}%</div>
+            <div style="font-size: 10px; color: #64748b;">Kehadiran</div>
+          </div>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+          <thead>
+            <tr>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">No</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: left;">Nama Peserta</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: left;">Divisi</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Tanggal</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Check-In</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Check-Out</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Status</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Keterlambatan</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredData.map((item, index) => `
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${index + 1}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 8px;">${getNamaPeserta(item)}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 8px;">${getDivisiPeserta(item)}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${formatDateOnly(item.check_in || item.tanggal)}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${formatDateTime(item.check_in)}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${formatDateTime(item.check_out)}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.status || '-'}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.keterlambatan || 0} menit</td>
+              </tr>
+            `).join('')}
+            ${filteredData.length === 0 ? `
+              <tr>
+                <td colspan="8" style="border: 1px solid #cbd5e1; padding: 40px; text-align: center; color: #94a3b8;">Tidak ada data presensi</td>
+              </tr>
+            ` : ''}
+          </tbody>
+        </table>
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #cbd5e1;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div style="text-align: left;">
+              <p style="font-size: 9px; color: #94a3b8; margin: 0;">Dokumen ini dicetak secara elektronik</p>
+              <p style="font-size: 9px; color: #94a3b8; margin: 2px 0 0 0;">&copy; ${new Date().getFullYear()} PT Kuanta Prima Indonesia - All Rights Reserved</p>
+            </div>
+            <div style="text-align: right;">
+              <div style="margin-top: 30px;">
+                <p style="font-size: 10px; margin: 0;">Surabaya, ${today}</p>
+                <p style="font-size: 10px; margin: 20px 0 0 0;">Chief Operating Officer</p>
+                <div style="margin-top: 30px;">
+                  <p style="font-size: 10px; margin: 0; text-decoration: underline;">(_____________________)</p>
+                  <p style="font-size: 9px; color: #64748b; margin: 2px 0 0 0;">Nama Lengkap & Tanda Tangan</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `
+      
+      const opt = {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        filename: `rekap_presensi_${new Date().toISOString().split('T')[0]}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+      }
+      
+      html2pdf().set(opt).from(element).save()
+      alert("Laporan berhasil diunduh dalam format PDF")
+    } catch (err) {
+      console.error("Error exporting to PDF:", err)
+      alert("Gagal mengunduh laporan presensi dalam format PDF")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const resetFilters = () => {
+    setSearchTerm("")
+    setSelectedDivisi("all")
+    setStartDate("")
+    setEndDate("")
   }
 
   // Pagination
@@ -197,11 +435,6 @@ function Presensi() {
     }
   }
 
-  const formatDateTime = (dateTime) => {
-    if (!dateTime) return "-"
-    return dateTime
-  }
-
   const getNamaPeserta = (item) => {
     return item.peserta?.nama || item.nama || "-"
   }
@@ -225,6 +458,47 @@ function Presensi() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-[1400px] mx-auto">
         
+        {/* CONFIRMATION MODAL */}
+        {showConfirmModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-zoomIn">
+              <div className="relative">
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-t-2xl"></div>
+                <div className="p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-blue-100 rounded-xl">
+                      <Download className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-slate-800">Konfirmasi Unduh Laporan</h3>
+                  </div>
+                  <p className="text-slate-600 mb-6">
+                    Apakah Anda yakin ingin mengunduh laporan presensi dalam format <strong className="text-blue-600">{exportType?.toUpperCase()}</strong>?
+                    <br />
+                    <span className="text-sm text-slate-400">Data yang diunduh sesuai dengan filter yang sedang aktif.</span>
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        setShowConfirmModal(false)
+                        setExportType(null)
+                      }}
+                      className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 transition-all"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      onClick={executeExport}
+                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl text-white font-medium hover:shadow-lg transition-all"
+                    >
+                      Ya, Unduh
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ===== HEADER ===== */}
         <div className="mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -245,22 +519,45 @@ function Presensi() {
               </div>
             </div>
             
-            <button
-              onClick={handleExportPDF}
-              disabled={isExporting || filteredData.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 disabled:opacity-50"
-            >
-              {isExporting ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <Download size={16} />
+            {/* Dropdown Export */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowExportDropdown(!showExportDropdown)}
+                disabled={isExporting || filteredData.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 disabled:opacity-50"
+              >
+                {isExporting ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Download size={16} />
+                )}
+                Unduh Laporan
+                <ChevronDown size={16} className={`transition-transform ${showExportDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showExportDropdown && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden z-50">
+                  <button
+                    onClick={() => showConfirmExport('excel')}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-emerald-50 transition-colors"
+                  >
+                    <FileSpreadsheet size={16} className="text-emerald-600" />
+                    <span>Export ke Excel</span>
+                  </button>
+                  <button
+                    onClick={() => showConfirmExport('pdf')}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-red-50 transition-colors border-t border-slate-100"
+                  >
+                    <FileText size={16} className="text-red-600" />
+                    <span>Export ke PDF</span>
+                  </button>
+                </div>
               )}
-              Unduh Rekap Presensi
-            </button>
+            </div>
           </div>
         </div>
 
-        {/* ===== STATS CARDS ===== */}
+        {/* ===== STATS CARDS ===== (SAME AS BEFORE) */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="flex items-center justify-between mb-2">
@@ -269,7 +566,7 @@ function Presensi() {
               </div>
               <span className="text-2xl font-bold text-slate-800">{stats.total}</span>
             </div>
-            <p className="text-xs text-slate-500">Total Peserta</p>
+            <p className="text-xs text-slate-500">Total Presensi</p>
             <div className="mt-2 h-1 w-8 bg-blue-500 rounded-full"></div>
           </div>
 
@@ -307,7 +604,7 @@ function Presensi() {
           </div>
         </div>
 
-        {/* ===== FILTERS ===== */}
+        {/* ===== FILTERS ===== (SAME AS BEFORE) */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
@@ -341,19 +638,26 @@ function Presensi() {
             <div className="w-full md:w-48">
               <input
                 type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                placeholder="Tanggal Mulai"
+              />
+            </div>
+
+            <div className="w-full md:w-48">
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                placeholder="Tanggal Selesai"
               />
             </div>
             
-            {(searchTerm || selectedDivisi !== "all" || selectedDate) && (
+            {(searchTerm || selectedDivisi !== "all" || startDate || endDate) && (
               <button
-                onClick={() => {
-                  setSearchTerm("")
-                  setSelectedDivisi("all")
-                  setSelectedDate("")
-                }}
+                onClick={resetFilters}
                 className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700 transition"
               >
                 Reset Filter
@@ -371,7 +675,7 @@ function Presensi() {
           </div>
         )}
 
-        {/* ===== TABLE ===== */}
+        {/* ===== TABLE ===== (SAME AS BEFORE) */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -379,6 +683,7 @@ function Presensi() {
                 <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
                   <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Peserta</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Divisi</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tanggal</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Check-In</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Check-Out</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
@@ -388,7 +693,7 @@ function Presensi() {
               <tbody className="divide-y divide-slate-100">
                 {paginatedData.length === 0 && !loading ? (
                   <tr>
-                    <td colSpan="6" className="px-5 py-12 text-center">
+                    <td colSpan="7" className="px-5 py-12 text-center">
                       <div className="flex flex-col items-center gap-2">
                         <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center">
                           <Users size={20} className="text-slate-400" />
@@ -414,10 +719,17 @@ function Presensi() {
                         </span>
                       </td>
                       <td className="px-5 py-3 text-sm text-slate-600">
-                        {formatDateTime(item.check_in)}
+                        {formatDateOnly(item.check_in || item.tanggal)}
                       </td>
-                      <td className="px-5 py-3 text-sm text-slate-600">
-                        {formatDateTime(item.check_out)}
+                      <td className="px-5 py-3">
+                        <span className="text-sm text-slate-600">
+                          {formatDateTime(item.check_in)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className="text-sm text-slate-600">
+                          {formatDateTime(item.check_out)}
+                        </span>
                       </td>
                       <td className="px-5 py-3">
                         {getStatusBadge(item.status)}
@@ -478,7 +790,7 @@ function Presensi() {
           )}
         </div>
 
-        {/* ===== MODAL DETAIL PRESENSI ===== */}
+        {/* ===== MODAL DETAIL PRESENSI ===== (SAME AS BEFORE) */}
         {isModalOpen && selectedPresensi && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl max-w-md w-full max-h-[85vh] overflow-y-auto shadow-xl">
@@ -490,7 +802,7 @@ function Presensi() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-slate-800 text-sm">Detail Presensi</h3>
-                    <p className="text-[10px] text-slate-400">{selectedPresensi.tanggal || "-"}</p>
+                    <p className="text-[10px] text-slate-400">{formatDateOnly(selectedPresensi.check_in || selectedPresensi.tanggal)}</p>
                   </div>
                 </div>
                 <button
@@ -502,7 +814,6 @@ function Presensi() {
               </div>
               
               <div className="p-5 space-y-4">
-                {/* Info Peserta */}
                 <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
                   <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md">
                     {getNamaPeserta(selectedPresensi).charAt(0)}
@@ -513,21 +824,19 @@ function Presensi() {
                   </div>
                 </div>
 
-                {/* Waktu */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-blue-50 rounded-lg p-3 text-center">
                     <ClockIcon size={14} className="text-blue-500 mx-auto mb-1" />
                     <p className="text-[10px] text-slate-500">Check-In</p>
-                    <p className="text-sm font-semibold text-slate-700">{formatDateTime(selectedPresensi.check_in)}</p>
+                    <p className="text-sm text-slate-700">{formatDateTime(selectedPresensi.check_in)}</p>
                   </div>
                   <div className="bg-indigo-50 rounded-lg p-3 text-center">
                     <ClockIcon size={14} className="text-indigo-500 mx-auto mb-1" />
                     <p className="text-[10px] text-slate-500">Check-Out</p>
-                    <p className="text-sm font-semibold text-slate-700">{formatDateTime(selectedPresensi.check_out)}</p>
+                    <p className="text-sm text-slate-700">{formatDateTime(selectedPresensi.check_out)}</p>
                   </div>
                 </div>
 
-                {/* Status & Durasi */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-slate-50 rounded-lg p-2">
                     <p className="text-[10px] text-slate-500">Status</p>
@@ -539,7 +848,6 @@ function Presensi() {
                   </div>
                 </div>
 
-                {/* Device & Lokasi */}
                 <div className="space-y-2">
                   {selectedPresensi.device && (
                     <div className="flex items-center gap-2 text-xs text-slate-600">
@@ -555,7 +863,6 @@ function Presensi() {
                   )}
                 </div>
 
-                {/* Daily Report */}
                 {selectedPresensi.daily_report && (
                   <div className="bg-slate-50 rounded-lg p-3">
                     <p className="text-[10px] font-medium text-slate-500 mb-1">Daily Report</p>
@@ -576,6 +883,16 @@ function Presensi() {
           </div>
         )}
       </div>
+
+      <style>{`
+        @keyframes zoomIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-zoomIn {
+          animation: zoomIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   )
 }

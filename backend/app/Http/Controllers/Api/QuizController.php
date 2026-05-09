@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema; // TAMBAHKAN INI
+use Illuminate\Support\Facades\Schema;
 
 class QuizController extends Controller
 {
@@ -38,7 +38,7 @@ class QuizController extends Controller
                     'tanggal_selesai' => $quiz->tanggal_selesai,
                     'created_at' => $quiz->created_at,
                     'updated_at' => $quiz->updated_at,
-                    'status' => $quiz->status,
+                    'status' => $quiz->status ?? 'nonaktif',
                     'is_aktif' => $quiz->is_aktif,
                     'is_selesai' => $quiz->is_selesai,
                     'is_belum_mulai' => $quiz->is_belum_mulai,
@@ -132,6 +132,7 @@ class QuizController extends Controller
                 'divisi' => $request->divisi,
                 'durasi' => $request->durasi ?? 30,
                 'passing' => $request->passing ?? 75,
+                'status' => 'aktif', // Default status aktif
                 'total_soal' => count($request->questions ?? []),
                 'questions' => $request->questions,
                 'peserta' => 0,
@@ -179,7 +180,7 @@ class QuizController extends Controller
                     'tanggal_selesai' => $quiz->tanggal_selesai,
                     'created_at' => $quiz->created_at,
                     'updated_at' => $quiz->updated_at,
-                    'status' => $quiz->status,
+                    'status' => $quiz->status ?? 'nonaktif',
                     'is_aktif' => $quiz->is_aktif,
                     'is_selesai' => $quiz->is_selesai,
                     'is_belum_mulai' => $quiz->is_belum_mulai,
@@ -205,6 +206,7 @@ class QuizController extends Controller
                 'divisi' => 'nullable|string|max:100',
                 'durasi' => 'nullable|integer|min:1|max:180',
                 'passing' => 'nullable|integer|min:0|max:100',
+                'status' => 'sometimes|in:aktif,nonaktif', // 🔥 TAMBAHKAN VALIDASI STATUS
                 'questions' => 'nullable|array',
                 'tanggal_mulai' => 'nullable|date',
                 'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
@@ -225,6 +227,7 @@ class QuizController extends Controller
             if ($request->has('divisi')) $quiz->divisi = $request->divisi;
             if ($request->has('durasi')) $quiz->durasi = $request->durasi;
             if ($request->has('passing')) $quiz->passing = $request->passing;
+            if ($request->has('status')) $quiz->status = $request->status; // 🔥 UPDATE STATUS
             if ($request->has('questions')) {
                 $quiz->questions = $request->questions;
                 $quiz->total_soal = count($request->questions);
@@ -286,7 +289,7 @@ class QuizController extends Controller
                     'tanggal_mulai' => $quiz->tanggal_mulai,
                     'tanggal_selesai' => $quiz->tanggal_selesai,
                     'created_at' => $quiz->created_at,
-                    'status' => $quiz->status,
+                    'status' => $quiz->status ?? 'nonaktif',
                 ];
             });
             
@@ -303,13 +306,13 @@ class QuizController extends Controller
     }
     
     /**
-     * Import quiz from CSV file (tanpa library tambahan)
+     * Import quiz from CSV file
      */
     public function import(Request $request)
     {
         try {
             $validator = Validator::make($request->all(), [
-                'file' => 'required|file|mimes:csv,txt|max:10240'
+                'file' => 'required|file|mimes:csv,txt,xlsx,xls|max:10240'
             ]);
             
             if ($validator->fails()) {
@@ -321,7 +324,28 @@ class QuizController extends Controller
             }
             
             $file = $request->file('file');
+            $extension = $file->getClientOriginalExtension();
+            
+            // Untuk file Excel, perlu library tambahan, sementara kita support CSV dulu
+            if (in_array($extension, ['xlsx', 'xls'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Untuk file Excel, silakan konversi ke format CSV terlebih dahulu'
+                ], 400);
+            }
+            
             $content = file_get_contents($file->getPathname());
+            
+            // Deteksi encoding dan convert ke UTF-8
+            $encoding = mb_detect_encoding($content, ['UTF-8', 'ISO-8859-1', 'Windows-1252'], true);
+            if ($encoding !== 'UTF-8') {
+                $content = mb_convert_encoding($content, 'UTF-8', $encoding);
+            }
+            
+            // Remove BOM if exists
+            if (substr($content, 0, 3) === "\xEF\xBB\xBF") {
+                $content = substr($content, 3);
+            }
             
             // Parse CSV
             $lines = explode("\n", trim($content));
@@ -342,6 +366,16 @@ class QuizController extends Controller
             $failed = 0;
             $errors = [];
             
+            $expectedHeaders = ['judul_kuis', 'deskripsi', 'divisi', 'durasi', 'passing', 'questions', 'tanggal_mulai', 'tanggal_selesai'];
+            $missingHeaders = array_diff($expectedHeaders, $headers);
+            if (!empty($missingHeaders)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Header file tidak lengkap. Header yang diperlukan: ' . implode(', ', $expectedHeaders),
+                    'missing' => $missingHeaders
+                ], 400);
+            }
+            
             foreach ($lines as $rowIndex => $line) {
                 if (empty(trim($line))) continue;
                 
@@ -356,7 +390,7 @@ class QuizController extends Controller
                         }
                     }
                     
-                    $judul = $data['judul_kuis'] ?? $data['judul'] ?? null;
+                    $judul = $data['judul_kuis'] ?? null;
                     if (!$judul) {
                         $failed++;
                         $errors[] = "Baris " . ($rowIndex + 2) . ": Judul kuis wajib diisi";
@@ -376,8 +410,20 @@ class QuizController extends Controller
                                     'options' => array_slice($parts, 1, 4),
                                     'correct' => intval($parts[5])
                                 ]];
+                            } else {
+                                $failed++;
+                                $errors[] = "Baris " . ($rowIndex + 2) . ": Format questions tidak valid";
+                                continue;
                             }
                         }
+                    }
+                    
+                    // Cek apakah kuis dengan judul yang sama sudah ada
+                    $existingQuiz = Kuis::where('judul_kuis', $judul)->first();
+                    if ($existingQuiz) {
+                        $failed++;
+                        $errors[] = "Baris " . ($rowIndex + 2) . ": Kuis dengan judul '{$judul}' sudah ada";
+                        continue;
                     }
                     
                     $quiz = Kuis::create([
@@ -386,6 +432,7 @@ class QuizController extends Controller
                         'divisi' => $data['divisi'] ?? null,
                         'durasi' => intval($data['durasi'] ?? 30),
                         'passing' => intval($data['passing'] ?? 75),
+                        'status' => 'aktif', // Default status aktif untuk import
                         'total_soal' => $questions ? count($questions) : 0,
                         'questions' => $questions,
                         'peserta' => 0,
@@ -427,30 +474,77 @@ class QuizController extends Controller
     {
         try {
             $headers = ['judul_kuis', 'deskripsi', 'divisi', 'durasi', 'passing', 'questions', 'tanggal_mulai', 'tanggal_selesai'];
-            $example = [
-                'Quiz Contoh 1',
-                'Deskripsi quiz contoh',
+            
+            $exampleQuestion = json_encode([
+                [
+                    'text' => 'Apa ibu kota Indonesia?',
+                    'options' => ['Jakarta', 'Surabaya', 'Bandung', 'Medan'],
+                    'correct' => 0
+                ]
+            ]);
+            
+            $exampleData = [
+                'Quiz Programming Dasar',
+                'Quiz untuk menguji dasar pemrograman',
                 'ENGINEERING',
                 '30',
                 '75',
-                '[{"text":"Soal contoh?","options":["Jawaban A","Jawaban B","Jawaban C","Jawaban D"],"correct":0}]',
+                $exampleQuestion,
                 date('Y-m-d'),
                 date('Y-m-d', strtotime('+30 days'))
             ];
             
-            $callback = function() use ($headers, $example) {
+            $callback = function() use ($headers, $exampleData) {
                 $handle = fopen('php://output', 'w');
+                
+                // Add BOM for UTF-8 to fix Excel encoding
+                fputs($handle, "\xEF\xBB\xBF");
+                
+                // Write headers
                 fputcsv($handle, $headers);
-                fputcsv($handle, $example);
+                
+                // Write example data
+                fputcsv($handle, $exampleData);
+                
+                // Add second example for multiple questions
+                $multipleQuestions = json_encode([
+                    [
+                        'text' => 'Apa kepanjangan dari HTML?',
+                        'options' => ['Hyper Text Markup Language', 'High Text Markup Language', 'Hyper Transfer Markup Language', 'Home Tool Markup Language'],
+                        'correct' => 0
+                    ],
+                    [
+                        'text' => 'Apa fungsi CSS?',
+                        'options' => ['Styling halaman web', 'Database connection', 'Server side scripting', 'Backend logic'],
+                        'correct' => 0
+                    ]
+                ]);
+                
+                $secondExample = [
+                    'Quiz Web Development',
+                    'Quiz untuk menguji pengetahuan web development',
+                    'ENGINEERING',
+                    '45',
+                    '70',
+                    $multipleQuestions,
+                    date('Y-m-d'),
+                    date('Y-m-d', strtotime('+30 days'))
+                ];
+                
+                fputcsv($handle, $secondExample);
+                
                 fclose($handle);
             };
             
             return response()->stream($callback, 200, [
                 'Content-Type' => 'text/csv',
                 'Content-Disposition' => 'attachment; filename="template_kuis.csv"',
+                'Cache-Control' => 'private, max-age=0, must-revalidate',
+                'Pragma' => 'public',
             ]);
             
         } catch (\Exception $e) {
+            Log::error('Error download template: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal membuat template: ' . $e->getMessage()
