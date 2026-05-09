@@ -263,6 +263,26 @@ function DashboardAdmin() {
     return "Selamat Malam"
   }
 
+  // Fungsi navigasi untuk card
+  const handleCardClick = (type) => {
+    switch(type) {
+      case 'totalAkun':
+        navigate('/admin/users')
+        break
+      case 'aktif':
+        navigate('/admin/users?status=aktif')
+        break
+      case 'totalDivisi':
+        navigate('/admin/divisi')
+        break
+      case 'nonAktif':
+        navigate('/admin/users?status=nonaktif')
+        break
+      default:
+        break
+    }
+  }
+
   // Loading state
   if (loading && allUsers.length === 0) {
     return (
@@ -332,54 +352,70 @@ function DashboardAdmin() {
           </div>
         )}
 
-        {/* STATS CARDS */}
+        {/* STATS CARDS - dengan fungsi klik */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          <div 
+            onClick={() => handleCardClick('totalAkun')}
+            className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+          >
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
             <div className="relative">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
                   <Users className="w-5 h-5 text-white" />
                 </div>
+                <ArrowUpRight className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               <p className="text-3xl font-bold text-slate-800">{totalAkun}</p>
               <p className="text-sm text-slate-500 mt-0.5">Total Akun</p>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          <div 
+            onClick={() => handleCardClick('aktif')}
+            className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+          >
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
             <div className="relative">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-md">
                   <UserCheck className="w-5 h-5 text-white" />
                 </div>
+                <ArrowUpRight className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               <p className="text-3xl font-bold text-slate-800">{aktif}</p>
               <p className="text-sm text-slate-500 mt-0.5">Akun Aktif</p>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          <div 
+            onClick={() => handleCardClick('totalDivisi')}
+            className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+          >
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
             <div className="relative">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-md">
                   <Building2 className="w-5 h-5 text-white" />
                 </div>
+                <ArrowUpRight className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               <p className="text-3xl font-bold text-slate-800">{totalDivisi}</p>
               <p className="text-sm text-slate-500 mt-0.5">Divisi Aktif</p>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          <div 
+            onClick={() => handleCardClick('nonAktif')}
+            className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+          >
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-rose-500/10 to-red-500/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
             <div className="relative">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-12 h-12 bg-gradient-to-br from-rose-500 to-red-600 rounded-xl flex items-center justify-center shadow-md">
                   <UserX className="w-5 h-5 text-white" />
                 </div>
+                <ArrowUpRight className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               <p className="text-3xl font-bold text-slate-800">{nonAktif}</p>
               <p className="text-sm text-slate-500 mt-0.5">Akun Nonaktif</p>
@@ -680,7 +716,7 @@ function DashboardAdmin() {
             </div>
             <div className="flex-1">
               <p className="text-xs text-blue-800">
-                <strong className="font-semibold">Informasi:</strong> Dashboard ini menampilkan data real-time dari seluruh sistem. Gunakan menu navigasi untuk mengelola akun peserta, mentor, dan divisi.
+                <strong className="font-semibold">Informasi:</strong> Dashboard ini menampilkan data real-time dari seluruh sistem. Gunakan menu navigasi untuk mengelola akun peserta, mentor, dan divisi. Klik pada card statistik untuk melihat detail lebih lanjut.
               </p>
             </div>
           </div>

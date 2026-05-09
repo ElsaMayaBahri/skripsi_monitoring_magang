@@ -1,7 +1,8 @@
+// src/pages/admin/AddPeserta.jsx
 import { useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService"
-import { logActivity } from "../../utils/activityLogger"
+import { createPeserta } from "../../api/admin/pesertaService"
 import {
   ArrowLeft,
   UserPlus,
@@ -304,6 +305,7 @@ function AddPeserta() {
         return null
       case 'prodi':
         if (!form.prodi.trim()) return "Program studi harus diisi"
+        return null
       case 'tanggal_mulai':
         if (!form.tanggal_mulai) return "Tanggal mulai harus diisi"
         return null
@@ -391,9 +393,9 @@ function AddPeserta() {
         status_akun: "aktif",
       }
 
-      const response = await api.addPeserta(pesertaData)
+      const response = await createPeserta(pesertaData)
+      
       if (response && response.success) {
-        logActivity("create", "peserta", form.nama)
         setSuccessData({
           nama: form.nama,
           email: form.email,
@@ -409,6 +411,7 @@ function AddPeserta() {
         setError(response?.message || "Gagal menambahkan peserta")
       }
     } catch (err) {
+      console.error("Error adding peserta:", err)
       if (err.response?.data?.message) setError(err.response.data.message)
       else if (err.message) setError(err.message)
       else setError("Terjadi kesalahan saat menyimpan data")

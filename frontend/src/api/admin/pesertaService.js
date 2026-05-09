@@ -1,4 +1,4 @@
-import axiosInstance from "../../utils/axiosConfig"
+import axiosInstance from "../axios" 
 
 export const getPeserta = async () => {
   const response = await axiosInstance.get("/peserta")
