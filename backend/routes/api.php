@@ -17,9 +17,10 @@ use App\Http\Controllers\Api\DailyReportController;
 use App\Http\Controllers\Api\TugasController;
 use App\Http\Controllers\Api\LaporanAkhirController;
 use App\Http\Controllers\Api\NilaiController;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Storage;
+use App\Http\Controllers\Api\PresensiController;
+use App\Http\Controllers\Api\ActivityLogController;
+use App\Http\Controllers\Api\LaporanController;     
+
 
 /*
 |--------------------------------------------------------------------------
@@ -297,33 +298,34 @@ Route::middleware('auth:sanctum')->group(function () {
             ]
         ]);
     });
+});
+
+// ==================== MENTOR PROFILE ROUTE ====================
+Route::put('/mentor/profile', function (Request $request) {
+    $user = $request->user();
     
-    Route::put('/mentor/profile', function (Request $request) {
-        $user = $request->user();
-        
-        if ($user->role !== 'mentor') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-        
-        if ($request->has('nama')) {
-            $user->nama = $request->nama;
-        }
-        
-        if ($request->has('no_telepon')) {
-            $user->no_telepon = $request->no_telepon;
-        }
-        
-        $user->save();
-        
+    if ($user->role !== 'mentor') {
         return response()->json([
-            'success' => true,
-            'message' => 'Profil berhasil diupdate',
-            'data' => $user
-        ]);
-    });
+            'success' => false,
+            'message' => 'Unauthorized'
+        ], 403);
+    }
+    
+    if ($request->has('nama')) {
+        $user->nama = $request->nama;
+    }
+    
+    if ($request->has('no_telepon')) {
+        $user->no_telepon = $request->no_telepon;
+    }
+    
+    $user->save();
+    
+    return response()->json([
+        'success' => true,
+        'message' => 'Profil berhasil diupdate',
+        'data' => $user
+    ]);
 });
 
 // ==================== FALLBACK ROUTE ====================
