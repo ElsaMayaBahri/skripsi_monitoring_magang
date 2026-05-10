@@ -16,7 +16,7 @@ class Divisi extends Model
         'id_mentor',
         'nama_divisi',
         'deskripsi',
-        'status',  // 🔥 TAMBAHKAN FIELD STATUS
+        'status', 
     ];
     
     // Default values
