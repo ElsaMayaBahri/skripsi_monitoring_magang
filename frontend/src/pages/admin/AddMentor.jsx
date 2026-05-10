@@ -36,7 +36,6 @@ function AddMentor() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  // 🔥 SUCCESS MODAL PREMIUM - KEMBALI DIPAKAI
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [successData, setSuccessData] = useState(null);
@@ -116,7 +115,30 @@ function AddMentor() {
     return emailRegex.test(form.email);
   };
 
-  const isPasswordValid = () => form.password.length >= 6;
+  const isPasswordValid = () => {
+    const password = form.password;
+    if (password.length < 8) return false;
+    if (!/[A-Z]/.test(password)) return false;
+    if (!/[a-z]/.test(password)) return false;
+    if (!/[0-9]/.test(password)) return false;
+    return true;
+  };
+
+  const getPasswordStrength = () => {
+    const password = form.password;
+    if (!password) return { level: 0, text: "", color: "" };
+    
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[a-z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    
+    if (strength === 4) return { level: 3, text: "Kuat", color: "text-emerald-600 bg-emerald-50" };
+    if (strength === 3) return { level: 2, text: "Sedang", color: "text-amber-600 bg-amber-50" };
+    return { level: 1, text: "Lemah", color: "text-red-600 bg-red-50" };
+  };
+
   const isPasswordMatch = () => form.password === form.password_confirmation;
   const isNameValid = () => form.name.trim().length > 0;
   const isPhoneValid = () => form.phone.length >= 10 && form.phone.length <= 15;
@@ -145,7 +167,10 @@ function AddMentor() {
         return null;
       case 'password':
         if (!form.password) return "Password harus diisi";
-        if (form.password.length < 6) return "Minimal 6 karakter";
+        if (form.password.length < 8) return "Minimal 8 karakter";
+        if (!/[A-Z]/.test(form.password)) return "Harus mengandung huruf BESAR";
+        if (!/[a-z]/.test(form.password)) return "Harus mengandung huruf kecil";
+        if (!/[0-9]/.test(form.password)) return "Harus mengandung angka";
         return null;
       case 'password_confirmation':
         if (!form.password_confirmation) return "Konfirmasi password harus diisi";
@@ -181,18 +206,13 @@ function AddMentor() {
     });
 
     if (!isEmailValid()) { setError("Email tidak valid"); return false; }
-    if (!isPasswordValid()) { setError("Password minimal 6 karakter"); return false; }
+    if (!isPasswordValid()) { setError("Password minimal 8 karakter, mengandung huruf besar, huruf kecil, dan angka"); return false; }
     if (!isPasswordMatch()) { setError("Konfirmasi password tidak cocok"); return false; }
     if (!isNameValid()) { setError("Nama lengkap harus diisi"); return false; }
     if (!isPhoneValid()) { setError("Nomor telepon harus 10-15 digit angka"); return false; }
     if (!isDivisiValid()) { setError("Divisi harus dipilih"); return false; }
     if (!isJabatanValid()) { setError("Jabatan harus diisi"); return false; }
     return true;
-  };
-
-  const getDivisiName = (idDivisi) => {
-    const divisi = divisiList.find(d => (d.id_divisi || d.id) == idDivisi);
-    return divisi ? (divisi.nama_divisi || divisi.nama) : "-";
   };
 
   const handleSubmit = async () => {
@@ -217,15 +237,10 @@ function AddMentor() {
         status: true
       };
       
-      console.log("Sending mentor data to API:", mentorData);
-      
       const response = await api.addMentor(mentorData);
       
       if (response && response.success) {
-        // 🔥 LOG ACTIVITY - CREATE MENTOR
         logActivity("create", "mentor", form.name);
-        
-        // 🔥 SET DATA UNTUK POP UP PREMIUM
         setSuccessData({
           name: form.name,
           email: form.email,
@@ -240,29 +255,15 @@ function AddMentor() {
       }
     } catch (err) {
       console.error("Error adding mentor:", err);
-      if (err.response?.data?.message) {
-        setError(err.response.data.message);
-      } else if (err.response?.data?.errors) {
-        const errors = Object.values(err.response.data.errors).flat();
-        setError(errors.join("\n"));
-      } else if (err.message) {
-        setError(err.message);
-      } else {
-        setError("Terjadi kesalahan saat menyimpan data");
-      }
+      setError(err.response?.data?.message || err.message || "Terjadi kesalahan saat menyimpan data");
     } finally {
       setLoading(false);
     }
   };
 
-  // 🔥 PERBAIKAN: Modal Close langsung ke halaman users dengan tab mentor
   const handleModalClose = () => {
     setShowSuccessModal(false);
-    navigate("/admin/users", { 
-      state: { 
-        tab: "mentor"
-      } 
-    });
+    navigate("/admin/users", { state: { tab: "mentor" } });
   };
 
   const requiredFields = {
@@ -276,11 +277,11 @@ function AddMentor() {
   };
   const completedCount = Object.values(requiredFields).filter(Boolean).length;
   const totalRequired = 7;
+  const passwordStrength = getPasswordStrength();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-[1200px] mx-auto">
-        
         <div className="mb-6">
           <button
             onClick={() => navigate("/admin/users")}
@@ -372,7 +373,7 @@ function AddMentor() {
                     <input
                       name="password"
                       type={showPassword ? "text" : "password"}
-                      placeholder="Minimal 6 karakter"
+                      placeholder="Minimal 8 karakter, huruf besar, huruf kecil, angka"
                       value={form.password}
                       onChange={handleChange}
                       onBlur={() => handleBlur('password')}
@@ -396,12 +397,31 @@ function AddMentor() {
                       <CheckCircle size={14} className="absolute right-9 top-1/2 -translate-y-1/2 text-emerald-500" />
                     )}
                   </div>
+                  {form.password && (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-300 ${
+                            passwordStrength.level === 3 ? 'w-full bg-emerald-500' :
+                            passwordStrength.level === 2 ? 'w-2/3 bg-amber-500' :
+                            'w-1/3 bg-red-500'
+                          }`}
+                        />
+                      </div>
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium ${passwordStrength.color}`}>
+                        {passwordStrength.text}
+                      </span>
+                    </div>
+                  )}
                   {getFieldError('password') && (
                     <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1">
                       <AlertTriangle size={10} />
                       {getFieldError('password')}
                     </p>
                   )}
+                  <p className="text-[9px] text-slate-400 mt-1">
+                    Password harus mengandung: huruf besar, huruf kecil, angka, dan minimal 8 karakter
+                  </p>
                 </div>
 
                 <div>
@@ -471,7 +491,9 @@ function AddMentor() {
                       ) : divisiList.length === 0 ? (
                         <option value="" disabled>Tidak ada divisi tersedia</option>
                       ) : (
-                        divisiList.map((divisi) => (
+                        divisiList
+                          .filter(d => d.status === "aktif" || d.status === 1 || d.status === "Aktif") // Filter divisi aktif
+                          .map((divisi) => (
                           <option key={divisi.id_divisi || divisi.id} value={divisi.id_divisi || divisi.id}>
                             {divisi.nama_divisi || divisi.nama}
                           </option>
@@ -653,7 +675,7 @@ function AddMentor() {
               <p className="text-[10px] text-slate-400 mt-2">
                 {isFormComplete() 
                   ? "✓ Semua data telah terisi, siap disimpan!" 
-                  : "⚠️ Lengkapi semua field (*) untuk melanjutkan"}
+                  : "⚠ Lengkapi semua field (*) untuk melanjutkan"}
               </p>
             </div>
           </div>
@@ -697,7 +719,7 @@ function AddMentor() {
           <div className="flex items-center gap-2">
             <Zap size={14} className="text-amber-500" />
             <p className="text-xs text-blue-700">
-              <strong className="font-semibold">Tips:</strong> Password minimal 6 karakter. 
+              <strong className="font-semibold">Tips:</strong> Password minimal 8 karakter, harus mengandung huruf besar, huruf kecil, dan angka.
               <span className="text-red-500 font-medium ml-1">Semua field wajib diisi</span>.
               Nomor telepon hanya angka 10-15 digit tanpa 0 di depan.
             </p>
@@ -705,7 +727,7 @@ function AddMentor() {
         </div>
       </div>
 
-      {/* 🔥 PREMIUM SUCCESS MODAL (RAMAI) - SAMA KAYAK ADD PESERTA */}
+      {/* SUCCESS MODAL */}
       {showSuccessModal && successData && (
         <>
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={handleModalClose} />

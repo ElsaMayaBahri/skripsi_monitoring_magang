@@ -74,31 +74,62 @@ function EditMentor() {
           return;
         }
 
-        // Ambil data mentor dari API menggunakan getMentorById
-        console.log("Fetching mentor by ID:", mentorId);
-        const response = await api.getMentorById(mentorId);
-        console.log("getMentorById response:", response);
+        // 🔥 PERBAIKAN: Ambil data mentor dari getMentors (tanpa getMentorById)
+        console.log("Fetching mentors list...");
+        const response = await api.getMentors();
+        console.log("Mentors API response:", response);
         
-        if (response && response.success && response.data) {
-          const mentor = response.data;
+        let mentorsList = [];
+        if (response && response.success && Array.isArray(response.data)) {
+          mentorsList = response.data;
+        } else if (Array.isArray(response)) {
+          mentorsList = response;
+        }
+        
+        console.log("All mentors list:", mentorsList);
+        
+        // Cari mentor berdasarkan id_mentor
+        const mentor = mentorsList.find(m => {
+          const mid = m.id_mentor || m.id || m.id_user;
+          return mid == mentorId;
+        });
+        
+        if (mentor) {
           console.log("Found mentor:", mentor);
           
-          // 🔥 SIMPAN id_user dan id_mentor
+          // Simpan id_user dan id_mentor
           setOriginalUserId(mentor.id_user);
-          setOriginalMentorId(mentor.id_mentor);
+          setOriginalMentorId(mentor.id_mentor || mentor.id);
           console.log("Original user ID:", mentor.id_user);
-          console.log("Original mentor ID:", mentor.id_mentor);
+          console.log("Original mentor ID:", mentor.id_mentor || mentor.id);
           
           // Ambil data dari response
           const mentorName = mentor.nama || mentor.name || "";
           const mentorEmail = mentor.email || "";
           const mentorPhone = mentor.no_telepon || mentor.phone || "";
           const mentorJabatan = mentor.jabatan || "";
-          const mentorDivisi = mentor.divisi || "";
+          let mentorDivisi = "";
+          
+          // Ambil divisi dari berbagai kemungkinan struktur
+          if (mentor.divisi) {
+            if (typeof mentor.divisi === 'string') {
+              mentorDivisi = mentor.divisi;
+            } else if (mentor.divisi?.nama_divisi) {
+              mentorDivisi = mentor.divisi.nama_divisi;
+            }
+          }
+          if (!mentorDivisi && mentor.user?.divisi) {
+            if (typeof mentor.user.divisi === 'string') {
+              mentorDivisi = mentor.user.divisi;
+            } else if (mentor.user.divisi?.nama_divisi) {
+              mentorDivisi = mentor.user.divisi.nama_divisi;
+            }
+          }
           
           // Ambil status
           let mentorStatus = "non_aktif";
-          if (mentor.status_akun === "aktif" || mentor.status_akun === "active") {
+          const mentorStatusAkun = mentor.status_akun || mentor.user?.status_akun;
+          if (mentorStatusAkun === "aktif" || mentorStatusAkun === "active") {
             mentorStatus = "aktif";
           } else if (mentor.status === "aktif") {
             mentorStatus = "aktif";
@@ -183,14 +214,14 @@ function EditMentor() {
     }
 
     try {
-      // 🔥 PERBAIKAN: Gunakan id_user, bukan id_mentor
+      // Gunakan id_user, bukan id_mentor
       if (!originalUserId) {
         setError("ID User tidak ditemukan");
         setSaving(false);
         return;
       }
 
-      // Data yang dikirim ke API - sesuai dengan yang diharapkan backend
+      // Data yang dikirim ke API
       const updateData = {
         email: form.email.trim(),
         name: form.name.trim(),
@@ -203,13 +234,10 @@ function EditMentor() {
       console.log("📤 Sending update data to API with user_id:", originalUserId);
       console.log("Update data:", JSON.stringify(updateData, null, 2));
       
-      // 🔥 PERBAIKAN: Update menggunakan id_user (bukan id_mentor)
-      // Karena backend mencari user dengan where('id_user', $id)
       const response = await api.updateMentor(originalUserId, updateData);
       console.log("📥 API response:", response);
       
       if (response && response.success) {
-        // 🔥 LOG ACTIVITY - UPDATE MENTOR
         logActivity("update", "mentor", form.name);
         
         setSuccessData({

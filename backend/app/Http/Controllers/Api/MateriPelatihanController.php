@@ -20,12 +20,17 @@ class MateriPelatihanController extends Controller
         try {
             $materi = MateriPelatihan::orderBy('created_at', 'desc')->get();
 
+            // Tambahkan URL file yang bisa diakses
+            $materi = $materi->map(function ($item) {
+                return $this->addFileUrl($item);
+            });
+
             return response()->json([
                 'success' => true,
                 'data' => $materi
             ], 200);
         } catch (\Exception $e) {
-            Log::error('Error index materi: ' . $e->getMessage()); // Gunakan Log
+            Log::error('Error index materi: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal mengambil data materi',
@@ -35,12 +40,28 @@ class MateriPelatihanController extends Controller
     }
 
     /**
+     * Add accessible file URL to materi object
+     */
+    private function addFileUrl($materi)
+    {
+        if ($materi->file_materi) {
+            // Get filename from path
+            $filename = basename($materi->file_materi);
+            $materi->file_url = url('/api/materi-file/' . $filename);
+            $materi->file_preview_url = url('/api/materi-file/' . $filename);
+        } else {
+            $materi->file_url = null;
+            $materi->file_preview_url = null;
+        }
+        return $materi;
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
     {
         try {
-            // Log request untuk debugging
             Log::info('Store materi request:', [
                 'all_data' => $request->all(),
                 'has_file' => $request->hasFile('file'),
@@ -51,24 +72,23 @@ class MateriPelatihanController extends Controller
                 ] : null
             ]);
 
-            // Validasi input
             $validator = Validator::make($request->all(), [
                 'judul' => 'required|string|max:150',
                 'deskripsi' => 'nullable|string',
                 'divisi' => 'nullable|string|max:100',
                 'kategori' => 'nullable|string|max:50',
                 'file' => [
-    'required',
-    'file',
-    'max:51200',
-    function ($attribute, $value, $fail) {
-        $allowedExtensions = ['pdf', 'mp4', 'ppt', 'pptx', 'doc', 'docx'];
-        $extension = strtolower($value->getClientOriginalExtension());
-        if (!in_array($extension, $allowedExtensions)) {
-            $fail('Format file harus PDF, MP4, PPT, PPTX, DOC, atau DOCX.');
-        }
-    },
-],
+                    'required',
+                    'file',
+                    'max:51200',
+                    function ($attribute, $value, $fail) {
+                        $allowedExtensions = ['pdf', 'mp4', 'ppt', 'pptx', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
+                        $extension = strtolower($value->getClientOriginalExtension());
+                        if (!in_array($extension, $allowedExtensions)) {
+                            $fail('Format file harus PDF, MP4, PPT, PPTX, DOC, DOCX, JPG, JPEG, atau PNG.');
+                        }
+                    },
+                ],
             ]);
 
             if ($validator->fails()) {
@@ -79,7 +99,6 @@ class MateriPelatihanController extends Controller
                 ], 422);
             }
 
-            // Handle file upload
             if (!$request->hasFile('file')) {
                 return response()->json([
                     'success' => false,
@@ -89,7 +108,6 @@ class MateriPelatihanController extends Controller
 
             $file = $request->file('file');
 
-            // Validasi file benar-benar terupload
             if (!$file->isValid()) {
                 return response()->json([
                     'success' => false,
@@ -97,12 +115,10 @@ class MateriPelatihanController extends Controller
                 ], 400);
             }
 
-            // Generate unique filename
             $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
             $extension = $file->getClientOriginalExtension();
             $fileName = time() . '_' . Str::slug($originalName) . '.' . $extension;
 
-            // Store file
             $filePath = $file->storeAs('materi', $fileName, 'public');
 
             if (!$filePath) {
@@ -112,7 +128,6 @@ class MateriPelatihanController extends Controller
                 ], 500);
             }
 
-            // Create materi pelatihan
             $materi = MateriPelatihan::create([
                 'judul' => $request->judul,
                 'deskripsi' => $request->deskripsi,
@@ -122,6 +137,8 @@ class MateriPelatihanController extends Controller
                 'views' => 0
             ]);
 
+            $materi = $this->addFileUrl($materi);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Materi berhasil ditambahkan',
@@ -129,7 +146,6 @@ class MateriPelatihanController extends Controller
             ], 201);
         } catch (\Exception $e) {
             Log::error('Error store materi: ' . $e->getMessage());
-            Log::error('Stack trace: ' . $e->getTraceAsString());
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal menambahkan materi: ' . $e->getMessage()
@@ -144,9 +160,8 @@ class MateriPelatihanController extends Controller
     {
         try {
             $materi = MateriPelatihan::findOrFail($id);
-
-            // Increment views
             $materi->increment('views');
+            $materi = $this->addFileUrl($materi);
 
             return response()->json([
                 'success' => true,
@@ -175,19 +190,19 @@ class MateriPelatihanController extends Controller
                 'divisi' => 'nullable|string|max:100',
                 'kategori' => 'nullable|string|max:50',
                 'file' => [
-    'nullable',
-    'file',
-    'max:51200',
-    function ($attribute, $value, $fail) {
-        if ($value) {
-            $allowedExtensions = ['pdf', 'mp4', 'ppt', 'pptx', 'doc', 'docx'];
-            $extension = strtolower($value->getClientOriginalExtension());
-            if (!in_array($extension, $allowedExtensions)) {
-                $fail('Format file harus PDF, MP4, PPT, PPTX, DOC, atau DOCX.');
-            }
-        }
-    },
-],
+                    'nullable',
+                    'file',
+                    'max:51200',
+                    function ($attribute, $value, $fail) {
+                        if ($value) {
+                            $allowedExtensions = ['pdf', 'mp4', 'ppt', 'pptx', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
+                            $extension = strtolower($value->getClientOriginalExtension());
+                            if (!in_array($extension, $allowedExtensions)) {
+                                $fail('Format file harus PDF, MP4, PPT, PPTX, DOC, DOCX, JPG, JPEG, atau PNG.');
+                            }
+                        }
+                    },
+                ],
             ]);
 
             if ($validator->fails()) {
@@ -198,12 +213,9 @@ class MateriPelatihanController extends Controller
                 ], 422);
             }
 
-            // Update file if new file is uploaded
             if ($request->hasFile('file')) {
-                // Delete old file
                 if ($materi->file_materi && Storage::disk('public')->exists($materi->file_materi)) {
                     Storage::disk('public')->delete($materi->file_materi);
-                    Log::info('Old file deleted: ' . $materi->file_materi);
                 }
 
                 $file = $request->file('file');
@@ -213,18 +225,15 @@ class MateriPelatihanController extends Controller
                 $filePath = $file->storeAs('materi', $fileName, 'public');
 
                 $materi->file_materi = $filePath;
-                Log::info('New file uploaded: ' . $filePath);
             }
 
-            // Update other fields
             if ($request->has('judul')) $materi->judul = $request->judul;
             if ($request->has('deskripsi')) $materi->deskripsi = $request->deskripsi;
             if ($request->has('divisi')) $materi->divisi = $request->divisi;
             if ($request->has('kategori')) $materi->kategori = $request->kategori;
 
             $materi->save();
-
-            Log::info('Materi updated successfully: ' . $materi->id_materi_pelatihan);
+            $materi = $this->addFileUrl($materi);
 
             return response()->json([
                 'success' => true,
@@ -248,7 +257,6 @@ class MateriPelatihanController extends Controller
         try {
             $materi = MateriPelatihan::findOrFail($id);
 
-            // Delete file from storage
             if ($materi->file_materi && Storage::disk('public')->exists($materi->file_materi)) {
                 Storage::disk('public')->delete($materi->file_materi);
             }
@@ -277,6 +285,10 @@ class MateriPelatihanController extends Controller
             $materi = MateriPelatihan::where('divisi', $divisi)
                 ->orderBy('created_at', 'desc')
                 ->get();
+
+            $materi = $materi->map(function ($item) {
+                return $this->addFileUrl($item);
+            });
 
             return response()->json([
                 'success' => true,
@@ -307,13 +319,58 @@ class MateriPelatihanController extends Controller
             }
 
             $fullPath = Storage::disk('public')->path($materi->file_materi);
-            return response()->download($fullPath);
+            $filename = $materi->judul . '.' . pathinfo($fullPath, PATHINFO_EXTENSION);
+            
+            return response()->download($fullPath, $filename, [
+                'Content-Type' => mime_content_type($fullPath),
+                'Access-Control-Allow-Origin' => '*',
+            ]);
         } catch (\Exception $e) {
             Log::error('Error download materi: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal mendownload file: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Serve file for preview (public access)
+     * 🔥 INI METHOD PENTING UNTUK PREVIEW FILE
+     */
+    public function serveFile($filename)
+    {
+        try {
+            // Cari file di storage/public/materi/
+            $path = storage_path('app/public/materi/' . $filename);
+            
+            if (!file_exists($path)) {
+                Log::error('File not found: ' . $path);
+                return response()->json(['error' => 'File not found'], 404);
+            }
+            
+            $mime = mime_content_type($path);
+            $fileSize = filesize($path);
+            
+            // Set header untuk cache dan CORS
+            $headers = [
+                'Content-Type' => $mime,
+                'Content-Length' => $fileSize,
+                'Access-Control-Allow-Origin' => '*',
+                'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers' => '*',
+                'Cache-Control' => 'public, max-age=86400',
+            ];
+            
+            // Untuk PDF, tambahkan header agar bisa ditampilkan di iframe
+            if ($mime === 'application/pdf') {
+                $headers['Content-Disposition'] = 'inline; filename="' . $filename . '"';
+            }
+            
+            return response()->file($path, $headers);
+        } catch (\Exception $e) {
+            Log::error('Error serve file: ' . $e->getMessage());
+            return response()->json(['error' => 'Internal server error'], 500);
         }
     }
 }

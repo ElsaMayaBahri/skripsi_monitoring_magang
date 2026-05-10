@@ -16,6 +16,12 @@ class Kuis extends Model
     protected $fillable = [
         'judul_kuis',
         'deskripsi',
+        'divisi',
+        'durasi',
+        'passing',
+        'total_soal',
+        'questions',
+        'peserta',
         'tanggal_mulai',
         'tanggal_selesai',
     ];
@@ -23,9 +29,50 @@ class Kuis extends Model
     protected $casts = [
         'tanggal_mulai' => 'date',
         'tanggal_selesai' => 'date',
+        'questions' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    /**
+     * Accessor untuk title (kompatibel dengan frontend)
+     */
+    public function getTitleAttribute()
+    {
+        return $this->judul_kuis;
+    }
+
+    /**
+     * Accessor untuk judul (kompatibel dengan frontend)
+     */
+    public function getJudulAttribute()
+    {
+        return $this->judul_kuis;
+    }
+
+    /**
+     * Accessor untuk duration (kompatibel dengan frontend)
+     */
+    public function getDurationAttribute()
+    {
+        return $this->durasi;
+    }
+
+    /**
+     * Accessor untuk participants (kompatibel dengan frontend)
+     */
+    public function getParticipantsAttribute()
+    {
+        return $this->peserta;
+    }
+
+    /**
+     * Accessor untuk passing grade (kompatibel dengan frontend)
+     */
+    public function getPassingAttribute()
+    {
+        return $this->passing ?? 75;
+    }
 
     /**
      * Relasi ke SoalKuis
@@ -72,6 +119,16 @@ class Kuis extends Model
     }
 
     /**
+     * Get status kuis
+     */
+    public function getStatusAttribute()
+    {
+        if ($this->is_belum_mulai) return 'akan_datang';
+        if ($this->is_aktif) return 'aktif';
+        return 'selesai';
+    }
+
+    /**
      * Scope untuk kuis yang aktif
      */
     public function scopeAktif($query)
@@ -102,6 +159,18 @@ class Kuis extends Model
      */
     public function getTotalSkorMaksimalAttribute()
     {
-        return $this->soal()->count(); // Asumsikan setiap soal bernilai 1
+        return $this->soal()->count();
+    }
+
+    /**
+     * Cek apakah peserta lulus berdasarkan skor
+     */
+    public function isLulus($skor)
+    {
+        $maxScore = $this->total_soal;
+        if ($maxScore == 0) return false;
+        
+        $percentage = ($skor / $maxScore) * 100;
+        return $percentage >= $this->passing;
     }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class MateriMentor extends Model
 {
@@ -18,11 +19,15 @@ class MateriMentor extends Model
         'judul',
         'deskripsi',
         'file_materi',
+        'tipe_materi',  // ✅ TAMBAHKAN
+        'link',         // ✅ TAMBAHKAN
+        'views',        // ✅ TAMBAHKAN
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'views' => 'integer',
     ];
 
     /**
@@ -47,7 +52,18 @@ class MateriMentor extends Model
     public function getFileUrlAttribute()
     {
         if ($this->file_materi) {
-            return asset('storage/' . $this->file_materi);
+            return Storage::url($this->file_materi);
+        }
+        return null;
+    }
+
+    /**
+     * Accessor untuk URL video
+     */
+    public function getVideoUrlAttribute()
+    {
+        if ($this->tipe_materi === 'video' && $this->file_materi) {
+            return Storage::url($this->file_materi);
         }
         return null;
     }
@@ -81,6 +97,10 @@ class MateriMentor extends Model
             'jpg' => 'file-image',
             'jpeg' => 'file-image',
             'png' => 'file-image',
+            'mp4' => 'file-video',
+            'mov' => 'file-video',
+            'avi' => 'file-video',
+            'webm' => 'file-video',
             'zip' => 'file-archive',
             'rar' => 'file-archive',
         ];
@@ -121,6 +141,14 @@ class MateriMentor extends Model
     }
 
     /**
+     * Scope untuk filter berdasarkan tipe materi
+     */
+    public function scopeByTipe($query, $tipe)
+    {
+        return $query->where('tipe_materi', $tipe);
+    }
+
+    /**
      * Mendapatkan ukuran file dalam format yang mudah dibaca
      */
     public function getFileSizeAttribute()
@@ -138,7 +166,7 @@ class MateriMentor extends Model
                 return round($bytes, 2) . ' ' . $units[$i];
             }
         }
-        return 'Tidak diketahui';
+        return null;
     }
 
     /**
@@ -154,6 +182,30 @@ class MateriMentor extends Model
      */
     public function getNamaMentorAttribute()
     {
-        return $this->mentor ? $this->mentor->nama_lengkap : 'Tidak Diketahui';
+        return $this->mentor ? ($this->mentor->user->nama ?? 'Tidak Diketahui') : 'Tidak Diketahui';
+    }
+
+    /**
+     * Cek apakah materi adalah dokumen
+     */
+    public function isDokumen()
+    {
+        return $this->tipe_materi === 'dokumen';
+    }
+
+    /**
+     * Cek apakah materi adalah video
+     */
+    public function isVideo()
+    {
+        return $this->tipe_materi === 'video';
+    }
+
+    /**
+     * Cek apakah materi adalah link
+     */
+    public function isLink()
+    {
+        return $this->tipe_materi === 'link';
     }
 }

@@ -30,9 +30,6 @@ import {
   TrendingUp,
   TrendingDown,
   Filter,
-  Crown,
-  Medal,
-  Trophy,
   ArrowUp,
   ArrowDown,
   BarChart3,
@@ -193,7 +190,6 @@ function Divisi() {
           throw new Error(response.message || "Gagal memperbarui divisi")
         }
         
-        // 🔥 LOG ACTIVITY - UPDATE DIVISI
         logActivity("update", "divisi", form.nama_divisi)
         
         const statusText = form.status === "aktif" ? "diaktifkan" : "dinonaktifkan"
@@ -214,7 +210,6 @@ function Divisi() {
           throw new Error(response.message || "Gagal menambahkan divisi")
         }
         
-        // 🔥 LOG ACTIVITY - CREATE DIVISI
         logActivity("create", "divisi", form.nama_divisi)
         
         setSuccessMessage(`Divisi "${form.nama_divisi}" berhasil ditambahkan!`)
@@ -255,7 +250,6 @@ function Divisi() {
     try {
       await api.deleteDivisi(deleteTarget.id_divisi)
       
-      // 🔥 LOG ACTIVITY - DELETE DIVISI
       logActivity("delete", "divisi", deleteTarget.nama_divisi)
       
       await loadData()
@@ -522,7 +516,7 @@ function Divisi() {
                         <span>Jumlah Peserta</span>
                       </div>
                       {sortBy === "peserta_terbanyak" && (
-                        sortOrder === "desc" ? <TrendingDown size={14} /> : <TrendingUp size={14} />
+                        sortOrder === "desc" ? <TrendingUp size={14} /> : <TrendingDown size={14} />
                       )}
                     </button>
                     
@@ -537,18 +531,18 @@ function Divisi() {
                         <span>Jumlah Mentor</span>
                       </div>
                       {sortBy === "mentor_terbanyak" && (
-                        sortOrder === "desc" ? <TrendingDown size={14} /> : <TrendingUp size={14} />
+                        sortOrder === "desc" ? <TrendingUp size={14} /> : <TrendingDown size={14} />
                       )}
                     </button>
                   </div>
                   <div className="p-3 border-t border-slate-100 bg-slate-50/50">
                     <p className="text-[10px] text-slate-400 text-center">
-                      {sortBy === "peserta_terbanyak" && sortOrder === "desc" && "Menampilkan divisi dengan peserta terbanyak di atas"}
-                      {sortBy === "peserta_terbanyak" && sortOrder === "asc" && "Menampilkan divisi dengan peserta paling sedikit di atas"}
-                      {sortBy === "mentor_terbanyak" && sortOrder === "desc" && "Menampilkan divisi dengan mentor terbanyak di atas"}
-                      {sortBy === "mentor_terbanyak" && sortOrder === "asc" && "Menampilkan divisi dengan mentor paling sedikit di atas"}
-                      {sortBy === "nama" && sortOrder === "asc" && "Menampilkan divisi dari A-Z"}
-                      {sortBy === "nama" && sortOrder === "desc" && "Menampilkan divisi dari Z-A"}
+                      {sortBy === "peserta_terbanyak" && sortOrder === "desc" && "Menampilkan divisi dengan peserta terbanyak di atas (↑)"}
+                      {sortBy === "peserta_terbanyak" && sortOrder === "asc" && "Menampilkan divisi dengan peserta paling sedikit di atas (↓)"}
+                      {sortBy === "mentor_terbanyak" && sortOrder === "desc" && "Menampilkan divisi dengan mentor terbanyak di atas (↑)"}
+                      {sortBy === "mentor_terbanyak" && sortOrder === "asc" && "Menampilkan divisi dengan mentor paling sedikit di atas (↓)"}
+                      {sortBy === "nama" && sortOrder === "asc" && "Menampilkan divisi dari A-Z (↑)"}
+                      {sortBy === "nama" && sortOrder === "desc" && "Menampilkan divisi dari Z-A (↓)"}
                     </p>
                   </div>
                 </div>
@@ -571,7 +565,7 @@ function Divisi() {
                       Peserta
                       {sortBy === "peserta_terbanyak" && (
                         <span className="text-blue-500">
-                          {sortOrder === "desc" ? <TrendingDown size={10} /> : <TrendingUp size={10} />}
+                          {sortOrder === "desc" ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                         </span>
                       )}
                     </div>
@@ -582,7 +576,7 @@ function Divisi() {
                       Mentor
                       {sortBy === "mentor_terbanyak" && (
                         <span className="text-blue-500">
-                          {sortOrder === "desc" ? <TrendingDown size={10} /> : <TrendingUp size={10} />}
+                          {sortOrder === "desc" ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                         </span>
                       )}
                     </div>
@@ -630,13 +624,6 @@ function Divisi() {
                               isActive ? 'bg-gradient-to-br from-blue-500 to-indigo-500' : 'bg-gradient-to-br from-slate-400 to-slate-500'
                             }`}>
                               <Building2 size={16} className="text-white" />
-                              {isTopRank && (
-                                <div className="absolute -top-1 -right-1">
-                                  {globalIndex === 0 && <Crown size={14} className="text-yellow-500" />}
-                                  {globalIndex === 1 && <Medal size={14} className="text-gray-400" />}
-                                  {globalIndex === 2 && <Medal size={14} className="text-amber-600" />}
-                                </div>
-                              )}
                             </div>
                             <span className={`font-semibold text-slate-800 text-sm ${isTopRank ? 'text-blue-600' : ''}`}>
                               {d.nama_divisi}

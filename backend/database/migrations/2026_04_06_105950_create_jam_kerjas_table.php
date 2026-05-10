@@ -1,29 +1,75 @@
 <?php
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
+namespace App\Models;
 
-return new class extends Migration
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Carbon\Carbon;
+
+class JamKerja extends Model
 {
-    public function up(): void
+    use HasFactory;
+
+    protected $table = 'jam_kerjas';
+    protected $primaryKey = 'id_jam_kerja';
+    
+    protected $fillable = [
+        'jam_masuk',
+        'jam_pulang',
+        'batas_terlambat',
+    ];
+
+    protected $casts = [
+        'jam_masuk' => 'string',
+        'jam_pulang' => 'string',
+        'batas_terlambat' => 'string',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    /**
+     * Mendapatkan konfigurasi jam kerja (hanya ada 1 record)
+     */
+    public static function getConfig()
     {
-        Schema::create('jam_kerjas', function (Blueprint $table) {
-            $table->id('id_jam_kerja'); // Primary key
-            $table->time('jam_masuk'); // Jam masuk kerja
-            $table->time('jam_pulang'); // Jam pulang kerja
-            $table->time('batas_terlambat'); // Batas waktu terlambat
-            $table->timestamps(); // created_at dan updated_at
-            
-            // Hanya akan ada 1 record konfigurasi jam kerja
-            // Index untuk optimasi
-            $table->index('jam_masuk');
-            $table->index('jam_pulang');
-        });
+        return self::first();
     }
 
-    public function down(): void
+    /**
+     * Cek apakah waktu check in terlambat
+     * batas_terlambat dalam format waktu (H:i:s)
+     */
+    public function isTerlambat($checkInTime)
     {
-        Schema::dropIfExists('jam_kerjas');
+        $batasWaktu = Carbon::parse($this->batas_terlambat);
+        $checkIn = Carbon::parse($checkInTime);
+        
+        return $checkIn->gt($batasWaktu);
     }
-};
+
+    /**
+     * Hitung keterlambatan dalam menit
+     */
+    public function hitungKeterlambatan($checkInTime)
+    {
+        if (!$this->isTerlambat($checkInTime)) {
+            return 0;
+        }
+        
+        $batasWaktu = Carbon::parse($this->batas_terlambat);
+        $checkIn = Carbon::parse($checkInTime);
+        
+        return $batasWaktu->diffInMinutes($checkIn);
+    }
+
+    /**
+     * Cek apakah check out lebih awal
+     */
+    public function isPulangCepat($checkOutTime)
+    {
+        $jamPulang = Carbon::parse($this->jam_pulang);
+        $checkOut = Carbon::parse($checkOutTime);
+        
+        return $checkOut->lt($jamPulang);
+    }
+}

@@ -19,7 +19,8 @@ import {
   Calendar,
   ChevronLeft,
   ChevronDown,
-  Shield
+  Shield,
+  Power
 } from "lucide-react"
 
 function AdminLayout() {
@@ -117,7 +118,11 @@ function AdminLayout() {
   const unreadCount = notifications.filter(n => !n.is_read).length
 
   const handleLogout = () => {
-    localStorage.clear()
+    localStorage.removeItem("token")
+    localStorage.removeItem("user")
+    localStorage.removeItem("role")
+    localStorage.removeItem("rememberedEmail")
+    
     navigate("/login")
   }
 
@@ -156,7 +161,7 @@ function AdminLayout() {
                 <h1 className="font-bold text-gray-800 text-lg tracking-tight">
                   Kuanta <span className="text-teal-500">Academy</span>
                 </h1>
-                <p className="text-xs text-gray-400 font-medium">Administrator Portal</p>
+                <p className="text-xs text-gray-400 font-medium">Admin Portal</p>
               </div>
             )}
           </div>
@@ -249,14 +254,17 @@ function AdminLayout() {
             </div>
           </div>
 
-          {/* LOGOUT */}
+          {/* LOGOUT BUTTON - SIDEBAR - PREMIUM */}
           <div className="p-4 border-t border-gray-200">
             <button
               onClick={handleLogout}
-              className="w-full flex justify-center gap-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white py-2.5 rounded-xl transition-all duration-200 shadow-md shadow-red-500/20"
+              className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-md shadow-red-500/20 hover:shadow-lg hover:shadow-red-500/30"
             >
-              <LogOut size={16} />
-              {!collapsed && <span className="font-medium">Keluar</span>}
+              <div className="absolute inset-0 bg-white/20 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-300"></div>
+              <div className={`relative flex items-center justify-center gap-2 py-2.5 ${collapsed ? "px-2" : "px-4"}`}>
+                <Power size={16} className="group-hover:rotate-90 transition-transform duration-300" />
+                {!collapsed && <span className="font-medium">Keluar</span>}
+              </div>
             </button>
           </div>
 
@@ -271,7 +279,7 @@ function AdminLayout() {
         </div>
 
         {/* RIGHT SIDE - Topbar + Content */}
-        <div className="flex-1 flex flex-col overflow-hidden relative z-10">
+        <div className="flex-1 flex flex-col overflow-hidden relative z-10 bg-gradient-to-br from-gray-50 to-gray-100">
           
           {/* TOPBAR PREMIUM */}
           <div className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-6 shadow-sm shrink-0 relative z-50">
@@ -396,15 +404,14 @@ function AdminLayout() {
                       </div>
                     </div>
 
-                    
-
-                    <div className="py-2 pb-3">
+                    {/* LOGOUT BUTTON - PROFILE DROPDOWN - PREMIUM & RATA */}
+                    <div className="py-2">
                       <button 
                         onClick={handleLogout}
                         className="w-full flex items-center gap-3 px-5 py-3 text-sm text-red-600 hover:bg-red-50 transition group"
                       >
                         <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center group-hover:bg-red-100 transition">
-                          <LogOut size={14} className="text-red-500" />
+                          <Power size={14} className="text-red-500" />
                         </div>
                         <div className="flex-1 text-left">
                           <p className="font-medium">Keluar</p>
@@ -418,11 +425,9 @@ function AdminLayout() {
             </div>
           </div>
 
-          {/* CONTENT */}
-          <div className="flex-1 overflow-auto p-6">
-            <div className="w-full">
-              <Outlet />
-            </div>
+          {/* CONTENT AREA - FULLY INTEGRATED, NO EXTRA CARD */}
+          <div className="flex-1 overflow-auto">
+            <Outlet />
           </div>
 
         </div>

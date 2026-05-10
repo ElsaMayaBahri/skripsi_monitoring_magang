@@ -12,10 +12,10 @@ return new class extends Migration
             $table->id('id_pengumpulan'); // Primary key
             $table->unsignedBigInteger('id_tugas'); // Foreign key ke tugas
             $table->unsignedBigInteger('id_peserta'); // Foreign key ke peserta
-            $table->string('file_jawaban', 255); // File jawaban tugas
+            $table->string('file_jawaban', 255)->nullable(); // File jawaban tugas (nullable karena belum tentu dikumpulkan)
             $table->enum('status', ['dikumpulkan', 'dinilai', 'selesai', 'terlambat'])->default('dikumpulkan'); // Status pengumpulan
             $table->text('catatan_mentor')->nullable(); // Catatan dari mentor
-            $table->dateTime('tanggal_kumpul'); // Tanggal pengumpulan
+            $table->dateTime('tanggal_kumpul')->nullable(); // Tanggal pengumpulan (nullable karena bisa belum kumpul)
             $table->timestamps(); // created_at dan updated_at
             
             // Foreign key ke tabel tugas
@@ -46,4 +46,3 @@ return new class extends Migration
         Schema::dropIfExists('pengumpulan_tugas');
     }
 };
-
