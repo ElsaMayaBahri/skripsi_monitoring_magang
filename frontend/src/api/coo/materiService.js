@@ -1,3 +1,4 @@
+// frontend/src/api/coo/materiService.js
 import axiosInstance from "../axios"
 
 // Get all materi
@@ -22,9 +23,9 @@ export const createMateri = async (formData) => {
   return response.data
 }
 
-// Update materi (with file upload)
+// Update materi (with file upload) - FIXED: Use POST only
 export const updateMateri = async (id, formData) => {
-  formData.append("_method", "PUT")
+  // Langsung pakai POST, karena route sudah mendukung POST untuk update
   const response = await axiosInstance.post(`/materi-pelatihan/${id}`, formData, {
     headers: {
       "Content-Type": "multipart/form-data",

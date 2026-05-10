@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService"
-import axiosInstance from "../../api/axios"  // ← TAMBAHKAN INI
+import { getMateriById, updateMateri } from "../../api/coo/materiService"
+import axiosInstance from "../../api/axios"
 import { 
   ArrowLeft, 
   Save, 
@@ -64,40 +65,36 @@ function EditMateri() {
   const fetchMateri = async () => {
     setLoading(true)
     try {
-      const response = await api.getMateri()
-      if (response.success && response.data) {
-        const materiItem = response.data.find(item => 
-          (item.id_materi_pelatihan == id) || 
-          (item.id_materi == id) || 
-          (item.id == id)
-        )
+      const response = await getMateriById(id)
+      console.log("Materi response:", response)
+      
+      if (response && response.success && response.data) {
+        const materiItem = response.data
         
-        if (materiItem) {
-          setForm({
-            judul: materiItem.judul || materiItem.title || "",
-            deskripsi: materiItem.deskripsi || materiItem.description || "",
-            divisi: materiItem.divisi || "",
-            kategori: materiItem.kategori || ""
+        setForm({
+          judul: materiItem.judul || materiItem.title || "",
+          deskripsi: materiItem.deskripsi || materiItem.description || "",
+          divisi: materiItem.divisi || "",
+          kategori: materiItem.kategori || ""
+        })
+        
+        if (materiItem.file_materi) {
+          setExistingFile({
+            name: materiItem.file_materi.split('/').pop(),
+            path: materiItem.file_materi,
+            url: cleanUrl(materiItem.file_materi),
+            type: materiItem.kategori === "PDF" ? "application/pdf" : 
+                   materiItem.kategori === "Video" ? "video/mp4" : "application/octet-stream"
           })
-          
-          if (materiItem.file_materi) {
-            setExistingFile({
-              name: materiItem.file_materi.split('/').pop(),
-              path: materiItem.file_materi,
-              url: cleanUrl(materiItem.file_materi),
-              type: materiItem.kategori === "PDF" ? "application/pdf" : 
-                     materiItem.kategori === "Video" ? "video/mp4" : "application/octet-stream"
-            })
-          }
-        } else {
-          setError("Materi tidak ditemukan")
         }
+      } else if (response && response.data && !response.success) {
+        setError(response.message || "Gagal mengambil data materi")
       } else {
-        setError("Gagal mengambil data materi")
+        setError("Materi tidak ditemukan")
       }
     } catch (error) {
       console.error("Error fetch materi:", error)
-      setError("Terjadi kesalahan saat mengambil data")
+      setError(error.response?.data?.message || error.message || "Terjadi kesalahan saat mengambil data")
     } finally {
       setLoading(false)
     }
@@ -105,12 +102,15 @@ function EditMateri() {
 
   const fetchDivisi = async () => {
     try {
-      const response = await api.getDivisi()
+      const response = await getDivisi()
       let divisiData = []
-      if (response.success && response.data) {
+      if (response && response.success && Array.isArray(response.data)) {
         divisiData = response.data
+      } else if (Array.isArray(response)) {
+        divisiData = response
       }
       setDivisiList(divisiData)
+      console.log("Divisi list loaded:", divisiData)
     } catch (error) {
       console.error("Error fetch divisi:", error)
     }
@@ -196,36 +196,55 @@ function EditMateri() {
       const materiId = parseInt(id)
       
       const formData = new FormData()
+      
+      // Data untuk update
       formData.append("judul", form.judul.trim())
       formData.append("deskripsi", form.deskripsi || "")
       formData.append("divisi", form.divisi)
       formData.append("kategori", form.kategori || "")
       
+      // Hanya append file jika ada file baru
       if (newFile && newFile.file) {
         formData.append("file", newFile.file)
       }
 
-      console.log("Updating materi:", {
-        id: materiId,
+      console.log("Updating materi ID:", materiId)
+      console.log("Data:", {
         judul: form.judul,
         divisi: form.divisi,
         kategori: form.kategori,
-        hasFile: !!newFile
+        hasFile: !!(newFile && newFile.file)
       })
 
-      const response = await api.updateMateri(materiId, formData)
+      const response = await updateMateri(materiId, formData)
+      console.log("Update response:", response)
       
-      if (response.success) {
-        setSuccess("Materi berhasil diupdate!")
+      if (response && response.success) {
+        setSuccess(response.message || "Materi berhasil diupdate!")
         setTimeout(() => {
           navigate("/coo/materi")
         }, 1500)
       } else {
-        setError(response.message || "Gagal mengupdate materi")
+        setError(response?.message || "Gagal mengupdate materi")
       }
     } catch (err) {
       console.error("Error updating materi:", err)
-      setError(err.message || "Terjadi kesalahan saat mengupdate materi")
+      
+      if (err.response?.status === 405) {
+        setError("Method tidak diizinkan. Silahkan coba lagi.")
+      } else if (err.response?.status === 422) {
+        const errors = err.response.data?.errors
+        if (errors) {
+          const errorMessages = Object.values(errors).flat()
+          setError(errorMessages.join(", "))
+        } else {
+          setError(err.response.data?.message || "Validasi gagal")
+        }
+      } else if (err.response?.status === 404) {
+        setError("Materi tidak ditemukan")
+      } else {
+        setError(err.response?.data?.message || err.message || "Terjadi kesalahan saat mengupdate materi")
+      }
     } finally {
       setLoading(false)
     }
@@ -362,8 +381,8 @@ function EditMateri() {
                     >
                       <option value="">Pilih Divisi</option>
                       {divisiList.map((div) => (
-                        <option key={div.id_divisi} value={div.nama_divisi}>
-                          {div.nama_divisi}
+                        <option key={div.id_divisi || div.id} value={div.nama_divisi || div.nama}>
+                          {div.nama_divisi || div.nama}
                         </option>
                       ))}
                     </select>
