@@ -236,7 +236,7 @@ function Divisi() {
   const openDeleteModal = (item) => {
     const stats = getStats(item.nama_divisi)
     if (stats.peserta > 0 || stats.mentor > 0) {
-      setError(`Tidak dapat menghapus divisi "${item.nama_divisi}" karena masih memiliki ${stats.peserta} peserta dan ${stats.mentor} mentor. Nonaktifkan saja divisi ini.`)
+      setError(`Tidak dapat menghapus divisi "${item.nama_divisi}" karena masih memiliki ${stats.peserta} peserta dan ${stats.mentor} mentor. Nonaktifkan saja divisi ini melalui menu edit.`)
       setTimeout(() => setError(""), 5000)
       return
     }
@@ -250,7 +250,15 @@ function Divisi() {
     
     setDeleteLoading(true)
     try {
-      await deleteDivisi(deleteTarget.id_divisi)
+      console.log(`Attempting to delete divisi ID: ${deleteTarget.id_divisi}`)
+      
+      const response = await deleteDivisi(deleteTarget.id_divisi)
+      console.log("Delete response:", response)
+      
+      // Check if response indicates success
+      if (response && response.success === false) {
+        throw new Error(response.message || "Gagal menghapus divisi")
+      }
       
       logActivity("delete", "divisi", deleteTarget.nama_divisi)
       
@@ -259,17 +267,36 @@ function Divisi() {
       setSuccessMessage(`Divisi "${deleteTarget.nama_divisi}" berhasil dihapus!`)
       setSuccessType("delete")
       setShowSuccessModal(true)
+      setDeleteTarget(null)
+      
     } catch (err) {
       console.error("Error deleting divisi:", err)
-      setError(err.message || "Failed to delete divisi")
+      
+      let errorMessage = err.message || "Gagal menghapus divisi"
+      
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error
+      } else if (err.response?.status === 400) {
+        errorMessage = `Divisi "${deleteTarget?.nama_divisi}" tidak dapat dihapus karena masih memiliki data terkait. Silahkan nonaktifkan divisi ini melalui menu edit.`
+      }
+      
+      setError(errorMessage)
+      setShowDeleteModal(false)
+      setDeleteTarget(null)
+      
+      // Scroll ke error message
+      setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100)
     } finally {
       setDeleteLoading(false)
-      setDeleteTarget(null)
     }
   }
 
   const handleModalClose = () => {
     setShowSuccessModal(false)
+    // Optional: reload data after modal closes
+    loadData()
   }
 
   const handleSort = (type) => {

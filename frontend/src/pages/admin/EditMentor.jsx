@@ -1,6 +1,8 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
+import { getPeserta, updatePeserta } from "../../api/admin/pesertaService";
+import { getMentor as getMentors, updateMentor } from "../../api/admin/mentorService"; 
+import { getDivisi } from "../../api/admin/divisiService";  
 import { logActivity } from "../../utils/activityLogger";
 import {
   ArrowLeft,
@@ -198,81 +200,82 @@ function EditMentor() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    setError(null);
+  setSaving(true);
+  setError(null);
 
-    if (!form.name || form.name.trim() === "") {
-      setError("Nama lengkap harus diisi");
+  if (!form.name || form.name.trim() === "") {
+    setError("Nama lengkap harus diisi");
+    setSaving(false);
+    return;
+  }
+
+  if (!form.email || form.email.trim() === "") {
+    setError("Email harus diisi");
+    setSaving(false);
+    return;
+  }
+
+  try {
+    // Gunakan id_user, bukan id_mentor
+    if (!originalUserId) {
+      setError("ID User tidak ditemukan");
       setSaving(false);
       return;
     }
 
-    if (!form.email || form.email.trim() === "") {
-      setError("Email harus diisi");
-      setSaving(false);
-      return;
+    // Data yang dikirim ke API
+    const updateData = {
+      email: form.email.trim(),
+      name: form.name.trim(),
+      phone: form.phone || "",
+      divisi: form.divisi_name || null,
+      jabatan: form.jabatan || null,
+      status: form.status === "aktif",
+    };
+    
+    console.log("📤 Sending update data to API with user_id:", originalUserId);
+    console.log("Update data:", JSON.stringify(updateData, null, 2));
+    
+    // GANTI: api.updateMentor -> updateMentor
+    const response = await updateMentor(originalUserId, updateData);
+    console.log("📥 API response:", response);
+    
+    if (response && response.success) {
+      logActivity("update", "mentor", form.name);
+      
+      setSuccessData({
+        name: form.name,
+        email: form.email,
+        role: "Mentor",
+        divisi: form.divisi_name || "-",
+        jabatan: form.jabatan || "-",
+        phone: form.phone || "-",
+        status: form.status === "aktif" ? "Aktif" : "Nonaktif"
+      });
+      setSuccessMessage(response.message || "Perubahan data mentor berhasil disimpan!");
+      setShowSuccessModal(true);
+    } else {
+      setError(response?.message || "Gagal menyimpan perubahan");
+    }
+    
+  } catch (err) {
+    console.error("Error saving data:", err);
+    let errorMessage = err.message || "Gagal menyimpan perubahan. Silakan coba lagi.";
+
+    if (err.response?.data?.message) {
+      errorMessage = err.response.data.message;
+    } else if (err.response?.data?.errors) {
+      const errors = Object.values(err.response.data.errors).flat();
+      errorMessage = errors.join("\n");
+    } else if (err.response?.data?.error) {
+      errorMessage = err.response.data.error;
     }
 
-    try {
-      // Gunakan id_user, bukan id_mentor
-      if (!originalUserId) {
-        setError("ID User tidak ditemukan");
-        setSaving(false);
-        return;
-      }
-
-      // Data yang dikirim ke API
-      const updateData = {
-        email: form.email.trim(),
-        name: form.name.trim(),
-        phone: form.phone || "",
-        divisi: form.divisi_name || null,
-        jabatan: form.jabatan || null,
-        status: form.status === "aktif",
-      };
-      
-      console.log("📤 Sending update data to API with user_id:", originalUserId);
-      console.log("Update data:", JSON.stringify(updateData, null, 2));
-      
-      const response = await api.updateMentor(originalUserId, updateData);
-      console.log("📥 API response:", response);
-      
-      if (response && response.success) {
-        logActivity("update", "mentor", form.name);
-        
-        setSuccessData({
-          name: form.name,
-          email: form.email,
-          role: "Mentor",
-          divisi: form.divisi_name || "-",
-          jabatan: form.jabatan || "-",
-          phone: form.phone || "-",
-          status: form.status === "aktif" ? "Aktif" : "Nonaktif"
-        });
-        setSuccessMessage(response.message || "Perubahan data mentor berhasil disimpan!");
-        setShowSuccessModal(true);
-      } else {
-        setError(response?.message || "Gagal menyimpan perubahan");
-      }
-      
-    } catch (err) {
-      console.error("Error saving data:", err);
-      let errorMessage = err.message || "Gagal menyimpan perubahan. Silakan coba lagi.";
-
-      if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.response?.data?.errors) {
-        const errors = Object.values(err.response.data.errors).flat();
-        errorMessage = errors.join("\n");
-      } else if (err.response?.data?.error) {
-        errorMessage = err.response.data.error;
-      }
-
-      setError(errorMessage);
-    } finally {
-      setSaving(false);
-    }
-  };
+    setError(errorMessage);
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handleModalClose = () => {
     setShowSuccessModal(false);

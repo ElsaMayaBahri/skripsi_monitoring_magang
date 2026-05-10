@@ -1,6 +1,8 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
+import { getPeserta, updatePeserta } from "../../api/admin/pesertaService";
+import { getMentor as getMentors } from "../../api/admin/mentorService";
+import { getDivisi } from "../../api/admin/divisiService";  
 import { logActivity } from "../../utils/activityLogger";
 import {
   ArrowLeft,
@@ -349,7 +351,7 @@ function EditPeserta() {
       
       console.log("📤 Data yang akan dikirim ke API:", JSON.stringify(updateData, null, 2));
       
-      const response = await api.updatePeserta(pesertaId, updateData);
+      const response = await updatePeserta(pesertaId, updateData);
       
       console.log("📥 API Response:", response);
       
