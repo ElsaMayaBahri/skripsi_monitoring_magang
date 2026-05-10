@@ -25,6 +25,7 @@
     "react-router-dom": "^7.14.0",
     "recharts": "^3.8.1",
     "spire.officejs": "^10.11.5",
+    "sweetalert2": "^11.26.24",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

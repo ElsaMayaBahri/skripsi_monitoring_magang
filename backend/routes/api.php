@@ -50,7 +50,11 @@ Route::get('/divisi-list', [MentorController::class, 'getDivisiList']);
 */
 
 Route::get('/materi-file/{filename}', function ($filename) {
+    // Daftar path yang akan dicari (prioritas dari spesifik ke umum)
     $paths = [
+        storage_path('app/public/materi_mentor/documents/' . $filename),
+        storage_path('app/public/materi_mentor/videos/' . $filename),
+        storage_path('app/public/materi_mentor/' . $filename),
         storage_path('app/public/materi/' . $filename),
         storage_path('app/public/' . $filename),
     ];
@@ -66,7 +70,15 @@ Route::get('/materi-file/{filename}', function ($filename) {
 
     if (!$filePath) {
         return response()->json([
-            'error' => 'File not found'
+            'error' => 'File not found',
+            'file' => $filename,
+            'searched_paths' => [
+                'materi_mentor/documents/' . $filename,
+                'materi_mentor/videos/' . $filename,
+                'materi_mentor/' . $filename,
+                'materi/' . $filename,
+                $filename
+            ]
         ], 404);
     }
 
@@ -206,22 +218,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/materi-pelatihan/{id}', [MateriPelatihanController::class, 'destroy']);
     Route::get('/materi-pelatihan/{id}/download', [MateriPelatihanController::class, 'download']);
     Route::get('/materi-pelatihan/divisi/{divisi}', [MateriPelatihanController::class, 'getByDivisi']);
-/*
-|--------------------------------------------------------------------------
-| COO DETAIL PESERTA ROUTES
-|--------------------------------------------------------------------------
-*/
 
-Route::prefix('coo')->group(function () {
-    // Detail peserta untuk COO
-    Route::get('/peserta/{id}/detail', [PesertaController::class, 'getDetailForCOO']);
-    Route::get('/peserta/{id}/kehadiran', [PesertaController::class, 'getKehadiranForCOO']);
-    Route::get('/peserta/{id}/progress-tugas', [PesertaController::class, 'getProgressTugasForCOO']);
-    Route::get('/peserta/{id}/hasil-kuis', [PesertaController::class, 'getHasilKuisForCOO']);
-    Route::get('/peserta/{id}/laporan-akhir', [PesertaController::class, 'getLaporanAkhirForCOO']);
-    Route::get('/peserta/{id}/statistik', [PesertaController::class, 'getStatistikForCOO']);
-    Route::get('/peserta/{id}/aktivitas', [PesertaController::class, 'getAktivitasForCOO']);
-});
+    /*
+    |--------------------------------------------------------------------------
+    | COO DETAIL PESERTA ROUTES
+    |--------------------------------------------------------------------------
+    */
+
+    Route::prefix('coo')->group(function () {
+        Route::get('/peserta/{id}/detail', [PesertaController::class, 'getDetailForCOO']);
+        Route::get('/peserta/{id}/kehadiran', [PesertaController::class, 'getKehadiranForCOO']);
+        Route::get('/peserta/{id}/progress-tugas', [PesertaController::class, 'getProgressTugasForCOO']);
+        Route::get('/peserta/{id}/hasil-kuis', [PesertaController::class, 'getHasilKuisForCOO']);
+        Route::get('/peserta/{id}/laporan-akhir', [PesertaController::class, 'getLaporanAkhirForCOO']);
+        Route::get('/peserta/{id}/statistik', [PesertaController::class, 'getStatistikForCOO']);
+        Route::get('/peserta/{id}/aktivitas', [PesertaController::class, 'getAktivitasForCOO']);
+    });
+
     /*
     |--------------------------------------------------------------------------
     | PRESENSI (COO)
@@ -243,8 +256,7 @@ Route::prefix('coo')->group(function () {
     Route::get('/quiz/{id}', [QuizController::class, 'show']);
     Route::put('/quiz/{id}', [QuizController::class, 'update']);
     Route::delete('/quiz/{id}', [QuizController::class, 'destroy']);
-    // Download template import kuis
-Route::get('/quiz/template', [QuizController::class, 'downloadTemplate']);
+    Route::get('/quiz/template', [QuizController::class, 'downloadTemplate']);
 
     /*
     |--------------------------------------------------------------------------
@@ -274,12 +286,43 @@ Route::get('/quiz/template', [QuizController::class, 'downloadTemplate']);
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/mentor/dashboard', [MentorController::class, 'dashboard']);
-    Route::get('/mentor/peserta-list', [MentorController::class, 'getPesertaList']);
-    Route::get('/mentor/pesertas', [MentorController::class, 'getMyPesertas']);
-    Route::get('/mentor/pesertas/{id}', [MentorController::class, 'getDetailPeserta']);
-    Route::get('/mentor/filters', [MentorController::class, 'getFilters']);
-    Route::get('/mentor/notifications', [MentorController::class, 'getNotifications']);
+    Route::prefix('mentor')->group(function () {
+        Route::get('/dashboard', [MentorController::class, 'dashboard']);
+        Route::get('/peserta-list', [MentorController::class, 'getPesertaList']);
+        Route::get('/pesertas', [MentorController::class, 'getMyPesertas']);
+        Route::get('/pesertas/{id}', [MentorController::class, 'getDetailPeserta']);
+        Route::get('/filters', [MentorController::class, 'getFilters']);
+        Route::get('/notifications', [MentorController::class, 'getNotifications']);
+        Route::get('/peserta', [TugasController::class, 'getPesertaByMentor']);
+        
+        // Tugas Routes
+        Route::get('/tugas', [TugasController::class, 'index']);
+        Route::post('/tugas', [TugasController::class, 'store']);
+        Route::get('/tugas/{id}', [TugasController::class, 'show']);
+        Route::put('/tugas/{id}', [TugasController::class, 'update']);
+        Route::delete('/tugas/{id}', [TugasController::class, 'destroy']);
+        
+        // Materi Routes
+        Route::get('/materi', [MateriMentorController::class, 'index']);
+        Route::post('/materi', [MateriMentorController::class, 'store']);
+        Route::get('/materi/{id}', [MateriMentorController::class, 'show']);
+        Route::put('/materi/{id}', [MateriMentorController::class, 'update']);
+        Route::delete('/materi/{id}', [MateriMentorController::class, 'destroy']);
+        Route::get('/materi/divisi-list', [MateriMentorController::class, 'getDivisiList']);
+        
+        // Nilai Routes
+        Route::get('/nilai', [NilaiController::class, 'index']);
+        Route::post('/nilai', [NilaiController::class, 'store']);
+        Route::post('/nilai/{id}/finalize', [NilaiController::class, 'finalize']);
+        Route::get('/nilai/export', [NilaiController::class, 'export']);
+        
+        // Laporan Akhir Routes - PASTIKAN INI ADA
+        Route::get('/laporan-akhir', [LaporanAkhirController::class, 'index']);
+        Route::get('/laporan-akhir/{id}', [LaporanAkhirController::class, 'show']);
+        Route::get('/laporan-akhir/{id}/download', [LaporanAkhirController::class, 'download']);
+        Route::post('/laporan-akhir/{id}/review', [LaporanAkhirController::class, 'submitReview']);
+        Route::get('/laporan-akhir/export', [LaporanAkhirController::class, 'export']); // ← ROUTE EXPORT
+    });
 
     /*
     |--------------------------------------------------------------------------
@@ -296,43 +339,12 @@ Route::get('/quiz/template', [QuizController::class, 'downloadTemplate']);
 
     /*
     |--------------------------------------------------------------------------
-    | MENTOR MATERI ROUTES
+    | TUGAS REMINDER
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/mentor/materi', [MateriMentorController::class, 'index']);
-    Route::post('/mentor/materi', [MateriMentorController::class, 'store']);
-    Route::get('/mentor/materi/{id}', [MateriMentorController::class, 'show']);
-    Route::put('/mentor/materi/{id}', [MateriMentorController::class, 'update']);
-    Route::delete('/mentor/materi/{id}', [MateriMentorController::class, 'destroy']);
-    Route::get('/mentor/materi/divisi-list', [MateriMentorController::class, 'getDivisiList']);
-
-    /*
-    |--------------------------------------------------------------------------
-    | MENTOR NILAI ROUTES
-    |--------------------------------------------------------------------------
-    */
-
-    Route::prefix('mentor')->group(function () {
-        // Nilai routes
-        Route::get('/nilai', [App\Http\Controllers\Api\NilaiController::class, 'index']);
-        Route::post('/nilai', [App\Http\Controllers\Api\NilaiController::class, 'store']);
-        Route::post('/nilai/{id}/finalize', [App\Http\Controllers\Api\NilaiController::class, 'finalize']);
-        Route::get('/nilai/export', [App\Http\Controllers\Api\NilaiController::class, 'export']);
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | MENTOR LAPORAN AKHIR ROUTES
-    |--------------------------------------------------------------------------
-    */
-
-    Route::prefix('mentor')->group(function () {
-        Route::get('/laporan-akhir', [LaporanAkhirController::class, 'index']);
-        Route::get('/laporan-akhir/{id}', [LaporanAkhirController::class, 'show']);
-        Route::post('/laporan-akhir/{id}/review', [LaporanAkhirController::class, 'submitReview']);
-        Route::get('/laporan-akhir/export', [LaporanAkhirController::class, 'export']);
-    });
+    Route::post('/tugas/reminder', [TugasController::class, 'sendReminder']);
+    Route::post('/tugas/{id}/reminder', [TugasController::class, 'sendReminder']);
 
 }); // ← TUTUP Route::middleware('auth:sanctum')
 

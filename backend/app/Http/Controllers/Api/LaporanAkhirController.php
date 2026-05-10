@@ -148,6 +148,58 @@ class LaporanAkhirController extends Controller
     }
 
     /**
+     * Get single laporan detail
+     * GET /api/mentor/laporan-akhir/{id}
+     */
+    public function show($id)
+    {
+        try {
+            $user = Auth::user();
+            
+            if ($user->role !== 'mentor') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+
+            $laporan = LaporanAkhir::with('peserta.user', 'peserta.divisi')->find($id);
+            
+            if (!$laporan) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Laporan tidak ditemukan'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $laporan->id_laporan,
+                    'peserta_nama' => $laporan->peserta->user->nama ?? 'Unknown',
+                    'peserta_divisi' => $laporan->peserta->divisi->nama_divisi ?? '-',
+                    'judul' => $laporan->judul,
+                    'file_url' => $laporan->file_laporan ? Storage::url($laporan->file_laporan) : null,
+                    'file_size' => $laporan->file_size,
+                    'uploaded_at' => $laporan->tanggal_upload ?? $laporan->created_at,
+                    'status' => $laporan->status,
+                    'catatan' => $laporan->catatan_mentor,
+                    'nilai_akhir' => $laporan->nilai_akhir,
+                    'dinilai_oleh' => $laporan->dinilai_oleh,
+                    'dinilai_pada' => $laporan->dinilai_pada,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Laporan Akhir Show Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Submit review for laporan akhir
      * POST /api/mentor/laporan-akhir/{id}/review
      */
@@ -238,7 +290,77 @@ class LaporanAkhirController extends Controller
     }
 
     /**
-     * Export laporan akhir
+     * Download laporan akhir file
+     * GET /api/mentor/laporan-akhir/{id}/download
+     */
+    public function download($id)
+    {
+        try {
+            $user = Auth::user();
+            
+            if ($user->role !== 'mentor') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+
+            $mentor = Mentor::where('id_user', $user->id_user)->first();
+            
+            if (!$mentor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Data mentor tidak ditemukan'
+                ], 404);
+            }
+
+            $laporan = LaporanAkhir::find($id);
+            
+            if (!$laporan) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Laporan tidak ditemukan'
+                ], 404);
+            }
+
+            // Verify that this laporan belongs to mentor's peserta
+            $peserta = Peserta::where('id_peserta', $laporan->id_peserta)
+                ->where('id_mentor', $mentor->id_mentor)
+                ->first();
+            
+            if (!$peserta) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda tidak memiliki akses ke laporan ini'
+                ], 403);
+            }
+
+            if (!$laporan->file_laporan || !Storage::exists($laporan->file_laporan)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File laporan tidak ditemukan'
+                ], 404);
+            }
+
+            $filePath = storage_path('app/public/' . $laporan->file_laporan);
+            $filename = 'laporan_akhir_' . $peserta->user->nama . '_' . date('Y-m-d') . '.pdf';
+            
+            return response()->download($filePath, $filename, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Laporan Akhir Download Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal download file: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Export laporan akhir to Excel/CSV
      * GET /api/mentor/laporan-akhir/export
      */
     public function export(Request $request)
@@ -311,9 +433,27 @@ class LaporanAkhirController extends Controller
                 });
             }
 
+            $exportData = array_values($exportData);
+
+            // Handle Excel export
+            if ($request->format === 'excel') {
+                return $this->exportToExcel($exportData);
+            }
+
+            // Handle CSV export
+            if ($request->format === 'csv') {
+                return $this->exportToCsv($exportData);
+            }
+
+            // Handle PDF export
+            if ($request->format === 'pdf') {
+                return $this->exportToPdf($exportData);
+            }
+
+            // Default JSON response
             return response()->json([
                 'success' => true,
-                'data' => array_values($exportData),
+                'data' => $exportData,
                 'count' => count($exportData),
                 'message' => 'Data berhasil diexport'
             ]);
@@ -328,57 +468,139 @@ class LaporanAkhirController extends Controller
     }
 
     /**
-     * Get single laporan detail
-     * GET /api/mentor/laporan-akhir/{id}
+     * Export to Excel (CSV format)
      */
-    public function show($id)
+    private function exportToExcel($data)
     {
-        try {
-            $user = Auth::user();
-            
-            if ($user->role !== 'mentor') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized'
-                ], 403);
-            }
-
-            $laporan = LaporanAkhir::with('peserta.user', 'peserta.divisi')->find($id);
-            
-            if (!$laporan) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Laporan tidak ditemukan'
-                ], 404);
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'id' => $laporan->id_laporan,
-                    'peserta_nama' => $laporan->peserta->user->nama ?? 'Unknown',
-                    'peserta_divisi' => $laporan->peserta->divisi->nama_divisi ?? '-',
-                    'judul' => $laporan->judul,
-                    'file_url' => $laporan->file_laporan ? Storage::url($laporan->file_laporan) : null,
-                    'file_size' => $laporan->file_size,
-                    'uploaded_at' => $laporan->tanggal_upload ?? $laporan->created_at,
-                    'status' => $laporan->status,
-                    'catatan' => $laporan->catatan_mentor,
-                    'nilai_akhir' => $laporan->nilai_akhir,
-                    'dinilai_oleh' => $laporan->dinilai_oleh,
-                    'dinilai_pada' => $laporan->dinilai_pada,
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Laporan Akhir Show Error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Terjadi kesalahan: ' . $e->getMessage()
-            ], 500);
+        $output = fopen('php://temp', 'r+');
+        
+        // Add headers
+        if (!empty($data)) {
+            fputcsv($output, array_keys($data[0]));
         }
+        
+        // Add data rows
+        foreach ($data as $row) {
+            fputcsv($output, $row);
+        }
+        
+        rewind($output);
+        $csv = stream_get_contents($output);
+        fclose($output);
+        
+        return response($csv)
+            ->withHeaders([
+                'Content-Type' => 'text/csv',
+                'Content-Disposition' => 'attachment; filename="laporan_akhir_' . date('Y-m-d') . '.csv"',
+                'Cache-Control' => 'max-age=0',
+            ]);
     }
 
+    /**
+     * Export to CSV
+     */
+    private function exportToCsv($data)
+    {
+        $output = fopen('php://temp', 'r+');
+        
+        // Add headers
+        if (!empty($data)) {
+            fputcsv($output, array_keys($data[0]));
+        }
+        
+        // Add data rows
+        foreach ($data as $row) {
+            fputcsv($output, $row);
+        }
+        
+        rewind($output);
+        $csv = stream_get_contents($output);
+        fclose($output);
+        
+        return response($csv)
+            ->withHeaders([
+                'Content-Type' => 'text/csv',
+                'Content-Disposition' => 'attachment; filename="laporan_akhir_' . date('Y-m-d') . '.csv"',
+                'Cache-Control' => 'max-age=0',
+            ]);
+    }
+
+    /**
+     * Export to PDF
+     */
+    private function exportToPdf($data)
+    {
+        $html = '<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Laporan Akhir Magang</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                h1 { color: #1e3a5f; text-align: center; margin-bottom: 20px; }
+                h3 { color: #1e3a5f; margin-top: 20px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 12px; }
+                th { background-color: #1e3a5f; color: white; }
+                tr:nth-child(even) { background-color: #f9f9f9; }
+                .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #666; }
+                .date { text-align: right; margin-bottom: 20px; font-size: 12px; }
+            </style>
+        </head>
+        <body>
+            <h1>LAPORAN AKHIR MAGANG</h1>
+            <div class="date">Tanggal: ' . date('d-m-Y H:i:s') . '</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Nama Peserta</th>
+                        <th>Divisi</th>
+                        <th>Judul Laporan</th>
+                        <th>Tanggal Upload</th>
+                        <th>Status</th>
+                        <th>Nilai</th>
+                    </tr>
+                </thead>
+                <tbody>';
+        
+        foreach ($data as $index => $row) {
+            $html .= '<tr>
+                        <td>' . ($index + 1) . '</td>
+                        <td>' . htmlspecialchars($row['Nama Peserta']) . '</td>
+                        <td>' . htmlspecialchars($row['Divisi']) . '</td>
+                        <td>' . htmlspecialchars($row['Judul Laporan']) . '</td>
+                        <td>' . htmlspecialchars($row['Tanggal Upload']) . '</td>
+                        <td>' . htmlspecialchars($row['Status']) . '</td>
+                        <td>' . htmlspecialchars($row['Nilai Akhir']) . '</td>
+                     </tr>';
+        }
+        
+        $html .= '</tbody>
+            </table>
+            <div class="footer">
+                <p>Dicetak dari Sistem Monitoring Magang - Kuanta Academy</p>
+            </div>
+        </body>
+        </html>';
+        
+        // Use dompdf if installed, otherwise return HTML
+        if (class_exists('\Barryvdh\DomPDF\Facade\Pdf')) {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
+            return $pdf->download('laporan_akhir_' . date('Y-m-d') . '.pdf');
+        }
+        
+        // Fallback: return HTML as response
+        return response($html)
+            ->withHeaders([
+                'Content-Type' => 'text/html',
+                'Content-Disposition' => 'attachment; filename="laporan_akhir_' . date('Y-m-d') . '.html"',
+            ]);
+    }
+
+    /**
+     * Get status text
+     */
     private function getStatusText($status)
     {
         $statusMap = [

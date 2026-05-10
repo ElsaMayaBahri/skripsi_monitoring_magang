@@ -26,13 +26,17 @@ import {
   ChevronRight,
   Search,
   Upload,
-  Paperclip
+  Paperclip,
+  Link as LinkIcon,
+  Globe,
 } from "lucide-react";
-import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
+import * as api from "../../api/mentor/tugasService";
+import { getMentorPesertaList, getMyPesertas } from "../../api/mentor/pesertaService";
 
 function AddTugas() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [fetchingPeserta, setFetchingPeserta] = useState(true);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [pesertaList, setPesertaList] = useState([]);
@@ -42,11 +46,14 @@ function AddTugas() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(6);
   const [fileUpload, setFileUpload] = useState(null);
+  const [fileLink, setFileLink] = useState("");
+  const [attachmentType, setAttachmentType] = useState(null);
   const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
     judul: "",
     deskripsi: "",
     deadline: "",
+    deadline_time: "23:59",
     peserta: []
   });
   const [errors, setErrors] = useState({});
@@ -55,20 +62,62 @@ function AddTugas() {
   useEffect(() => {
     const fetchPeserta = async () => {
       try {
-        const response = await api.getMentorPesertaList({});
-        if (response.success && response.data) {
-          const transformedPeserta = response.data.map(p => ({
-            id: p.id_peserta,
-            nama: p.nama || p.nama_peserta || "Unknown",
-            divisi: p.divisi || "-",
-            progress: p.progress || 0,
-            email: p.email || "-"
-          }));
-          setPesertaList(transformedPeserta);
-          setFilteredPeserta(transformedPeserta);
+        setFetchingPeserta(true);
+        let response = null;
+        
+        try {
+          response = await getMentorPesertaList({});
+          console.log("Peserta response from getMentorPesertaList:", response);
+        } catch (err) {
+          console.log("getMentorPesertaList failed, trying getMyPesertas...");
+          try {
+            response = await getMyPesertas();
+            console.log("Peserta response from getMyPesertas:", response);
+          } catch (err2) {
+            console.error("Both endpoints failed:", err2);
+            throw new Error("Gagal memuat data peserta");
+          }
+        }
+        
+        if (response && response.success && response.data) {
+          let pesertaData = response.data;
+          
+          if (Array.isArray(pesertaData)) {
+            const transformedPeserta = pesertaData.map(p => ({
+              id: p.id_peserta,
+              nama: p.nama || p.nama_peserta || p.user?.nama || "Unknown",
+              divisi: p.divisi || p.nama_divisi || p.divisi?.nama_divisi || "-",
+              email: p.email || p.user?.email || "-"
+            }));
+            setPesertaList(transformedPeserta);
+            setFilteredPeserta(transformedPeserta);
+          } else if (pesertaData.peserta && Array.isArray(pesertaData.peserta)) {
+            const transformedPeserta = pesertaData.peserta.map(p => ({
+              id: p.id_peserta,
+              nama: p.nama || p.nama_peserta || p.user?.nama || "Unknown",
+              divisi: p.divisi || p.nama_divisi || p.divisi?.nama_divisi || "-",
+              email: p.email || p.user?.email || "-"
+            }));
+            setPesertaList(transformedPeserta);
+            setFilteredPeserta(transformedPeserta);
+          } else if (pesertaData.items && Array.isArray(pesertaData.items)) {
+            const transformedPeserta = pesertaData.items.map(p => ({
+              id: p.id_peserta,
+              nama: p.nama || p.nama_peserta || p.user?.nama || "Unknown",
+              divisi: p.divisi || p.nama_divisi || p.divisi?.nama_divisi || "-",
+              email: p.email || p.user?.email || "-"
+            }));
+            setPesertaList(transformedPeserta);
+            setFilteredPeserta(transformedPeserta);
+          }
         }
       } catch (error) {
         console.error("Error fetching peserta:", error);
+        setError("Gagal memuat data peserta: " + (error.message || "Unknown error"));
+        setPesertaList([]);
+        setFilteredPeserta([]);
+      } finally {
+        setFetchingPeserta(false);
       }
     };
     fetchPeserta();
@@ -97,6 +146,23 @@ function AddTugas() {
     setDisplayedPeserta(filteredPeserta.slice(start, end));
   }, [filteredPeserta, currentPage, itemsPerPage]);
 
+  // Handle pilihan attachment type
+  const selectAttachmentType = (type) => {
+    if (attachmentType === type) {
+      setAttachmentType(null);
+    } else {
+      setAttachmentType(type);
+      if (type === "file") {
+        setFileLink("");
+      } else if (type === "link") {
+        setFileUpload(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -111,6 +177,10 @@ function AddTugas() {
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
         setErrors({ file: "Ukuran file maksimal 10 MB" });
+        setFileUpload(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
         return;
       }
       
@@ -131,6 +201,10 @@ function AddTugas() {
       
       if (!allowedTypes.includes(file.type)) {
         setErrors({ file: "Format file tidak didukung. Gunakan PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, JPG, PNG, ZIP, RAR, atau TXT" });
+        setFileUpload(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
         return;
       }
       
@@ -141,9 +215,23 @@ function AddTugas() {
 
   const removeFile = () => {
     setFileUpload(null);
+    setAttachmentType(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+
+  const handleLinkChange = (e) => {
+    const url = e.target.value;
+    setFileLink(url);
+    if (errors.link) {
+      setErrors(prev => ({ ...prev, link: "" }));
+    }
+  };
+
+  const removeLink = () => {
+    setFileLink("");
+    setAttachmentType(null);
   };
 
   const handlePesertaToggle = (pesertaId) => {
@@ -157,7 +245,7 @@ function AddTugas() {
   };
 
   const handleSelectAll = () => {
-    if (formData.peserta.length === filteredPeserta.length) {
+    if (formData.peserta.length === filteredPeserta.length && filteredPeserta.length > 0) {
       setFormData(prev => ({ ...prev, peserta: [] }));
     } else {
       setFormData(prev => ({ ...prev, peserta: filteredPeserta.map(p => p.id) }));
@@ -169,7 +257,13 @@ function AddTugas() {
     if (!formData.judul.trim()) newErrors.judul = "Judul tugas wajib diisi";
     if (!formData.deskripsi.trim()) newErrors.deskripsi = "Deskripsi tugas wajib diisi";
     if (!formData.deadline) newErrors.deadline = "Deadline wajib diisi";
+    if (!formData.deadline_time) newErrors.deadline_time = "Jam deadline wajib diisi";
     if (formData.peserta.length === 0) newErrors.peserta = "Pilih minimal 1 peserta";
+    
+    // Link validation - hanya validasi format URL standar
+    if (attachmentType === "link" && fileLink && !fileLink.match(/^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i)) {
+      newErrors.link = "Masukkan URL yang valid (contoh: https://docs.google.com/... atau https://drive.google.com/...)";
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -186,14 +280,22 @@ function AddTugas() {
       const submitData = new FormData();
       submitData.append("judul", formData.judul);
       submitData.append("deskripsi", formData.deskripsi);
-      submitData.append("deadline", formData.deadline);
+      
+      const deadlineDateTime = `${formData.deadline} ${formData.deadline_time}:00`;
+      submitData.append("deadline", deadlineDateTime);
+      
       submitData.append("id_peserta", JSON.stringify(formData.peserta));
       
-      if (fileUpload) {
+      if (attachmentType === "file" && fileUpload) {
         submitData.append("file_tugas", fileUpload);
       }
       
+      if (attachmentType === "link" && fileLink) {
+        submitData.append("file_link", fileLink);
+      }
+      
       const response = await api.createMentorTugas(submitData);
+      console.log("Create tugas response:", response);
       
       if (response.success) {
         setSuccess(true);
@@ -208,7 +310,7 @@ function AddTugas() {
       }
     } catch (err) {
       console.error("Error adding tugas:", err);
-      setError(err.message || "Terjadi kesalahan saat menambahkan tugas");
+      setError(err.response?.data?.message || err.message || "Terjadi kesalahan saat menambahkan tugas");
     } finally {
       setLoading(false);
     }
@@ -239,6 +341,17 @@ function AddTugas() {
   const totalCount = filteredPeserta.length;
   const totalPages = Math.ceil(filteredPeserta.length / itemsPerPage);
 
+  if (fetchingPeserta) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 size="48" className="animate-spin text-teal-500 mx-auto mb-4" />
+          <p className="text-slate-600">Memuat data peserta...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20">
       <div className="fixed inset-0 opacity-[0.03] pointer-events-none">
@@ -252,13 +365,6 @@ function AddTugas() {
         <div className="relative mb-10 rounded-2xl overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-teal-500/15 via-blue-500/10 to-teal-500/15 rounded-2xl"></div>
           <div className="relative px-6 py-5">
-            <Link to="/mentor/tugas" className="group inline-flex items-center gap-2 text-slate-500 hover:text-teal-600 transition-all duration-300 mb-4">
-              <div className="p-1 rounded-lg bg-white/80 backdrop-blur-sm shadow-sm group-hover:bg-teal-50 transition-colors">
-                <ArrowLeft size="14" />
-              </div>
-              <span className="text-sm font-medium">Kembali ke Daftar Tugas</span>
-            </Link>
-            
             <div className="flex items-center gap-4">
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-2xl blur-md opacity-50"></div>
@@ -355,7 +461,7 @@ function AddTugas() {
               {errors.deskripsi && <p className="text-xs text-red-500 mt-1">{errors.deskripsi}</p>}
             </div>
 
-            {/* Deadline */}
+            {/* Deadline dengan Tanggal dan Jam */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
                 <div className="p-1 rounded-lg bg-amber-50">
@@ -363,77 +469,173 @@ function AddTugas() {
                 </div>
                 Deadline <span className="text-red-500">*</span>
               </label>
-              <input
-                type="date"
-                name="deadline"
-                value={formData.deadline}
-                onChange={handleChange}
-                min={getMinDate}
-                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl text-sm text-slate-700 focus:outline-none transition-all duration-200 ${
-                  errors.deadline ? "border-red-400 bg-red-50/30" : "border-slate-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
-                }`}
-              />
-              {errors.deadline && <p className="text-xs text-red-500 mt-1">{errors.deadline}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <input
+                    type="date"
+                    name="deadline"
+                    value={formData.deadline}
+                    onChange={handleChange}
+                    min={getMinDate}
+                    className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl text-sm text-slate-700 focus:outline-none transition-all duration-200 ${
+                      errors.deadline ? "border-red-400 bg-red-50/30" : "border-slate-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
+                    }`}
+                  />
+                </div>
+                <div>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Clock size="16" className="text-slate-400" />
+                    </div>
+                    <input
+                      type="time"
+                      name="deadline_time"
+                      value={formData.deadline_time}
+                      onChange={handleChange}
+                      className={`w-full px-4 py-3 pl-10 bg-slate-50 border-2 rounded-xl text-sm text-slate-700 focus:outline-none transition-all duration-200 ${
+                        errors.deadline_time ? "border-red-400 bg-red-50/30" : "border-slate-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
+              {(errors.deadline || errors.deadline_time) && (
+                <p className="text-xs text-red-500 mt-1">{errors.deadline || errors.deadline_time}</p>
+              )}
+              <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
+                <Clock size="10" />
+                Tentukan batas waktu pengerjaan tugas (tanggal dan jam)
+              </p>
             </div>
 
-            {/* Upload File */}
+            {/* Materi Tugas: Pilihan Upload File atau Link */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+              <label className="block text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
                 <div className="p-1 rounded-lg bg-indigo-50">
                   <Paperclip size="14" className="text-indigo-600" />
                 </div>
-                Lampiran File (Opsional)
+                Materi Tugas
+                <span className="text-xs text-slate-400 font-normal ml-2">(Opsional - Pilih salah satu)</span>
               </label>
-              <div className="relative">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  className="hidden"
-                  id="file_tugas"
-                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.rar,.txt"
-                />
-                {!fileUpload ? (
-                  <label
-                    htmlFor="file_tugas"
-                    className="flex items-center justify-center w-full p-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50 cursor-pointer hover:border-teal-400 hover:bg-teal-50/20 transition-all duration-200"
-                  >
-                    <div className="text-center">
-                      <Upload size="32" className="mx-auto mb-2 text-slate-400" />
-                      <p className="text-sm text-slate-600">Klik untuk upload file</p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, JPG, PNG, ZIP, RAR, TXT (Max 10 MB)
-                      </p>
-                    </div>
-                  </label>
-                ) : (
-                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-100 to-blue-100 flex items-center justify-center text-xl">
-                        {getFileIcon(fileUpload)}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-700">{fileUpload.name}</p>
-                        <p className="text-xs text-slate-400">
-                          {(fileUpload.size / 1024 / 1024).toFixed(2)} MB
+              
+              {/* 2 Pilihan Tombol */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <button
+                  type="button"
+                  onClick={() => selectAttachmentType("file")}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 text-center ${
+                    attachmentType === "file" 
+                      ? "border-teal-500 bg-teal-50 shadow-md" 
+                      : "border-slate-200 hover:border-teal-300 hover:bg-teal-50/50 bg-white"
+                  }`}
+                >
+                  <Upload size="24" className={`mx-auto mb-2 ${attachmentType === "file" ? "text-teal-500" : "text-slate-400"}`} />
+                  <p className={`text-sm font-semibold ${attachmentType === "file" ? "text-teal-600" : "text-slate-600"}`}>Upload File</p>
+                  <p className="text-[10px] text-slate-400 mt-1">PDF, DOC, PPT, XLS, dll</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectAttachmentType("link")}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 text-center ${
+                    attachmentType === "link" 
+                      ? "border-teal-500 bg-teal-50 shadow-md" 
+                      : "border-slate-200 hover:border-teal-300 hover:bg-teal-50/50 bg-white"
+                  }`}
+                >
+                  <LinkIcon size="24" className={`mx-auto mb-2 ${attachmentType === "link" ? "text-teal-500" : "text-slate-400"}`} />
+                  <p className={`text-sm font-semibold ${attachmentType === "link" ? "text-teal-600" : "text-slate-600"}`}>Masukkan Link</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Google Drive, Docs, Sheets, atau link lainnya</p>
+                </button>
+              </div>
+
+              {/* Upload File Section */}
+              {attachmentType === "file" && (
+                <div className="mt-4 p-4 bg-gradient-to-r from-slate-50 to-white rounded-xl border border-slate-200">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                    id="file_tugas"
+                    accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.rar,.txt"
+                  />
+                  {!fileUpload ? (
+                    <label
+                      htmlFor="file_tugas"
+                      className="flex items-center justify-center w-full p-6 border-2 border-dashed rounded-xl transition-all duration-200 cursor-pointer border-slate-200 bg-slate-50/50 hover:border-teal-400 hover:bg-teal-50/20"
+                    >
+                      <div className="text-center">
+                        <Upload size="32" className="mx-auto mb-2 text-slate-400" />
+                        <p className="text-sm text-slate-600 font-medium">Klik untuk upload file</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, JPG, PNG, ZIP, RAR, TXT (Max 10 MB)
                         </p>
                       </div>
+                    </label>
+                  ) : (
+                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-100 to-blue-100 flex items-center justify-center text-2xl">
+                          {getFileIcon(fileUpload)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-700">{fileUpload.name}</p>
+                          <p className="text-xs text-slate-400">
+                            {(fileUpload.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={removeFile}
+                        className="p-2 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all duration-200"
+                      >
+                        <Trash2 size="18" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={removeFile}
-                      className="p-2 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all duration-200"
-                    >
-                      <Trash2 size="16" />
-                    </button>
+                  )}
+                  {errors.file && <p className="text-xs text-red-500 mt-2">{errors.file}</p>}
+                  <p className="text-xs text-slate-400 mt-3 flex items-center gap-1">
+                    <Shield size="10" />
+                    File akan tersedia untuk diunduh oleh peserta tugas
+                  </p>
+                </div>
+              )}
+
+              {/* Link URL Section */}
+              {attachmentType === "link" && (
+                <div className="mt-4 p-4 bg-gradient-to-r from-slate-50 to-white rounded-xl border border-slate-200">
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Globe size="16" className="text-slate-400" />
+                    </div>
+                    <input
+                      id="file_link_input"
+                      type="url"
+                      value={fileLink}
+                      onChange={handleLinkChange}
+                      placeholder="https://docs.google.com/spreadsheets/d/... atau link lainnya"
+                      className={`w-full px-4 py-3 pl-10 bg-slate-50 border-2 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none transition-all duration-200 ${
+                        errors.link ? "border-red-400 bg-red-50/30" : "border-slate-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
+                      }`}
+                    />
+                    {fileLink && (
+                      <button
+                        type="button"
+                        onClick={removeLink}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        <X size="16" className="text-slate-400 hover:text-rose-500 transition-colors" />
+                      </button>
+                    )}
                   </div>
-                )}
-              </div>
-              {errors.file && <p className="text-xs text-red-500 mt-1">{errors.file}</p>}
-              <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
-                <Shield size="10" />
-                File akan tersedia untuk diunduh oleh peserta tugas
-              </p>
+                  {errors.link && <p className="text-xs text-red-500 mt-2">{errors.link}</p>}
+                  <p className="text-xs text-slate-400 mt-3 flex items-center gap-1">
+                    <Shield size="10" />
+                    Peserta dapat mengakses link yang Anda berikan untuk mengerjakan tugas
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Peserta dengan Search & Pagination */}
@@ -446,13 +648,15 @@ function AddTugas() {
                   Peserta Tugas <span className="text-red-500">*</span>
                   <span className="text-xs text-slate-400 ml-2">({selectedCount} dari {totalCount} dipilih)</span>
                 </label>
-                <button
-                  type="button"
-                  onClick={handleSelectAll}
-                  className="px-4 py-1.5 text-xs font-semibold text-teal-600 bg-teal-50 rounded-lg hover:bg-teal-100 transition-all duration-200"
-                >
-                  {selectedCount === totalCount && totalCount > 0 ? "Hapus Semua" : "Pilih Semua"}
-                </button>
+                {totalCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    className="px-4 py-1.5 text-xs font-semibold text-teal-600 bg-teal-50 rounded-lg hover:bg-teal-100 transition-all duration-200"
+                  >
+                    {selectedCount === totalCount && totalCount > 0 ? "Hapus Semua" : "Pilih Semua"}
+                  </button>
+                )}
               </div>
               
               {/* Search Bar */}
@@ -475,7 +679,7 @@ function AddTugas() {
                   <div className="text-center py-8 text-slate-400">
                     <Users size="32" className="mx-auto mb-2 opacity-50" />
                     <p className="text-sm">Tidak ada peserta ditemukan</p>
-                    <p className="text-xs mt-1">Coba ubah kata kunci pencarian</p>
+                    <p className="text-xs mt-1">Pastikan Anda memiliki peserta bimbingan</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -501,13 +705,7 @@ function AddTugas() {
                             <p className={`text-sm font-semibold ${isChecked ? 'text-teal-700' : 'text-slate-700'}`}>
                               {peserta.nama}
                             </p>
-                            <div className="flex items-center justify-between mt-0.5">
-                              <p className="text-[10px] text-slate-400">{peserta.divisi}</p>
-                              <div className="flex items-center gap-1">
-                                <div className="w-1 h-1 rounded-full bg-slate-300"></div>
-                                <span className="text-[9px] text-slate-400">{peserta.progress}% progress</span>
-                              </div>
-                            </div>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{peserta.divisi}</p>
                           </div>
                           {isChecked && (
                             <CheckCircle size="16" className="text-teal-500 flex-shrink-0" />
@@ -527,6 +725,7 @@ function AddTugas() {
                   </p>
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                       disabled={currentPage === 1}
                       className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-all duration-200"
@@ -548,6 +747,7 @@ function AddTugas() {
                         return (
                           <button
                             key={pageNum}
+                            type="button"
                             onClick={() => setCurrentPage(pageNum)}
                             className={`w-7 h-7 rounded-lg text-xs font-medium transition-all duration-200 ${
                               currentPage === pageNum
@@ -561,6 +761,7 @@ function AddTugas() {
                       })}
                     </div>
                     <button
+                      type="button"
                       onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                       disabled={currentPage === totalPages}
                       className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-all duration-200"
@@ -595,48 +796,6 @@ function AddTugas() {
             </button>
           </div>
         </form>
-
-        {/* Info Box Premium */}
-        <div className="mt-8 bg-gradient-to-r from-teal-50/90 via-blue-50/90 to-transparent backdrop-blur-sm rounded-2xl p-5 border border-teal-100 shadow-md">
-          <div className="flex items-start gap-3">
-            <div className="relative">
-              <div className="absolute inset-0 bg-teal-500 rounded-xl blur-md opacity-30"></div>
-              <div className="relative p-2.5 bg-white rounded-xl shadow-md">
-                <Shield size="16" className="text-teal-500" />
-              </div>
-            </div>
-            <div>
-              <p className="text-sm font-bold text-teal-800">Informasi Penting</p>
-              <p className="text-xs text-teal-700 mt-1 leading-relaxed">
-                Tugas akan langsung tersedia untuk peserta yang dipilih. Anda dapat melampirkan file soal/template yang diperlukan.
-                Peserta akan menerima notifikasi dan dapat mengunduh file tugas.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Ringkasan Form */}
-        {formData.judul && formData.deadline && (
-          <div className="mt-6 p-4 bg-white/50 backdrop-blur-sm rounded-xl border border-slate-100">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap size="12" className="text-teal-500" />
-              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Ringkasan Tugas</span>
-            </div>
-            <div className="flex flex-wrap gap-3 text-xs text-slate-500">
-              <span className="font-semibold text-teal-600">{formData.judul}</span>
-              <span className="text-slate-300">•</span>
-              <span>Deadline: {formData.deadline}</span>
-              <span className="text-slate-300">•</span>
-              <span>Peserta: {formData.peserta.length} orang</span>
-              {fileUpload && (
-                <>
-                  <span className="text-slate-300">•</span>
-                  <span>File: {fileUpload.name}</span>
-                </>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

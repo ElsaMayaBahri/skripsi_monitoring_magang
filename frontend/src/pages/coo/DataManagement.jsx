@@ -359,7 +359,13 @@ function DataManagement() {
 
   // Handle detail peserta - navigasi ke halaman detail peserta
   const handleDetailPeserta = (pesertaId) => {
+    // Navigasi ke halaman detail peserta dengan ID yang benar
     navigate(`/coo/peserta/${pesertaId}/detail`);
+  };
+
+  // Handle detail mentor
+  const handleDetailMentor = (mentorId) => {
+    navigate(`/coo/mentor/${mentorId}/detail`);
   };
 
   // Get statistik untuk setiap tab
@@ -656,7 +662,7 @@ function DataManagement() {
           </div>
         </div>
 
-        {/* TABLE - Kolom Progress dihapus */}
+        {/* TABLE */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -808,8 +814,10 @@ function DataManagement() {
                             onClick={() => {
                               if (activeTab === "peserta") {
                                 handleDetailPeserta(item.id);
+                              } else if (activeTab === "mentor") {
+                                handleDetailMentor(item.id);
                               } else {
-                                navigate(activeTab === "peserta" ? `/coo/peserta/${item.id}/detail` : `/coo/mentor/${item.id}/detail`);
+                                navigate(`/coo/divisi/${item.id}/detail`);
                               }
                             }}
                             className="p-1.5 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition"

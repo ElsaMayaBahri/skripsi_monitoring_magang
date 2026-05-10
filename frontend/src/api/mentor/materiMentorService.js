@@ -1,7 +1,6 @@
 // src/api/mentor/materiMentorService.js
-import axiosInstance from "../axios"  // ← ubah dari "../../utils/axiosConfig" menjadi "../axios"
+import axiosInstance from "../axios"
 
-// Rest of the code remains the same...
 export const getMentorMateri = async (params = {}) => {
   const queryString = new URLSearchParams(params).toString()
   const response = await axiosInstance.get(`/mentor/materi${queryString ? `?${queryString}` : ''}`)
@@ -14,6 +13,11 @@ export const getMentorMateriById = async (id) => {
 }
 
 export const createMentorMateri = async (formData) => {
+  // Debug: Log apa yang dikirim
+  for (let pair of formData.entries()) {
+    console.log(pair[0] + ': ' + pair[1]);
+  }
+  
   const response = await axiosInstance.post("/mentor/materi", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
@@ -23,7 +27,6 @@ export const createMentorMateri = async (formData) => {
 }
 
 export const updateMentorMateri = async (id, formData) => {
-  formData.append("_method", "PUT")
   const response = await axiosInstance.post(`/mentor/materi/${id}`, formData, {
     headers: {
       "Content-Type": "multipart/form-data",

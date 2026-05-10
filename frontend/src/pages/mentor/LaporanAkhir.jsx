@@ -1,5 +1,5 @@
 // src/pages/mentor/LaporanAkhir.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   FileText,
   Search,
@@ -14,19 +14,20 @@ import {
   Calendar,
   MessageSquare,
   Star,
-  Printer,
   Sparkles,
   Shield,
   Zap,
   Users,
   Loader2,
   Send,
-  Activity
+  Activity,
+  ChevronDown
 } from "lucide-react";
 import { 
   getMentorLaporanAkhir, 
   submitLaporanReview, 
-  exportLaporanAkhir 
+  exportLaporanAkhir,
+  downloadLaporanFile
 } from "../../api/mentor/laporanAkhirService";
 
 function LaporanAkhir() {
@@ -53,6 +54,29 @@ function LaporanAkhir() {
     revisi: 0,
     pending: 0
   });
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [exportError, setExportError] = useState(null);
+  const dropdownRef = useRef(null);
+
+  // Handle click outside dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowExportDropdown(false);
+        setExportError(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Clear error after 5 seconds
+  useEffect(() => {
+    if (exportError) {
+      const timer = setTimeout(() => setExportError(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [exportError]);
 
   // Fetch laporan dari backend
   const fetchLaporan = async () => {
@@ -71,7 +95,8 @@ function LaporanAkhir() {
           sudahUpload: 0,
           belumUpload: 0,
           disetujui: 0,
-          revisi: 0
+          revisi: 0,
+          pending: 0
         };
         
         setLaporan(laporanData);
@@ -148,39 +173,137 @@ function LaporanAkhir() {
       }
     } catch (error) {
       console.error("Error submitting review:", error);
-      alert("Terjadi kesalahan saat menyimpan review");
+      alert(error.response?.data?.message || "Terjadi kesalahan saat menyimpan review");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleExport = async () => {
-    setLoading(true);
+  const handleViewFile = async (laporanItem) => {
+    if (!laporanItem.file_url && !laporanItem.id) {
+      alert("File tidak tersedia");
+      return;
+    }
+    
+    try {
+      if (laporanItem.file_url) {
+        window.open(laporanItem.file_url, '_blank');
+        return;
+      }
+      
+      const response = await downloadLaporanFile(laporanItem.id);
+      if (response && response.success) {
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } else {
+        alert("Gagal membuka file");
+      }
+    } catch (error) {
+      console.error("Error viewing file:", error);
+      alert("Gagal membuka file");
+    }
+  };
+
+  const handleDownloadFile = async (laporanItem) => {
+    if (!laporanItem.file_url && !laporanItem.id) {
+      alert("File tidak tersedia");
+      return;
+    }
+    
+    try {
+      if (laporanItem.file_url) {
+        const link = document.createElement('a');
+        link.href = laporanItem.file_url;
+        link.download = laporanItem.file_name || `laporan_${laporanItem.peserta_nama || 'akhir'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+      
+      const response = await downloadLaporanFile(laporanItem.id);
+      if (response && response.success) {
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = response.filename || `laporan_${laporanItem.peserta_nama || 'akhir'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        alert("Gagal mengunduh file");
+      }
+    } catch (error) {
+      console.error("Error downloading file:", error);
+      alert("Gagal mengunduh file");
+    }
+  };
+
+  // Export function dengan pesan error yang jelas
+  const handleExport = async (format) => {
+    setShowExportDropdown(false);
+    setExportError(null);
+    
     try {
       const params = {};
       if (searchTerm) params.search = searchTerm;
       if (filterStatus !== "all") params.status = filterStatus;
+      params.format = format;
       
-      const response = await exportLaporanAkhir(params);
+      const token = localStorage.getItem('token');
+      const queryString = new URLSearchParams(params).toString();
+      const url = `http://localhost:8000/api/mentor/laporan-akhir/export?${queryString}`;
       
-      if (response && response.success && response.data) {
-        // Create blob from response data
-        const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `laporan_akhir_${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        alert(`Berhasil mengekspor ${response.count || response.data.length} data`);
-      } else {
-        alert(response?.message || "Gagal mengekspor laporan");
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        // Coba ambil pesan error dari response
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.message) errorMessage = errorData.message;
+        } catch (e) {
+          // Jika response bukan JSON
+          const text = await response.text();
+          if (text) errorMessage = text;
+        }
+        throw new Error(errorMessage);
       }
+      
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `laporan_akhir_${new Date().toISOString().split('T')[0]}.${format === 'excel' ? 'csv' : 'html'}`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+      
     } catch (error) {
       console.error("Error exporting laporan:", error);
-      alert("Terjadi kesalahan saat mengekspor laporan");
-    } finally {
-      setLoading(false);
+      setExportError({
+        message: error.message || "Terjadi kesalahan saat mengekspor laporan",
+        hint: "Hubungi backend developer untuk memperbaiki endpoint /mentor/laporan-akhir/export"
+      });
     }
   };
 
@@ -223,9 +346,34 @@ function LaporanAkhir() {
       
       <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
         
-        {/* Header Premium */}
-        <div className="relative mb-10 rounded-2xl overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-teal-500/15 via-blue-500/10 to-teal-500/15 rounded-2xl"></div>
+        {/* Error Toast Notification */}
+        {exportError && (
+          <div className="fixed top-24 right-6 z-50 animate-in slide-in-from-right duration-300">
+            <div className="bg-gradient-to-r from-red-500 to-rose-500 rounded-2xl shadow-2xl p-4 flex items-start gap-3 min-w-[320px] max-w-md">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-white font-semibold text-sm">Gagal Export Laporan</p>
+                <p className="text-white/80 text-xs mt-0.5">{exportError.message}</p>
+                <p className="text-white/60 text-[10px] mt-1 font-mono">{exportError.hint}</p>
+              </div>
+              <button onClick={() => setExportError(null)} className="text-white/70 hover:text-white flex-shrink-0">
+                <X size="16" />
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* Header */}
+        <div className="relative mb-10 rounded-2xl overflow-visible">
+          
+          {/* Background Gradient */}
+          <div className="absolute inset-0 rounded-2xl overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-teal-500/15 via-blue-500/10 to-teal-500/15"></div>
+          </div>
+          
+          {/* Content */}
           <div className="relative px-6 py-5">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
               <div>
@@ -244,14 +392,48 @@ function LaporanAkhir() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <button className="relative group overflow-hidden px-5 py-2.5 bg-white/80 backdrop-blur-sm border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm">
-                  <span className="relative z-10 flex items-center gap-2"><Printer size="14" />Cetak Laporan</span>
-                </button>
-                <button onClick={handleExport} className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300">
-                  <span className="relative z-10 flex items-center gap-2"><Download size="14" />Export</span>
+              
+              {/* Export Dropdown */}
+              <div className="relative" ref={dropdownRef}>
+                <button 
+                  onClick={() => setShowExportDropdown(!showExportDropdown)} 
+                  className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2"
+                >
+                  <Download size="16" />
+                  <span>Export</span>
+                  <ChevronDown size="14" className={`transition-transform duration-200 ${showExportDropdown ? 'rotate-180' : ''}`} />
                   <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                 </button>
+                
+                {/* Dropdown Menu */}
+                {showExportDropdown && (
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-[100]">
+                    <button
+                      onClick={() => handleExport('excel')}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-teal-50 transition-colors border-b border-slate-100"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                        <FileText size="14" className="text-emerald-600" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-medium">Export ke Excel</p>
+                        <p className="text-[10px] text-slate-400">Format .csv</p>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => handleExport('pdf')}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-teal-50 transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
+                        <FileText size="14" className="text-red-600" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-medium">Export ke PDF</p>
+                        <p className="text-[10px] text-slate-400">Format .html</p>
+                      </div>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -399,8 +581,8 @@ function LaporanAkhir() {
                           <div className="flex items-center gap-2">
                             {item.file_url && (
                               <>
-                                <button onClick={() => window.open(item.file_url, '_blank')} className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100 transition-all duration-200 hover:scale-105" title="Lihat Laporan"><Eye size="14" /></button>
-                                <button onClick={() => window.open(item.file_url, '_blank')} className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all duration-200 hover:scale-105" title="Download"><Download size="14" /></button>
+                                <button onClick={() => handleViewFile(item)} className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100 transition-all duration-200 hover:scale-105" title="Lihat Laporan"><Eye size="14" /></button>
+                                <button onClick={() => handleDownloadFile(item)} className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all duration-200 hover:scale-105" title="Download"><Download size="14" /></button>
                               </>
                             )}
                             {item.id && (
@@ -470,7 +652,7 @@ function LaporanAkhir() {
               <div className="bg-gradient-to-r from-slate-50 to-white rounded-xl p-4 border border-slate-100 shadow-sm">
                 <div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-teal-50"><FileText size="20" className="text-teal-500" /></div><div className="flex-1"><p className="text-sm font-semibold text-slate-700">{selectedLaporan.judul || "Laporan Akhir"}</p><p className="text-xs text-slate-400">Upload: {selectedLaporan.uploaded_at ? new Date(selectedLaporan.uploaded_at).toLocaleString('id-ID') : '-'} • Size: {selectedLaporan.file_size || '-'}</p></div>
                   {selectedLaporan.file_url && (
-                    <button onClick={() => window.open(selectedLaporan.file_url, '_blank')} className="px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-semibold hover:shadow-md transition-all duration-200 flex items-center gap-1.5"><Eye size="12" />Lihat</button>
+                    <button onClick={() => handleViewFile(selectedLaporan)} className="px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-semibold hover:shadow-md transition-all duration-200 flex items-center gap-1.5"><Eye size="12" />Lihat</button>
                   )}
                 </div>
               </div>
@@ -516,6 +698,16 @@ function LaporanAkhir() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes zoom-in-95 { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes slide-in-from-right { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+        .animate-in { animation-duration: 0.2s; animation-fill-mode: both; }
+        .fade-in { animation-name: fade-in; }
+        .zoom-in-95 { animation-name: zoom-in-95; }
+        .slide-in-from-right { animation-name: slide-in-from-right; }
+      `}</style>
     </div>
   );
 }

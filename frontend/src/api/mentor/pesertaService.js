@@ -20,6 +20,31 @@ export const getDetailPeserta = async (idPeserta) => {
   return response.data;
 };
 
+// Get detail peserta by id (untuk mentor)
+export const getDetailPesertaById = async (idPeserta) => {
+  try {
+    // Coba beberapa endpoint yang mungkin tersedia
+    let response;
+    try {
+      response = await axiosInstance.get(`/peserta/${idPeserta}`);
+    } catch (e) {
+      try {
+        response = await axiosInstance.get(`/mentor/peserta/${idPeserta}`);
+      } catch (e2) {
+        response = await axiosInstance.get(`/mentor/pesertas/${idPeserta}`);
+      }
+    }
+    return response.data;
+  } catch (error) {
+    console.error("Error getting detail peserta by id:", error);
+    return {
+      success: false,
+      message: error.response?.data?.message || "Gagal memuat data peserta",
+      data: null
+    };
+  }
+};
+
 // Get mentor filters (divisi, periode, etc.)
 export const getMentorFilters = async () => {
   const response = await axiosInstance.get("/mentor/filters");
@@ -30,5 +55,6 @@ export default {
   getMentorPesertaList,
   getMyPesertas,
   getDetailPeserta,
+  getDetailPesertaById,
   getMentorFilters
 };

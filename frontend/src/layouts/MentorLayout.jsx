@@ -51,6 +51,24 @@ function MentorLayout() {
 
   const [user, setUser] = useState(null)
   const [notifications, setNotifications] = useState([])
+  
+  // Cek apakah preview modal terbuka (ditandai dengan state global atau URL)
+  // Kita akan menggunakan state global sederhana via window
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+
+  // Listen untuk event preview dari komponen anak
+  useEffect(() => {
+    const handlePreviewOpen = () => setIsPreviewOpen(true)
+    const handlePreviewClose = () => setIsPreviewOpen(false)
+    
+    window.addEventListener('preview-modal-open', handlePreviewOpen)
+    window.addEventListener('preview-modal-close', handlePreviewClose)
+    
+    return () => {
+      window.removeEventListener('preview-modal-open', handlePreviewOpen)
+      window.removeEventListener('preview-modal-close', handlePreviewClose)
+    }
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem("token")
@@ -203,294 +221,298 @@ function MentorLayout() {
       {/* MAIN CONTENT AREA */}
       <div className="flex flex-1 overflow-hidden pt-1">
         
-        {/* SIDEBAR */}
-        <div className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300 shadow-lg shadow-gray-200/50 shrink-0 relative z-20 ${sidebarCollapsed ? "w-20" : "w-64"}`}>
-          
-          {/* LOGO */}
-          <div className={`px-4 py-5 flex items-center gap-3 border-b border-gray-200 ${sidebarCollapsed ? "justify-center" : ""}`}>
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-xl blur-md opacity-60"></div>
-              <div className="relative w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-md">
-                <span className="text-teal-600 font-bold text-xl">M</span>
+        {/* SIDEBAR - HIDE WHEN PREVIEW OPEN */}
+        {!isPreviewOpen && (
+          <div className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300 shadow-lg shadow-gray-200/50 shrink-0 relative z-20 ${sidebarCollapsed ? "w-20" : "w-64"}`}>
+            
+            {/* LOGO */}
+            <div className={`px-4 py-5 flex items-center gap-3 border-b border-gray-200 ${sidebarCollapsed ? "justify-center" : ""}`}>
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-xl blur-md opacity-60"></div>
+                <div className="relative w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-md">
+                  <span className="text-teal-600 font-bold text-xl">M</span>
+                </div>
+              </div>
+              {!sidebarCollapsed && (
+                <div>
+                  <h1 className="font-bold text-gray-800 text-lg tracking-tight">
+                    Kuanta <span className="text-teal-500">Academy</span>
+                  </h1>
+                  <p className="text-xs text-gray-400 font-medium">Mentor Panel</p>
+                </div>
+              )}
+            </div>
+
+            {/* MENU NAVIGATION */}
+            <div className="px-3 py-6 flex-1 overflow-y-auto">
+              <div className="mb-4">
+                <ul className="space-y-1 text-sm">
+                  
+                  {/* DASHBOARD */}
+                  <Link to="/mentor/dashboard">
+                    <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                      isActive("/mentor/dashboard")
+                        ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                        : "text-gray-600 hover:bg-gray-100"
+                    }`}>
+                      <LayoutDashboard size={18} />
+                      {!sidebarCollapsed && <span className="font-medium">Dashboard</span>}
+                      {isActive("/mentor/dashboard") && !sidebarCollapsed && (
+                        <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
+                      )}
+                    </li>
+                  </Link>
+
+                  {/* DAFTAR PESERTA */}
+                  <Link to="/mentor/peserta">
+                    <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                      isActive("/mentor/peserta")
+                        ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                        : "text-gray-600 hover:bg-gray-100"
+                    }`}>
+                      <Users size={18} />
+                      {!sidebarCollapsed && <span className="font-medium">Daftar Peserta</span>}
+                      {isActive("/mentor/peserta") && !sidebarCollapsed && (
+                        <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
+                      )}
+                    </li>
+                  </Link>
+
+                  {/* PRESENSI & DAILY REPORT */}
+                  <Link to="/mentor/presensi-daily-report">
+                    <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                      isActive("/mentor/presensi-daily-report")
+                        ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                        : "text-gray-600 hover:bg-gray-100"
+                    }`}>
+                      <CalendarCheck size={18} />
+                      {!sidebarCollapsed && <span className="font-medium">Presensi & Daily Report</span>}
+                      {isActive("/mentor/presensi-daily-report") && !sidebarCollapsed && (
+                        <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
+                      )}
+                    </li>
+                  </Link>
+
+                  {/* MATERI MENU dengan dropdown */}
+                  <li>
+                    <div 
+                      onClick={() => !sidebarCollapsed && setMateriOpen(!materiOpen)}
+                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                        isActive("/mentor/materi")
+                          ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                          : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <BookOpen size={18} />
+                        {!sidebarCollapsed && <span className="font-medium">Materi</span>}
+                      </div>
+                      {!sidebarCollapsed && (
+                        <button onClick={(e) => { e.stopPropagation(); setMateriOpen(!materiOpen); }} className="p-0.5">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                            className={`transition-transform duration-200 ${materiOpen ? "rotate-180" : ""}`}>
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+
+                    {!sidebarCollapsed && materiOpen && (
+                      <div className="ml-7 mt-2 space-y-1">
+                        <Link to="/mentor/materi">
+                          <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                            location.pathname === "/mentor/materi"
+                              ? "bg-teal-50 text-teal-600 font-medium"
+                              : "text-gray-500 hover:bg-gray-100"
+                          }`}>
+                            <List size={14} />
+                            <span>Daftar Materi</span>
+                          </div>
+                        </Link>
+                        <Link to="/mentor/add-materi">
+                          <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                            location.pathname === "/mentor/add-materi"
+                              ? "bg-teal-50 text-teal-600 font-medium"
+                              : "text-gray-500 hover:bg-gray-100"
+                          }`}>
+                            <PlusCircle size={14} />
+                            <span>Tambah Materi</span>
+                          </div>
+                        </Link>
+                      </div>
+                    )}
+                  </li>
+
+                  {/* TUGAS MENU dengan dropdown */}
+                  <li>
+                    <div 
+                      onClick={() => !sidebarCollapsed && setTugasOpen(!tugasOpen)}
+                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                        isActive("/mentor/tugas")
+                          ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                          : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <ClipboardList size={18} />
+                        {!sidebarCollapsed && <span className="font-medium">Tugas</span>}
+                      </div>
+                      {!sidebarCollapsed && (
+                        <button onClick={(e) => { e.stopPropagation(); setTugasOpen(!tugasOpen); }} className="p-0.5">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                            className={`transition-transform duration-200 ${tugasOpen ? "rotate-180" : ""}`}>
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+
+                    {!sidebarCollapsed && tugasOpen && (
+                      <div className="ml-7 mt-2 space-y-1">
+                        <Link to="/mentor/tugas">
+                          <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                            location.pathname === "/mentor/tugas"
+                              ? "bg-teal-50 text-teal-600 font-medium"
+                              : "text-gray-500 hover:bg-gray-100"
+                          }`}>
+                            <List size={14} />
+                            <span>Kelola Tugas</span>
+                          </div>
+                        </Link>
+                        <Link to="/mentor/add-tugas">
+                          <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                            location.pathname === "/mentor/add-tugas"
+                              ? "bg-teal-50 text-teal-600 font-medium"
+                              : "text-gray-500 hover:bg-gray-100"
+                          }`}>
+                            <PlusCircle size={14} />
+                            <span>Tambah Tugas</span>
+                          </div>
+                        </Link>
+                        <Link to="/mentor/validasi-tugas">
+                          <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                            location.pathname === "/mentor/validasi-tugas"
+                              ? "bg-teal-50 text-teal-600 font-medium"
+                              : "text-gray-500 hover:bg-gray-100"
+                          }`}>
+                            <CheckCircle size={14} />
+                            <span>Validasi Tugas</span>
+                          </div>
+                        </Link>
+                      </div>
+                    )}
+                  </li>
+
+                  {/* LAPORAN AKHIR */}
+                  <Link to="/mentor/laporan-akhir">
+                    <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                      isActive("/mentor/laporan-akhir")
+                        ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                        : "text-gray-600 hover:bg-gray-100"
+                    }`}>
+                      <FileText size={18} />
+                      {!sidebarCollapsed && <span className="font-medium">Laporan Akhir</span>}
+                      {isActive("/mentor/laporan-akhir") && !sidebarCollapsed && (
+                        <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
+                      )}
+                    </li>
+                  </Link>
+
+                  {/* PENILAIAN MENU dengan dropdown */}
+                  <li>
+                    <div 
+                      onClick={() => !sidebarCollapsed && setPenilaianOpen(!penilaianOpen)}
+                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                        isActive("/mentor/penilaian-manual") || isActive("/mentor/nilai-akhir")
+                          ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                          : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Star size={18} />
+                        {!sidebarCollapsed && <span className="font-medium">Penilaian</span>}
+                      </div>
+                      {!sidebarCollapsed && (
+                        <button onClick={(e) => { e.stopPropagation(); setPenilaianOpen(!penilaianOpen); }} className="p-0.5">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                            className={`transition-transform duration-200 ${penilaianOpen ? "rotate-180" : ""}`}>
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+
+                    {!sidebarCollapsed && penilaianOpen && (
+                      <div className="ml-7 mt-2 space-y-1">
+                        <Link to="/mentor/penilaian-manual">
+                          <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                            location.pathname === "/mentor/penilaian-manual"
+                              ? "bg-teal-50 text-teal-600 font-medium"
+                              : "text-gray-500 hover:bg-gray-100"
+                          }`}>
+                            <Award size={14} />
+                            <span>Input Nilai Manual</span>
+                          </div>
+                        </Link>
+                        <Link to="/mentor/nilai-akhir">
+                          <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                            location.pathname === "/mentor/nilai-akhir"
+                              ? "bg-teal-50 text-teal-600 font-medium"
+                              : "text-gray-500 hover:bg-gray-100"
+                          }`}>
+                            <Target size={14} />
+                            <span>Hitung Nilai Akhir</span>
+                          </div>
+                        </Link>
+                      </div>
+                    )}
+                  </li>
+
+                </ul>
               </div>
             </div>
-            {!sidebarCollapsed && (
-              <div>
-                <h1 className="font-bold text-gray-800 text-lg tracking-tight">
-                  Kuanta <span className="text-teal-500">Academy</span>
-                </h1>
-                <p className="text-xs text-gray-400 font-medium">Mentor Panel</p>
-              </div>
-            )}
-          </div>
 
-          {/* MENU NAVIGATION - Tanpa Navigasi Utama label */}
-          <div className="px-3 py-6 flex-1 overflow-y-auto">
-            <div className="mb-4">
-              <ul className="space-y-1 text-sm">
-                
-                {/* DASHBOARD */}
-                <Link to="/mentor/dashboard">
-                  <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                    isActive("/mentor/dashboard")
-                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}>
-                    <LayoutDashboard size={18} />
-                    {!sidebarCollapsed && <span className="font-medium">Dashboard</span>}
-                    {isActive("/mentor/dashboard") && !sidebarCollapsed && (
-                      <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
-                    )}
-                  </li>
-                </Link>
-
-                {/* DAFTAR PESERTA */}
-                <Link to="/mentor/peserta">
-                  <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                    isActive("/mentor/peserta")
-                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}>
-                    <Users size={18} />
-                    {!sidebarCollapsed && <span className="font-medium">Daftar Peserta</span>}
-                    {isActive("/mentor/peserta") && !sidebarCollapsed && (
-                      <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
-                    )}
-                  </li>
-                </Link>
-
-                {/* PRESENSI & DAILY REPORT - single menu langsung ke daily-report */}
-                <Link to="/mentor/presensi-daily-report">
-                  <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                    isActive("/mentor/presensi-daily-report")
-                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}>
-                    <CalendarCheck size={18} />
-                    {!sidebarCollapsed && <span className="font-medium">Presensi & Daily Report</span>}
-                    {isActive("/mentor/presensi-daily-report") && !sidebarCollapsed && (
-                      <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
-                    )}
-                  </li>
-                </Link>
-
-                {/* MATERI MENU dengan dropdown */}
-                <li>
-                  <div 
-                    onClick={() => !sidebarCollapsed && setMateriOpen(!materiOpen)}
-                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                      isActive("/mentor/materi")
-                        ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <BookOpen size={18} />
-                      {!sidebarCollapsed && <span className="font-medium">Materi</span>}
-                    </div>
-                    {!sidebarCollapsed && (
-                      <button onClick={(e) => { e.stopPropagation(); setMateriOpen(!materiOpen); }} className="p-0.5">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                          className={`transition-transform duration-200 ${materiOpen ? "rotate-180" : ""}`}>
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-
-                  {!sidebarCollapsed && materiOpen && (
-                    <div className="ml-7 mt-2 space-y-1">
-                      <Link to="/mentor/materi">
-                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                          location.pathname === "/mentor/materi"
-                            ? "bg-teal-50 text-teal-600 font-medium"
-                            : "text-gray-500 hover:bg-gray-100"
-                        }`}>
-                          <List size={14} />
-                          <span>Daftar Materi</span>
-                        </div>
-                      </Link>
-                      <Link to="/mentor/add-materi">
-                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                          location.pathname === "/mentor/add-materi"
-                            ? "bg-teal-50 text-teal-600 font-medium"
-                            : "text-gray-500 hover:bg-gray-100"
-                        }`}>
-                          <PlusCircle size={14} />
-                          <span>Tambah Materi</span>
-                        </div>
-                      </Link>
-                    </div>
-                  )}
-                </li>
-
-                {/* TUGAS MENU dengan dropdown */}
-                <li>
-                  <div 
-                    onClick={() => !sidebarCollapsed && setTugasOpen(!tugasOpen)}
-                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                      isActive("/mentor/tugas")
-                        ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <ClipboardList size={18} />
-                      {!sidebarCollapsed && <span className="font-medium">Tugas</span>}
-                    </div>
-                    {!sidebarCollapsed && (
-                      <button onClick={(e) => { e.stopPropagation(); setTugasOpen(!tugasOpen); }} className="p-0.5">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                          className={`transition-transform duration-200 ${tugasOpen ? "rotate-180" : ""}`}>
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-
-                  {!sidebarCollapsed && tugasOpen && (
-                    <div className="ml-7 mt-2 space-y-1">
-                      <Link to="/mentor/tugas">
-                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                          location.pathname === "/mentor/tugas"
-                            ? "bg-teal-50 text-teal-600 font-medium"
-                            : "text-gray-500 hover:bg-gray-100"
-                        }`}>
-                          <List size={14} />
-                          <span>Kelola Tugas</span>
-                        </div>
-                      </Link>
-                      <Link to="/mentor/add-tugas">
-                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                          location.pathname === "/mentor/add-tugas"
-                            ? "bg-teal-50 text-teal-600 font-medium"
-                            : "text-gray-500 hover:bg-gray-100"
-                        }`}>
-                          <PlusCircle size={14} />
-                          <span>Tambah Tugas</span>
-                        </div>
-                      </Link>
-                      <Link to="/mentor/validasi-tugas">
-                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                          location.pathname === "/mentor/validasi-tugas"
-                            ? "bg-teal-50 text-teal-600 font-medium"
-                            : "text-gray-500 hover:bg-gray-100"
-                        }`}>
-                          <CheckCircle size={14} />
-                          <span>Validasi Tugas</span>
-                        </div>
-                      </Link>
-                    </div>
-                  )}
-                </li>
-
-                {/* LAPORAN AKHIR */}
-                <Link to="/mentor/laporan-akhir">
-                  <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                    isActive("/mentor/laporan-akhir")
-                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}>
-                    <FileText size={18} />
-                    {!sidebarCollapsed && <span className="font-medium">Laporan Akhir</span>}
-                    {isActive("/mentor/laporan-akhir") && !sidebarCollapsed && (
-                      <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
-                    )}
-                  </li>
-                </Link>
-
-                {/* PENILAIAN MENU dengan dropdown */}
-                <li>
-                  <div 
-                    onClick={() => !sidebarCollapsed && setPenilaianOpen(!penilaianOpen)}
-                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                      isActive("/mentor/penilaian-manual") || isActive("/mentor/nilai-akhir")
-                        ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Star size={18} />
-                      {!sidebarCollapsed && <span className="font-medium">Penilaian</span>}
-                    </div>
-                    {!sidebarCollapsed && (
-                      <button onClick={(e) => { e.stopPropagation(); setPenilaianOpen(!penilaianOpen); }} className="p-0.5">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                          className={`transition-transform duration-200 ${penilaianOpen ? "rotate-180" : ""}`}>
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-
-                  {!sidebarCollapsed && penilaianOpen && (
-                    <div className="ml-7 mt-2 space-y-1">
-                      <Link to="/mentor/penilaian-manual">
-                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                          location.pathname === "/mentor/penilaian-manual"
-                            ? "bg-teal-50 text-teal-600 font-medium"
-                            : "text-gray-500 hover:bg-gray-100"
-                        }`}>
-                          <Award size={14} />
-                          <span>Input Nilai Manual</span>
-                        </div>
-                      </Link>
-                      <Link to="/mentor/nilai-akhir">
-                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                          location.pathname === "/mentor/nilai-akhir"
-                            ? "bg-teal-50 text-teal-600 font-medium"
-                            : "text-gray-500 hover:bg-gray-100"
-                        }`}>
-                          <Target size={14} />
-                          <span>Hitung Nilai Akhir</span>
-                        </div>
-                      </Link>
-                    </div>
-                  )}
-                </li>
-
-              </ul>
+            {/* LOGOUT BUTTON */}
+            <div className="p-4 border-t border-gray-200">
+              <button
+                onClick={handleLogout}
+                className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-md shadow-red-500/20 hover:shadow-lg hover:shadow-red-500/30"
+              >
+                <div className="absolute inset-0 bg-white/20 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-300"></div>
+                <div className={`relative flex items-center justify-center gap-2 py-2.5 ${sidebarCollapsed ? "px-2" : "px-4"}`}>
+                  <Power size={16} className="group-hover:rotate-90 transition-transform duration-300" />
+                  {!sidebarCollapsed && <span className="font-medium">Keluar</span>}
+                </div>
+              </button>
             </div>
-          </div>
 
-          {/* LOGOUT BUTTON - SIDEBAR - PREMIUM */}
-          <div className="p-4 border-t border-gray-200">
+            {/* COLLAPSE BUTTON */}
             <button
-              onClick={handleLogout}
-              className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-md shadow-red-500/20 hover:shadow-lg hover:shadow-red-500/30"
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="absolute -right-3 top-24 bg-white border border-gray-300 rounded-full p-1 shadow-md hover:bg-gray-100 transition-all z-30 hover:scale-110"
             >
-              <div className="absolute inset-0 bg-white/20 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-300"></div>
-              <div className={`relative flex items-center justify-center gap-2 py-2.5 ${sidebarCollapsed ? "px-2" : "px-4"}`}>
-                <Power size={16} className="group-hover:rotate-90 transition-transform duration-300" />
-                {!sidebarCollapsed && <span className="font-medium">Keluar</span>}
-              </div>
+              {sidebarCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
             </button>
+
           </div>
-
-          {/* COLLAPSE BUTTON */}
-          <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="absolute -right-3 top-24 bg-white border border-gray-300 rounded-full p-1 shadow-md hover:bg-gray-100 transition-all z-30 hover:scale-110"
-          >
-            {sidebarCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
-          </button>
-
-        </div>
+        )}
 
         {/* RIGHT SIDE - Topbar + Content */}
         <div className="flex-1 flex flex-col overflow-hidden relative z-10 bg-gradient-to-br from-gray-50 to-gray-100">
           
-          {/* TOPBAR PREMIUM - COMPACT DATE TIME */}
+          {/* TOPBAR - Hide when preview open? Optional, better to keep for navigation */}
           <div className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-6 shadow-sm shrink-0 relative z-50">
             
             {/* LEFT SIDE */}
             <div className="flex items-center gap-4">
-              <button 
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)} 
-                className="p-2 hover:bg-gray-100 rounded-xl transition-all lg:hidden"
-              >
-                <Menu size={18} className="text-gray-600" />
-              </button>
+              {!isPreviewOpen && (
+                <button 
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)} 
+                  className="p-2 hover:bg-gray-100 rounded-xl transition-all lg:hidden"
+                >
+                  <Menu size={18} className="text-gray-600" />
+                </button>
+              )}
               <div className="hidden md:flex items-center gap-3">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-500">Mentor</span>
@@ -505,7 +527,7 @@ function MentorLayout() {
             {/* RIGHT SIDE */}
             <div className="flex items-center gap-4">
               
-              {/* DATE TIME - Compact & Premium */}
+              {/* DATE TIME */}
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white/70 backdrop-blur-sm rounded-xl border border-gray-200/80 shadow-sm">
                 <div className="flex items-center gap-1.5">
                   <Calendar size={14} className="text-teal-500" />
@@ -563,7 +585,7 @@ function MentorLayout() {
                 )}
               </div>
 
-              {/* Profile Dropdown Premium */}
+              {/* Profile Dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setProfileOpen(!profileOpen)}
@@ -661,8 +683,8 @@ function MentorLayout() {
             </div>
           </div>
 
-          {/* CONTENT AREA - FULLY INTEGRATED, NO EXTRA CARD */}
-          <div className="flex-1 overflow-auto">
+          {/* CONTENT AREA */}
+          <div className="flex-1 overflow-auto relative">
             <Outlet />
           </div>
 

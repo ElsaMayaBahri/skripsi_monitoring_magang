@@ -19,7 +19,7 @@ import {
   Shield,
   PlayCircle
 } from "lucide-react";
-import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
+import { createMentorMateri } from "../../api/mentor/materiMentorService";
 
 function AddMateri() {
   const navigate = useNavigate();
@@ -28,6 +28,9 @@ function AddMateri() {
   const [error, setError] = useState("");
   const [filePreview, setFilePreview] = useState(null);
   const fileInputRef = useRef(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [formDataState, setFormDataState] = useState({
     judul: "",
     deskripsi: "",
@@ -123,6 +126,19 @@ function AddMateri() {
     }
   };
 
+  const resetForm = () => {
+    setFormDataState({
+      judul: "",
+      deskripsi: "",
+      tipe_materi: "dokumen",
+      file_materi: null,
+      link: "",
+    });
+    resetFile();
+    setErrors({});
+    setSuccess(false);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -138,28 +154,42 @@ function AddMateri() {
       
       if (formDataState.tipe_materi === "dokumen" || formDataState.tipe_materi === "video") {
         if (formDataState.file_materi) {
-          submitData.append("file_materi", formDataState.file_materi);
+          submitData.append("file", formDataState.file_materi);
         }
       } else if (formDataState.tipe_materi === "link") {
         submitData.append("link", formDataState.link);
       }
       
-      const response = await api.createMentorMateri(submitData);
+      const response = await createMentorMateri(submitData);
       
       if (response.success) {
         setSuccess(true);
-        setTimeout(() => {
-          navigate("/mentor/materi");
-        }, 1500);
+        setShowSuccessModal(true);
       } else {
         setError(response.message || "Gagal menambahkan materi");
         if (response.errors) {
           setErrors(response.errors);
         }
+        setErrorMessage(response.message || "Gagal menambahkan materi");
+        setShowErrorModal(true);
       }
     } catch (err) {
       console.error("Error adding materi:", err);
-      setError(err.message || "Terjadi kesalahan saat menambahkan materi");
+      let errorMsg = "Terjadi kesalahan saat menambahkan materi";
+      
+      if (err.response?.data?.errors) {
+        const backendErrors = err.response.data.errors;
+        setErrors(backendErrors);
+        errorMsg = Object.values(backendErrors).flat().join(", ");
+      } else if (err.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      
+      setError(errorMsg);
+      setErrorMessage(errorMsg);
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
     }
@@ -192,8 +222,96 @@ function AddMateri() {
   const currentTipe = getTipeIcon(formDataState.tipe_materi);
   const TipeIcon = currentTipe.icon;
 
+  // Modal Success Component
+  const SuccessModal = () => {
+    if (!showSuccessModal) return null;
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in duration-300">
+          {/* Header Gradient */}
+          <div className="relative h-24 bg-gradient-to-r from-emerald-500 to-teal-500">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
+                <CheckCircle className="w-10 h-10 text-emerald-500" />
+              </div>
+            </div>
+          </div>
+          
+          {/* Content */}
+          <div className="px-6 pb-6 pt-10 text-center">
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Berhasil!</h3>
+            <p className="text-slate-500 text-sm mb-6">
+              Materi "{formDataState.judul}" berhasil ditambahkan
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  resetForm();
+                }}
+                className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 transition-all duration-200"
+              >
+                Tambah Lagi
+              </button>
+              <button
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  navigate("/mentor/materi");
+                }}
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-white font-medium shadow-md hover:shadow-lg transition-all duration-200"
+              >
+                Lihat Daftar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Modal Error Component
+  const ErrorModal = () => {
+    if (!showErrorModal) return null;
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in duration-300">
+          {/* Header Gradient */}
+          <div className="relative h-24 bg-gradient-to-r from-red-500 to-rose-500">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
+                <AlertCircle className="w-10 h-10 text-red-500" />
+              </div>
+            </div>
+          </div>
+          
+          {/* Content */}
+          <div className="px-6 pb-6 pt-10 text-center">
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Gagal!</h3>
+            <p className="text-slate-500 text-sm mb-6">
+              {errorMessage}
+            </p>
+            
+            <button
+              onClick={() => setShowErrorModal(false)}
+              className="w-full px-4 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-white font-medium shadow-md hover:shadow-lg transition-all duration-200"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20">
+      {/* Modal */}
+      <SuccessModal />
+      <ErrorModal />
+      
       <div className="fixed inset-0 opacity-[0.03] pointer-events-none">
         <div className="absolute top-0 left-0 w-96 h-96 bg-teal-500 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500 rounded-full blur-3xl"></div>
@@ -201,14 +319,8 @@ function AddMateri() {
       
       <div className="relative p-6 lg:p-8 max-w-[1000px] mx-auto">
         
+        {/* Header tanpa tombol kembali ke daftar materi */}
         <div className="mb-8">
-          <Link to="/mentor/materi" className="group inline-flex items-center gap-2 text-slate-500 hover:text-teal-600 transition-all duration-300 mb-4">
-            <div className="p-1 rounded-lg bg-white/80 backdrop-blur-sm shadow-sm group-hover:bg-teal-50 transition-colors">
-              <ArrowLeft size={14} />
-            </div>
-            <span className="text-sm font-medium">Kembali ke Daftar Materi</span>
-          </Link>
-          
           <div className="relative overflow-hidden rounded-2xl">
             <div className="absolute inset-0 bg-gradient-to-r from-teal-500/15 via-blue-500/10 to-teal-500/15 rounded-2xl"></div>
             <div className="relative px-6 py-5">
@@ -229,34 +341,6 @@ function AddMateri() {
             </div>
           </div>
         </div>
-
-        {error && (
-          <div className="mb-6 bg-gradient-to-r from-red-50/90 to-rose-50/90 backdrop-blur-sm border border-red-200 rounded-2xl p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center shadow-md">
-                <AlertCircle size={14} className="text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-red-800">Gagal menambahkan materi!</p>
-                <p className="text-xs text-red-600">{error}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {success && (
-          <div className="mb-6 bg-gradient-to-r from-emerald-50/90 to-teal-50/90 backdrop-blur-sm border border-emerald-200 rounded-2xl p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md">
-                <CheckCircle size={14} className="text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-emerald-800">Materi berhasil ditambahkan!</p>
-                <p className="text-xs text-emerald-600">Materi akan segera tersedia untuk peserta</p>
-              </div>
-            </div>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
           <div className="relative">
@@ -364,7 +448,7 @@ function AddMateri() {
                   {formDataState.tipe_materi === "video" ? "Upload File Video" : "Upload File"} <span className="text-red-500">*</span>
                 </label>
                 <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 ${
-                  errors.file_materi 
+                  errors.file_materi || errors.file
                     ? "border-red-300 bg-red-50/30" 
                     : "border-slate-200 bg-slate-50/30 hover:border-teal-400 hover:bg-teal-50/20"
                 }`}>
@@ -427,7 +511,7 @@ function AddMateri() {
                     </label>
                   )}
                 </div>
-                {errors.file_materi && <p className="text-xs text-red-500 mt-2">{errors.file_materi}</p>}
+                {(errors.file_materi || errors.file) && <p className="text-xs text-red-500 mt-2">{errors.file_materi || errors.file}</p>}
               </div>
             )}
 
@@ -459,7 +543,7 @@ function AddMateri() {
           <div className="px-8 py-5 bg-gradient-to-r from-slate-50 to-white border-t border-slate-100 flex justify-end gap-4">
             <Link to="/mentor/materi">
               <button type="button" className="px-6 py-2.5 border-2 border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-all duration-200">
-                Batal
+                Kembali
               </button>
             </Link>
             <button
