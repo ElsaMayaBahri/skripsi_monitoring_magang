@@ -27,6 +27,9 @@ export const createMentorMateri = async (formData) => {
 }
 
 export const updateMentorMateri = async (id, formData) => {
+  // Tambahkan _method PUT untuk Laravel karena browser tidak support PUT untuk file upload
+  formData.append("_method", "PUT")
+  
   const response = await axiosInstance.post(`/mentor/materi/${id}`, formData, {
     headers: {
       "Content-Type": "multipart/form-data",

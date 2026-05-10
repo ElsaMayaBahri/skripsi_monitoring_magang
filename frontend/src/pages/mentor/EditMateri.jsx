@@ -163,46 +163,73 @@ function EditMateri() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validateForm()) return;
+  e.preventDefault();
+  if (!validateForm()) return;
+  
+  setLoading(true);
+  setError("");
+  
+  try {
+    const submitData = new FormData();
+    submitData.append("judul", formDataState.judul);
+    submitData.append("deskripsi", formDataState.deskripsi);
+    submitData.append("tipe_materi", formDataState.tipe_materi);
     
-    setLoading(true);
-    setError("");
-    
-    try {
-      const submitData = new FormData();
-      submitData.append("judul", formDataState.judul);
-      submitData.append("deskripsi", formDataState.deskripsi);
-      submitData.append("tipe_materi", formDataState.tipe_materi);
-      
-      if (formDataState.tipe_materi === "dokumen" || formDataState.tipe_materi === "video") {
-        if (formDataState.file_materi) {
-          submitData.append("file", formDataState.file_materi);
-        }
-      } else if (formDataState.tipe_materi === "link") {
-        submitData.append("link", formDataState.link);
+    if (formDataState.tipe_materi === "dokumen" || formDataState.tipe_materi === "video") {
+      if (formDataState.file_materi) {
+        submitData.append("file", formDataState.file_materi);
       }
-      
-      const response = await updateMentorMateri(id, submitData);
-      
-      if (response && response.success) {
-        setSuccess(true);
-        setTimeout(() => {
-          navigate("/mentor/materi");
-        }, 1500);
-      } else {
-        setError(response?.message || "Gagal mengupdate materi");
-        if (response?.errors) {
-          setErrors(response.errors);
-        }
-      }
-    } catch (err) {
-      console.error("Error updating materi:", err);
-      setError(err.response?.data?.message || err.message || "Terjadi kesalahan saat mengupdate materi");
-    } finally {
-      setLoading(false);
+    } else if (formDataState.tipe_materi === "link") {
+      submitData.append("link", formDataState.link);
     }
-  };
+    
+    // Tambahkan _method PUT jika diperlukan (sudah ditangani di service)
+    // service sudah menambahkan _method PUT
+    
+    console.log("Submitting update for materi ID:", id);
+    console.log("Data:", {
+      judul: formDataState.judul,
+      deskripsi: formDataState.deskripsi,
+      tipe_materi: formDataState.tipe_materi,
+      hasFile: !!formDataState.file_materi,
+      hasLink: !!formDataState.link
+    });
+    
+    const response = await updateMentorMateri(id, submitData);
+    
+    if (response && response.success) {
+      setSuccess(true);
+      setTimeout(() => {
+        navigate("/mentor/materi");
+      }, 1500);
+    } else {
+      setError(response?.message || "Gagal mengupdate materi");
+      if (response?.errors) {
+        setErrors(response.errors);
+      }
+    }
+  } catch (err) {
+    console.error("Error updating materi:", err);
+    
+    if (err.response?.status === 405) {
+      setError("Method tidak diizinkan. Silahkan coba lagi.");
+    } else if (err.response?.status === 422) {
+      const errors = err.response.data?.errors;
+      if (errors) {
+        const errorMessages = Object.values(errors).flat();
+        setError(errorMessages.join(", "));
+      } else {
+        setError(err.response.data?.message || "Validasi gagal");
+      }
+    } else if (err.response?.status === 404) {
+      setError("Materi tidak ditemukan");
+    } else {
+      setError(err.response?.data?.message || err.message || "Terjadi kesalahan saat mengupdate materi");
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleTipeChange = (tipe) => {
     resetFile();
