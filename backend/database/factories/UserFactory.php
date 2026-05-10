@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 class UserFactory extends Factory
 {
     /**
-     * The current password being used by the factory.
+     * Menyimpan password yang sudah di-hash agar bisa dipakai ulang (tidak perlu hash ulang setiap kali buat data).
      */
     protected static ?string $password;
 
