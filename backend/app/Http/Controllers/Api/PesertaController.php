@@ -68,8 +68,8 @@ class PesertaController extends Controller
                 'prodi' => 'nullable|string|max:255',
                 'id_divisi' => 'nullable|exists:divisis,id_divisi',
                 'id_mentor' => 'nullable|exists:mentors,id_mentor',
-                'tanggal_mulai' => 'required|date',  // 🔥 TAMBAHKAN INI
-                'tanggal_selesai' => 'nullable|date', // 🔥 TAMBAHKAN INI
+                'tanggal_mulai' => 'required|date', 
+                'tanggal_selesai' => 'nullable|date',
             ]);
 
             DB::beginTransaction();

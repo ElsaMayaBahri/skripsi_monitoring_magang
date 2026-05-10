@@ -88,9 +88,6 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import useIdleTimeout from "./hooks/useIdleTimeout";
 import IdleWarningModal from "./components/IdleWarningModal";
 
-// ============================================
-// AUTO LOGOUT CONFIGURATION
-// ============================================
 const IDLE_MINUTES = 120;
 const WARNING_MINUTES = 5;
 

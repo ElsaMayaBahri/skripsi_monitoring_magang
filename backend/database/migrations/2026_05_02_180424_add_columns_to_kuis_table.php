@@ -39,6 +39,11 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('kuis', function (Blueprint $table) {
+            // Drop index for divisi column first
+            if (Schema::hasColumn('kuis', 'divisi')) {
+                $table->dropIndex(['divisi']);
+            }
+
             $columns = [];
 
             if (Schema::hasColumn('kuis', 'divisi')) {
