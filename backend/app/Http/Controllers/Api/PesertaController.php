@@ -13,6 +13,69 @@ use Illuminate\Validation\ValidationException;
 class PesertaController extends Controller
 {
     /**
+     * Get profile for authenticated peserta (untuk halaman profile)
+     */
+    public function getProfile(Request $request)
+    {
+        try {
+            $user = $request->user();
+            
+            // Cari data peserta berdasarkan id_user
+            $peserta = Peserta::with(['divisi', 'mentor.user'])
+                ->where('id_user', $user->id_user)
+                ->first();
+            
+            if (!$peserta) {
+                return response()->json([
+                    'asal_kampus' => '-',
+                    'prodi' => '-',
+                    'tanggal_mulai' => null,
+                    'tanggal_selesai' => null,
+                    'divisi' => null,
+                    'mentor_nama' => '-',
+                    'total_materi' => '0',
+                    'total_tugas_selesai' => '0',
+                    'total_sertifikat' => '0',
+                    'total_poin' => '0'
+                ]);
+            }
+            
+            // Hitung statistik (opsional, sesuaikan dengan model Anda)
+            $totalMateri = 0;
+            $totalTugasSelesai = 0;
+            $totalSertifikat = 0;
+            $totalPoin = 0;
+            
+            return response()->json([
+                'asal_kampus' => $peserta->asal_kampus ?? '-',
+                'prodi' => $peserta->prodi ?? '-',
+                'tanggal_mulai' => $peserta->tanggal_mulai,
+                'tanggal_selesai' => $peserta->tanggal_selesai,
+                'divisi' => $peserta->divisi->nama_divisi ?? null,
+                'mentor_nama' => $peserta->mentor->user->nama ?? $peserta->mentor->nama ?? '-',
+                'total_materi' => (string) $totalMateri,
+                'total_tugas_selesai' => (string) $totalTugasSelesai,
+                'total_sertifikat' => (string) $totalSertifikat,
+                'total_poin' => (string) $totalPoin,
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'asal_kampus' => '-',
+                'prodi' => '-',
+                'tanggal_mulai' => null,
+                'tanggal_selesai' => null,
+                'divisi' => null,
+                'mentor_nama' => '-',
+                'total_materi' => '0',
+                'total_tugas_selesai' => '0',
+                'total_sertifikat' => '0',
+                'total_poin' => '0'
+            ]);
+        }
+    }
+
+    /**
      * Display a listing of the resource.
      */
     public function index()
@@ -20,7 +83,6 @@ class PesertaController extends Controller
         try {
             $peserta = Peserta::with(['user', 'mentor.user', 'divisi'])->get();
             
-            // Format response agar lebih rapi dan mencakup semua field
             $formattedPeserta = $peserta->map(function ($item) {
                 return [
                     'id_peserta' => $item->id_peserta,
@@ -74,7 +136,6 @@ class PesertaController extends Controller
 
             DB::beginTransaction();
             
-            // Create user
             $user = User::create([
                 'nama' => $validated['nama'],
                 'email' => $validated['email'],
@@ -84,21 +145,19 @@ class PesertaController extends Controller
                 'status_akun' => 'aktif',
             ]);
 
-            // 🔥 PERBAIKAN: Create peserta dengan semua field termasuk tanggal
             $peserta = Peserta::create([
                 'id_user' => $user->id_user,
                 'id_mentor' => $validated['id_mentor'] ?? null,
                 'id_divisi' => $validated['id_divisi'] ?? null,
                 'asal_kampus' => $validated['asal_kampus'] ?? null,
                 'prodi' => $validated['prodi'] ?? null,
-                'tanggal_mulai' => $validated['tanggal_mulai'],  // 🔥 TAMBAHKAN INI
-                'tanggal_selesai' => $validated['tanggal_selesai'] ?? null,  // 🔥 TAMBAHKAN INI
+                'tanggal_mulai' => $validated['tanggal_mulai'],
+                'tanggal_selesai' => $validated['tanggal_selesai'] ?? null,
                 'status_magang' => 'aktif',
             ]);
 
             DB::commit();
             
-            // Load relationships
             $peserta->load(['user', 'mentor.user', 'divisi']);
             
             return response()->json([
@@ -208,15 +267,14 @@ class PesertaController extends Controller
                 'id_mentor' => 'nullable|exists:mentors,id_mentor',
                 'status_akun' => 'nullable|in:aktif,non_aktif',
                 'status_magang' => 'nullable|in:aktif,non_aktif',
-                'tanggal_mulai' => 'sometimes|date',  // 🔥 TAMBAHKAN INI
-                'tanggal_selesai' => 'nullable|date', // 🔥 TAMBAHKAN INI
+                'tanggal_mulai' => 'sometimes|date',
+                'tanggal_selesai' => 'nullable|date',
             ];
             
             $request->validate($rules);
             
             DB::beginTransaction();
             
-            // Update user jika ada data user
             if ($peserta->user) {
                 $userData = [];
                 if ($request->has('nama')) $userData['nama'] = $request->nama;
@@ -229,18 +287,15 @@ class PesertaController extends Controller
                 }
             }
             
-            // 🔥 PERBAIKAN: Update peserta termasuk tanggal
             $pesertaData = [];
             if ($request->has('asal_kampus')) $pesertaData['asal_kampus'] = $request->asal_kampus;
             if ($request->has('prodi')) $pesertaData['prodi'] = $request->prodi;
             if ($request->has('id_divisi')) $pesertaData['id_divisi'] = $request->id_divisi;
             if ($request->has('id_mentor')) $pesertaData['id_mentor'] = $request->id_mentor;
             if ($request->has('status_magang')) $pesertaData['status_magang'] = $request->status_magang;
-            if ($request->has('tanggal_mulai')) $pesertaData['tanggal_mulai'] = $request->tanggal_mulai;  // 🔥 TAMBAHKAN INI
+            if ($request->has('tanggal_mulai')) $pesertaData['tanggal_mulai'] = $request->tanggal_mulai;
             if ($request->has('tanggal_selesai')) {
-                $pesertaData['tanggal_selesai'] = $request->tanggal_selesai;  // 🔥 TAMBAHKAN INI
-            } else if ($request->has('tanggal_selesai') && $request->tanggal_selesai === null) {
-                $pesertaData['tanggal_selesai'] = null;
+                $pesertaData['tanggal_selesai'] = $request->tanggal_selesai;
             }
             
             if (!empty($pesertaData)) {
@@ -249,7 +304,6 @@ class PesertaController extends Controller
             
             DB::commit();
             
-            // Ambil data terbaru dengan relasi
             $updatedPeserta = Peserta::with(['user', 'mentor.user', 'divisi'])
                 ->where('id_peserta', $id)
                 ->first();
@@ -309,11 +363,8 @@ class PesertaController extends Controller
             DB::beginTransaction();
             
             $userId = $peserta->id_user;
-            
-            // Delete peserta
             $peserta->delete();
             
-            // Delete user associated with peserta
             if ($userId) {
                 $user = User::where('id_user', $userId)->first();
                 if ($user) {

@@ -1,4 +1,5 @@
-import axiosInstance from "../../utils/axiosConfig"
+// frontend/src/api/peserta/presensiService.js
+import axiosInstance from "../axios"
 
 // Get peserta attendance history
 export const getPesertaPresensi = async (params = {}) => {
@@ -9,7 +10,11 @@ export const getPesertaPresensi = async (params = {}) => {
 
 // Check-in today
 export const postPesertaCheckin = async (data) => {
-  const response = await axiosInstance.post("/peserta/presensi/checkin", data)
+  const response = await axiosInstance.post("/peserta/presensi/checkin", data, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
   return response.data
 }
 

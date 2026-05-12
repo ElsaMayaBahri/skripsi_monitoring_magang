@@ -28,7 +28,7 @@ import MateriCOO from "./pages/coo/Materi";
 import AddMateriCOO from "./pages/coo/AddMateri";
 import EditMateriCOO from "./pages/coo/EditMateri";
 import DataManagement from "./pages/coo/DataManagement";
-import DetailPesertaCOO from "./pages/coo/DetailPeserta"; // Renamed to avoid conflict
+import DetailPesertaCOO from "./pages/coo/DetailPeserta";
 import ProfileCOO from "./pages/coo/Profile";
 import SettingsCOO from "./pages/coo/Settings";
 
@@ -64,7 +64,8 @@ import InputNilaiManual from "./pages/mentor/InputNilaiManual";
 import NilaiAkhirMentor from "./pages/mentor/NilaiAkhir";
 import EditMateri from "./pages/mentor/EditMateri";
 import LihatMateri from "./pages/mentor/LihatMateri";
-import DetailPesertaMentor from "./pages/mentor/DetailPeserta"; // Renamed to avoid conflict
+import DetailPesertaMentor from "./pages/mentor/DetailPeserta";
+import ProfileMentor from "./pages/mentor/ProfileMentor";
 
 // ============================================
 // PESERTA PAGES - Created by: Peserta Developer
@@ -80,6 +81,8 @@ import DaftarTugasPeserta from "./pages/peserta/DaftarTugas";
 import DetailTugas from "./pages/peserta/DetailTugas";
 import NilaiAkhirPeserta from "./pages/peserta/NilaiAkhir";
 import Sertifikat from "./pages/peserta/Sertifikat";
+import ProfilePeserta from "./pages/peserta/ProfilePeserta";
+import DaftarKuisKompetensi from "./pages/peserta/DaftarKuisKompetensi"
 
 // ============================================
 // COMPONENTS
@@ -271,11 +274,14 @@ function App() {
           <Route path="input-nilai-manual" element={<InputNilaiManual />} />
           <Route path="penilaian-manual" element={<InputNilaiManual />} />
           <Route path="nilai-akhir" element={<NilaiAkhirMentor />} />
+          
+          {/* Profile Mentor Route */}
+          <Route path="profile" element={<ProfileMentor />} />
         </Route>
 
-        {/* ============================================ */}
-        {/* PESERTA ROUTES - Created by: Peserta Developer */}
-        {/* ============================================ */}
+        // ============================================
+        // PESERTA ROUTES - Created by: Peserta Developer
+        // ============================================
         <Route
           path="/peserta"
           element={
@@ -294,16 +300,19 @@ function App() {
           {/* Kuis Routes */}
           <Route path="kuis-kompetensi" element={<KuisKompetensi />} />
           <Route path="kuis-kompetensi/:id" element={<KuisKompetensi />} />
+          <Route path="daftar-kuis-kompetensi" element={<DaftarKuisKompetensi />} />
           
-          {/* Tugas Routes */}
+          {/* Tugas Routes - Perbaikan di sini */}
           <Route path="tugas" element={<DaftarTugasPeserta />} />
-          <Route path="tugas/:id" element={<DetailTugas />} />
+          <Route path="tugas/:id/kumpul" element={<DetailTugas />} />
           
           {/* Nilai & Sertifikat Routes */}
           <Route path="nilai-akhir" element={<NilaiAkhirPeserta />} />
           <Route path="sertifikat" element={<Sertifikat />} />
+          
+          {/* Profile Route */}
+          <Route path="profile" element={<ProfilePeserta />} />
         </Route>
-
         {/* ============================================ */}
         {/* 404 NOT FOUND ROUTE - Created by: System Architect */}
         {/* ============================================ */}

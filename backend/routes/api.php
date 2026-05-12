@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\PesertaController;
 use App\Http\Controllers\Api\DivisiController;
 use App\Http\Controllers\Api\MateriPelatihanController;
 use App\Http\Controllers\Api\MateriMentorController;
+use App\Http\Controllers\Api\MateriPesertaController;
 use App\Http\Controllers\Api\QuizController;
 use App\Http\Controllers\Api\JamKerjaController;
 use App\Http\Controllers\Api\HariLiburController;
@@ -20,7 +21,6 @@ use App\Http\Controllers\Api\NilaiController;
 use App\Http\Controllers\Api\PresensiController;
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\LaporanController;     
-
 
 /*
 |--------------------------------------------------------------------------
@@ -134,6 +134,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/peserta/{id}', [PesertaController::class, 'update']);
     Route::delete('/peserta/{id}', [PesertaController::class, 'destroy']);
     
+    // ==================== PESERTA PROFILE ROUTES ====================
+    Route::get('/peserta/profile', [PesertaController::class, 'getProfile']);
+    
+    // ==================== PESERTA PRESENSI ROUTES ====================
+    Route::prefix('peserta')->group(function () {
+        // Presensi routes
+        Route::get('/presensi', [PresensiController::class, 'getByPeserta']);
+        Route::get('/presensi/today', [PresensiController::class, 'getTodayPresensi']);
+        Route::post('/presensi/checkin', [PresensiController::class, 'checkIn']);
+        Route::post('/presensi/checkout', [PresensiController::class, 'checkOut']);
+    });
+    
     // ==================== JAM KERJA ROUTES ====================
     Route::prefix('jam-kerja')->group(function () {
         Route::get('/', [JamKerjaController::class, 'index']);
@@ -141,7 +153,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [JamKerjaController::class, 'update']);
         Route::delete('/{id}', [JamKerjaController::class, 'destroy']);
     });
-    
+
     // ==================== HARI LIBUR ROUTES ====================
     Route::prefix('hari-libur')->group(function () {
         Route::get('/', [HariLiburController::class, 'index']);
@@ -169,6 +181,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}', [MateriMentorController::class, 'show']);
         Route::put('/{id}', [MateriMentorController::class, 'update']);
         Route::delete('/{id}', [MateriMentorController::class, 'destroy']);
+    });
+    
+    // ==================== MATERI PESERTA ROUTES (untuk Peserta) ====================
+    Route::prefix('peserta')->group(function () {
+        Route::get('/materi', [MateriPesertaController::class, 'index']);
+        Route::get('/materi/{id}', [MateriPesertaController::class, 'show']);
+        Route::post('/materi/{id}/selesai', [MateriPesertaController::class, 'markAsSelesai']);
     });
     
     // ==================== TUGAS MENTOR ROUTES ====================
@@ -298,34 +317,34 @@ Route::middleware('auth:sanctum')->group(function () {
             ]
         ]);
     });
-});
-
-// ==================== MENTOR PROFILE ROUTE ====================
-Route::put('/mentor/profile', function (Request $request) {
-    $user = $request->user();
     
-    if ($user->role !== 'mentor') {
+    // ==================== MENTOR PROFILE UPDATE ROUTE ====================
+    Route::put('/mentor/profile', function (Request $request) {
+        $user = $request->user();
+        
+        if ($user->role !== 'mentor') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+        
+        if ($request->has('nama')) {
+            $user->nama = $request->nama;
+        }
+        
+        if ($request->has('no_telepon')) {
+            $user->no_telepon = $request->no_telepon;
+        }
+        
+        $user->save();
+        
         return response()->json([
-            'success' => false,
-            'message' => 'Unauthorized'
-        ], 403);
-    }
-    
-    if ($request->has('nama')) {
-        $user->nama = $request->nama;
-    }
-    
-    if ($request->has('no_telepon')) {
-        $user->no_telepon = $request->no_telepon;
-    }
-    
-    $user->save();
-    
-    return response()->json([
-        'success' => true,
-        'message' => 'Profil berhasil diupdate',
-        'data' => $user
-    ]);
+            'success' => true,
+            'message' => 'Profil berhasil diupdate',
+            'data' => $user
+        ]);
+    });
 });
 
 // ==================== FALLBACK ROUTE ====================

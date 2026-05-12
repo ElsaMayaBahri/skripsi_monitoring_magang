@@ -1,5 +1,5 @@
 // src/pages/peserta/PresensiPeserta.jsx
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Calendar,
@@ -8,408 +8,873 @@ import {
   Clock,
   Send,
   CheckCircle,
-  AlertCircle,
   Loader2,
   RefreshCw,
   Wifi,
   Smartphone,
   FileText,
-  X,
-  Upload,
-  Image,
-  User
+  AlertTriangle,
+  RotateCcw,
+  CameraOff,
+  Check,
+  Navigation,
+  Building,
+  Home,
+  Video,
+  VideoOff,
+  AlertCircle,
+  Info,
+  Heart,
+  CalendarX,
+  Laptop,
+  Smartphone as MobileIcon
 } from "lucide-react"
+import jamKerjaApi from "../../api/peserta/jamKerjaApi"
+import { 
+  postPesertaCheckin, 
+  postPesertaCheckout, 
+  getPesertaPresensiToday 
+} from "../../api/peserta/presensiService"
 
 function PresensiPeserta() {
   const navigate = useNavigate()
+  const videoRef = useRef(null)
+  const canvasRef = useRef(null)
+  
   const [loading, setLoading] = useState(false)
   const [checkinStatus, setCheckinStatus] = useState(null)
   const [checkoutStatus, setCheckoutStatus] = useState(null)
+  const [stream, setStream] = useState(null)
+  const [cameraReady, setCameraReady] = useState(false)
+  const [cameraError, setCameraError] = useState(null)
+  const [capturedPhoto, setCapturedPhoto] = useState(null)
+  const [capturedPhotoFile, setCapturedPhotoFile] = useState(null)
   const [formData, setFormData] = useState({
-    foto: null,
     jenis_kehadiran: "wfo",
     aktivitas: "",
     kendala: "",
-    rencana: ""
+    rencana: "",
+    alasan_izin: ""
   })
-  const [previewImage, setPreviewImage] = useState(null)
-  const [location, setLocation] = useState({ lat: null, lng: null, address: "" })
-  const [gettingLocation, setGettingLocation] = useState(false)
+  const [showAlasanIzin, setShowAlasanIzin] = useState(false)
+  const [location, setLocation] = useState({ lat: null, lng: null, address: "", fullAddress: "", isGetting: false, error: null })
+  
+  // State untuk modal popup
+  const [popup, setPopup] = useState({
+    show: false,
+    title: "",
+    message: "",
+    type: "info"
+  })
+  
+  // State untuk jam kerja
+  const [jamKerja, setJamKerja] = useState({
+    jam_masuk: '08:00:00',
+    jam_pulang: '17:00:00',
+    batas_terlambat: 15
+  })
+  const [jamKerjaLoading, setJamKerjaLoading] = useState(true)
 
+  // Load jam kerja dari API
   useEffect(() => {
+    loadJamKerja()
     checkTodayPresensi()
     getCurrentLocation()
   }, [])
 
-  const checkTodayPresensi = () => {
-    const today = new Date().toISOString().split('T')[0]
-    const storedPresensi = JSON.parse(localStorage.getItem("presensi_peserta")) || []
-    const todayPresensi = storedPresensi.find(p => p.tanggal === today)
-    
-    if (todayPresensi) {
-      if (todayPresensi.check_in && !todayPresensi.check_out) {
-        setCheckinStatus({ success: true, time: todayPresensi.check_in })
-        setCheckoutStatus({ pending: true })
-        setFormData(prev => ({ ...prev, aktivitas: todayPresensi.aktivitas || "", kendala: todayPresensi.kendala || "", rencana: todayPresensi.rencana || "" }))
-      } else if (todayPresensi.check_in && todayPresensi.check_out) {
-        setCheckinStatus({ success: true, time: todayPresensi.check_in })
-        setCheckoutStatus({ success: true, time: todayPresensi.check_out })
+  const loadJamKerja = async () => {
+    try {
+      setJamKerjaLoading(true)
+      const response = await jamKerjaApi.getJamKerja()
+      if (response.success && response.data) {
+        setJamKerja({
+          jam_masuk: response.data.jam_masuk || '08:00:00',
+          jam_pulang: response.data.jam_pulang || '17:00:00',
+          batas_terlambat: response.data.batas_terlambat || 15
+        })
       }
+    } catch (err) {
+      console.error('Error load jam kerja:', err)
+    } finally {
+      setJamKerjaLoading(false)
+    }
+  }
+
+  // Helper function untuk validasi jam kerja
+  const timeToMinutes = (timeStr) => {
+    if (!timeStr) return 0
+    const parts = timeStr.split(':')
+    const hours = parseInt(parts[0], 10) || 0
+    const minutes = parseInt(parts[1], 10) || 0
+    return hours * 60 + minutes
+  }
+
+  const isWithinWorkingHours = (date = null) => {
+    const now = date ? new Date(date) : new Date()
+    const currentHour = now.getHours()
+    const currentMinute = now.getMinutes()
+    
+    const currentTotalMinutes = currentHour * 60 + currentMinute
+    const masukTotalMinutes = timeToMinutes(jamKerja.jam_masuk)
+    const pulangTotalMinutes = timeToMinutes(jamKerja.jam_pulang)
+    
+    return currentTotalMinutes >= masukTotalMinutes && currentTotalMinutes <= pulangTotalMinutes
+  }
+
+  const formatJamKerja = () => {
+    const masuk = jamKerja.jam_masuk.substring(0, 5)
+    const pulang = jamKerja.jam_pulang.substring(0, 5)
+    return `${masuk} - ${pulang} WIB`
+  }
+
+  // ============ CEK PRESENSI HARI INI DARI API ============
+  const checkTodayPresensi = async () => {
+    try {
+      const response = await getPesertaPresensiToday()
+      if (response.success && response.data) {
+        const presensi = response.data
+        if (presensi.check_in && !presensi.check_out) {
+          setCheckinStatus({ success: true, time: presensi.check_in, foto: presensi.foto_checkin })
+          setCheckoutStatus({ pending: true })
+          if (presensi.daily_report) {
+            try {
+              const report = JSON.parse(presensi.daily_report)
+              setFormData(prev => ({ 
+                ...prev, 
+                aktivitas: report.aktivitas || "", 
+                kendala: report.kendala || "", 
+                rencana: report.rencana || ""
+              }))
+            } catch (e) {}
+          }
+        } else if (presensi.check_in && presensi.check_out) {
+          setCheckinStatus({ success: true, time: presensi.check_in })
+          setCheckoutStatus({ success: true, time: presensi.check_out })
+        }
+      }
+    } catch (err) {
+      console.error("Gagal cek presensi hari ini:", err)
+    }
+  }
+
+  const stopCameraTracks = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => {
+        track.stop()
+        track.enabled = false
+      })
+      setStream(null)
+    }
+    setCameraReady(false)
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+  }
+
+  const getAddressFromCoordinates = async (lat, lng) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        { headers: { 'Accept-Language': 'id-ID', 'User-Agent': 'PresensiApp/1.0' } }
+      )
+      const data = await response.json()
+      
+      if (data && data.display_name) {
+        const address = data.address
+        const road = address.road || address.street || ""
+        const suburb = address.suburb || address.neighbourhood || ""
+        const city = address.city || address.town || address.village || ""
+        
+        let shortAddress = ""
+        if (road) shortAddress += road
+        if (suburb) shortAddress += (shortAddress ? ", " : "") + suburb
+        if (!shortAddress && city) shortAddress = city
+        if (!shortAddress) shortAddress = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+        
+        return { fullAddress: data.display_name, shortAddress: shortAddress }
+      }
+      return { fullAddress: `${lat.toFixed(6)}, ${lng.toFixed(6)}`, shortAddress: `${lat.toFixed(6)}, ${lng.toFixed(6)}` }
+    } catch (error) {
+      return { fullAddress: `${lat.toFixed(6)}, ${lng.toFixed(6)}`, shortAddress: `${lat.toFixed(6)}, ${lng.toFixed(6)}` }
     }
   }
 
   const getCurrentLocation = () => {
-    setGettingLocation(true)
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            address: "Mendapatkan alamat..."
-          })
-          setTimeout(() => {
-            setLocation(prev => ({ ...prev, address: "Jl. Teknologi No. 123, Jakarta Selatan" }))
-          }, 1000)
-          setGettingLocation(false)
+    setLocation(prev => ({ ...prev, isGetting: true, error: null }))
+    
+    if (!navigator.geolocation) {
+      setLocation(prev => ({ ...prev, isGetting: false, error: "Geolocation tidak didukung", address: "Tidak didukung" }))
+      return
+    }
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords
+        const addressData = await getAddressFromCoordinates(latitude, longitude)
+        
+        setLocation({
+          lat: latitude,
+          lng: longitude,
+          address: addressData.shortAddress,
+          fullAddress: addressData.fullAddress,
+          isGetting: false,
+          error: null
+        })
+      },
+      (error) => {
+        let errorMessage = "Gagal mendapatkan lokasi"
+        if (error.code === error.PERMISSION_DENIED) errorMessage = "Izin lokasi ditolak"
+        else if (error.code === error.POSITION_UNAVAILABLE) errorMessage = "Lokasi tidak tersedia"
+        setLocation(prev => ({ ...prev, isGetting: false, error: errorMessage, address: errorMessage }))
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }
+
+  // ============ KAMERA DENGAN ZOOM ============
+  const startCamera = async () => {
+    try {
+      setCameraError(null)
+      setCameraReady(false)
+
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop())
+        setStream(null)
+      }
+
+      console.log("Requesting camera with zoom...")
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          zoom: { ideal: 1.5 }
         },
-        (error) => {
-          console.error("Error getting location:", error)
-          setLocation({ lat: null, lng: null, address: "Gagal mendapatkan lokasi" })
-          setGettingLocation(false)
+        audio: false
+      })
+
+      console.log("STREAM obtained:", mediaStream.getTracks().length, "tracks")
+      setStream(mediaStream)
+
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream
+          
+          videoRef.current.onloadedmetadata = () => {
+            console.log(
+              "VIDEO READY - dimensions:",
+              videoRef.current.videoWidth,
+              "x",
+              videoRef.current.videoHeight
+            )
+            setCameraReady(true)
+          }
         }
-      )
-    } else {
-      setLocation({ lat: null, lng: null, address: "Geolocation tidak didukung" })
-      setGettingLocation(false)
-    }
-  }
+      }, 100)
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      setFormData(prev => ({ ...prev, foto: file }))
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPreviewImage(reader.result)
+    } catch (err) {
+      console.error("CAMERA ERROR:", err)
+      
+      try {
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        })
+        setStream(fallbackStream)
+        if (videoRef.current) {
+          videoRef.current.srcObject = fallbackStream
+          videoRef.current.onloadedmetadata = () => {
+            setCameraReady(true)
+          }
+        }
+      } catch (fallbackErr) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setCameraError("Izin kamera ditolak. Klik icon gembok di address bar, izinkan kamera, lalu refresh.")
+        } else if (err.name === 'NotFoundError') {
+          setCameraError("Tidak ada kamera yang terdeteksi di perangkat Anda")
+        } else {
+          setCameraError("Tidak dapat mengakses kamera: " + (err.message || "Unknown error"))
+        }
       }
-      reader.readAsDataURL(file)
     }
   }
 
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop())
+      setStream(null)
+    }
+    setCameraReady(false)
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+  }
+
+  const capturePhoto = () => {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    
+    if (!video || !canvas) {
+      setPopup({
+        show: true,
+        title: "Error",
+        message: "Video atau canvas tidak tersedia",
+        type: "error"
+      })
+      return
+    }
+    
+    if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+      setPopup({
+        show: true,
+        title: "Kamera Belum Siap",
+        message: "Kamera belum siap, tunggu sebentar... Pastikan video terlihat di layar",
+        type: "error"
+      })
+      return
+    }
+    
+    const context = canvas.getContext("2d")
+    
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    
+    context.save()
+    context.scale(-1, 1)
+    context.drawImage(video, -canvas.width, 0, canvas.width, canvas.height)
+    context.restore()
+    
+    const photoData = canvas.toDataURL("image/jpeg", 0.8)
+    setCapturedPhoto(photoData)
+    
+    const blob = dataURLtoBlob(photoData)
+    const file = new File([blob], `selfie_${Date.now()}.jpg`, { type: 'image/jpeg' })
+    setCapturedPhotoFile(file)
+    
+    stopCamera()
+  }
+
+  const retakePhoto = () => {
+    setCapturedPhoto(null)
+    setCapturedPhotoFile(null)
+    setTimeout(() => startCamera(), 100)
+  }
+
+  const dataURLtoBlob = (dataURL) => {
+    const arr = dataURL.split(',')
+    const mime = arr[0].match(/:(.*?);/)[1]
+    const bstr = atob(arr[1])
+    let n = bstr.length
+    const u8arr = new Uint8Array(n)
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n)
+    }
+    return new Blob([u8arr], { type: mime })
+  }
+
+  // Handle ketika jenis kehadiran berubah
+  const handleJenisKehadiranChange = (value) => {
+    setFormData(prev => ({ ...prev, jenis_kehadiran: value, alasan_izin: "" }))
+    setShowAlasanIzin(value === "izin")
+  }
+
+  // ============ CHECK-IN ============
   const handleCheckin = async () => {
-    if (!formData.foto) {
-      alert("Foto wajib diunggah untuk check-in")
+    if (!isWithinWorkingHours()) {
+      setPopup({
+        show: true,
+        title: "Check-in Gagal",
+        message: "Maaf, check-in hanya bisa dilakukan pada jam kerja!",
+        type: "error"
+      })
+      return
+    }
+
+    if (!capturedPhoto) {
+      setPopup({
+        show: true,
+        title: "Check-in Gagal",
+        message: "Silakan ambil foto selfie terlebih dahulu sebelum check-in.",
+        type: "error"
+      })
+      return
+    }
+    
+    if (!location.lat) {
+      setPopup({
+        show: true,
+        title: "Check-in Gagal",
+        message: "Mohon tunggu lokasi selesai didapatkan atau klik refresh lokasi.",
+        type: "error"
+      })
+      return
+    }
+
+    if (formData.jenis_kehadiran === "izin" && !formData.alasan_izin.trim()) {
+      setPopup({
+        show: true,
+        title: "Check-in Gagal",
+        message: "Silakan isi alasan izin terlebih dahulu.",
+        type: "error"
+      })
       return
     }
 
     setLoading(true)
-    setTimeout(() => {
-      const now = new Date()
-      const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
-      
-      const newPresensi = {
-        tanggal: now.toISOString().split('T')[0],
-        check_in: timeStr,
-        check_out: null,
-        status: "hadir",
-        foto: previewImage,
-        lokasi: location.address,
-        jenis_kehadiran: formData.jenis_kehadiran,
-        aktivitas: null,
-        kendala: null,
-        rencana: null
+    
+    try {
+      const formDataApi = new FormData()
+      formDataApi.append('foto', capturedPhotoFile)
+      formDataApi.append('lokasi', location.fullAddress || location.address)
+      formDataApi.append('lokasi_koordinat', `${location.lat},${location.lng}`)
+      formDataApi.append('jenis_kehadiran', formData.jenis_kehadiran)
+      if (formData.jenis_kehadiran === "izin") {
+        formDataApi.append('alasan_izin', formData.alasan_izin)
       }
       
-      const storedPresensi = JSON.parse(localStorage.getItem("presensi_peserta")) || []
-      const updatedPresensi = [...storedPresensi.filter(p => p.tanggal !== newPresensi.tanggal), newPresensi]
-      localStorage.setItem("presensi_peserta", JSON.stringify(updatedPresensi))
+      const response = await postPesertaCheckin(formDataApi)
       
-      setCheckinStatus({ success: true, time: timeStr })
+      if (response.success) {
+        setPopup({
+          show: true,
+          title: "Check-in Berhasil!",
+          message: `Check-in berhasil pada pukul ${response.data.check_in}!`,
+          type: "success"
+        })
+        
+        setCheckinStatus({ success: true, time: response.data.check_in, foto: capturedPhoto })
+        setCheckoutStatus({ pending: true })
+      } else {
+        throw new Error(response.message || "Check-in gagal")
+      }
+    } catch (err) {
+      console.error("Check-in error:", err)
+      setPopup({
+        show: true,
+        title: "Check-in Gagal",
+        message: err.response?.data?.message || err.message || "Terjadi kesalahan saat check-in. Silakan coba lagi.",
+        type: "error"
+      })
+    } finally {
       setLoading(false)
-      alert("Check-in berhasil!")
-    }, 1500)
+    }
   }
 
+  // ============ CHECK-OUT ============
   const handleCheckout = async () => {
+    if (!isWithinWorkingHours()) {
+      setPopup({
+        show: true,
+        title: "Check-out Gagal",
+        message: "Maaf, check-out hanya bisa dilakukan pada jam kerja!",
+        type: "error"
+      })
+      return
+    }
+
     if (!formData.aktivitas.trim()) {
-      alert("Aktivitas hari ini wajib diisi sebelum check-out")
+      setPopup({
+        show: true,
+        title: "Check-out Gagal",
+        message: "Aktivitas hari ini wajib diisi sebelum check-out.",
+        type: "error"
+      })
       return
     }
 
     setLoading(true)
-    setTimeout(() => {
-      const now = new Date()
-      const timeStr = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
-      const today = now.toISOString().split('T')[0]
+    
+    try {
+      const dailyReport = JSON.stringify({
+        aktivitas: formData.aktivitas,
+        kendala: formData.kendala,
+        rencana: formData.rencana
+      })
       
-      const storedPresensi = JSON.parse(localStorage.getItem("presensi_peserta")) || []
-      const updatedPresensi = storedPresensi.map(p => 
-        p.tanggal === today 
-          ? { ...p, check_out: timeStr, aktivitas: formData.aktivitas, kendala: formData.kendala, rencana: formData.rencana }
-          : p
-      )
-      localStorage.setItem("presensi_peserta", JSON.stringify(updatedPresensi))
+      const response = await postPesertaCheckout({ daily_report: dailyReport })
       
-      setCheckoutStatus({ success: true, time: timeStr })
+      if (response.success) {
+        setPopup({
+          show: true,
+          title: "Check-out Berhasil!",
+          message: `Check-out berhasil pada pukul ${response.data.check_out}!`,
+          type: "success"
+        })
+        
+        setCheckoutStatus({ success: true, time: response.data.check_out })
+      } else {
+        throw new Error(response.message || "Check-out gagal")
+      }
+    } catch (err) {
+      console.error("Check-out error:", err)
+      setPopup({
+        show: true,
+        title: "Check-out Gagal",
+        message: err.response?.data?.message || err.message || "Terjadi kesalahan saat check-out. Silakan coba lagi.",
+        type: "error"
+      })
+    } finally {
       setLoading(false)
-      alert("Check-out dan Daily Report berhasil disimpan!")
-      setTimeout(() => navigate("/peserta/riwayat-presensi"), 1500)
-    }, 1500)
+    }
   }
 
   const currentTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
   const currentDate = new Date().toLocaleDateString("id-ID", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const tomorrowDate = new Date(Date.now() + 86400000).toLocaleDateString("id-ID", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
+  // Jenis kehadiran options
+  const jenisKehadiranOptions = [
+    { value: "wfo", label: "WFO", icon: Building, color: "from-teal-500 to-emerald-500" },
+    { value: "wfh", label: "WFH", icon: Wifi, color: "from-blue-500 to-cyan-500" },
+    { value: "izin", label: "Izin", icon: CalendarX, color: "from-blue-600 to-indigo-600" },
+    { value: "sakit", label: "Sakit", icon: Heart, color: "from-rose-500 to-red-500" }
+  ]
+
+  // Device detection
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+
+  // ============ CONDITIONAL RENDER ============
+  // SUDAH CHECKOUT
   if (checkoutStatus?.success) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
-        <div className="text-center">
-          <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center shadow-2xl">
-            <CheckCircle size="40" className="text-white" />
+      <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+        <div className="text-center max-w-md mx-auto p-6 bg-white rounded-xl shadow-lg">
+          <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center">
+            <CheckCircle size="32" className="text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Check-out Berhasil!</h2>
-          <p className="text-gray-500 mb-4">Daily report Anda telah tersimpan</p>
-          <button
-            onClick={() => navigate("/peserta/riwayat-presensi")}
-            className="px-6 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-medium"
-          >
-            Lihat Riwayat Presensi
-          </button>
+          <h2 className="text-lg font-bold text-gray-800 mb-1">Check-out Berhasil!</h2>
+          <p className="text-sm text-gray-500 mb-3">Check-out: {checkoutStatus.time}</p>
+          
+          <div className="space-y-2">
+            <button onClick={() => navigate("/peserta/riwayat-presensi")} className="w-full px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg font-semibold text-sm">Lihat Riwayat</button>
+            <button onClick={() => navigate("/peserta/dashboard")} className="w-full px-4 py-2 border border-gray-200 text-gray-600 rounded-lg font-semibold text-sm">Dashboard</button>
+          </div>
+          
+          <div className="mt-4 p-3 bg-teal-50 rounded-lg text-left">
+            <p className="text-xs text-gray-600">✅ Anda sudah menyelesaikan presensi hari ini.</p>
+            <p className="text-xs text-gray-500 mt-1">Silakan kembali besok, <strong>{tomorrowDate}</strong></p>
+          </div>
         </div>
       </div>
     )
   }
 
+  // SUDAH CHECK-IN (tapi belum checkout)
   if (checkinStatus?.success && checkoutStatus?.pending) {
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent p-6">
+      <div className="px-5 md:px-6 py-4 space-y-5">
+        <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent p-4 rounded-xl">
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl blur-md opacity-50"></div>
-              <div className="relative w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg">
-                <FileText className="w-6 h-6 text-white" />
-              </div>
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center">
+              <FileText className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-800 via-teal-800 to-emerald-800 bg-clip-text text-transparent">
-                Daily Report & Check-out
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">Isi laporan harian Anda sebelum check-out</p>
+              <h1 className="text-lg font-bold text-gray-800">Daily Report</h1>
+              <p className="text-xs text-gray-500">Isi laporan harian Anda sebelum check-out</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-          <div className="relative h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
-          <div className="p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 rounded-xl bg-teal-50">
-                <p className="text-xs text-gray-500">Check-in</p>
-                <p className="text-xl font-bold text-teal-600">{checkinStatus.time}</p>
-              </div>
-              <div className="p-4 rounded-xl bg-gray-50">
-                <p className="text-xs text-gray-500">Status</p>
-                <p className="text-xl font-bold text-emerald-600">Sedang Magang</p>
-              </div>
-              <div className="p-4 rounded-xl bg-gray-50">
-                <p className="text-xs text-gray-500">Tanggal</p>
-                <p className="text-sm font-semibold text-gray-700">{currentDate}</p>
-              </div>
-            </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="p-3 rounded-xl bg-teal-50 border border-teal-200 text-center">
+            <p className="text-xs text-teal-600 font-medium">CHECK-IN</p>
+            <p className="text-lg font-bold text-teal-700">{checkinStatus.time}</p>
+          </div>
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
+            <p className="text-xs text-emerald-600 font-medium">STATUS</p>
+            <p className="text-sm font-bold text-emerald-700">Sedang Magang</p>
+          </div>
+          <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-center">
+            <p className="text-xs text-blue-600 font-medium">JENIS</p>
+            <p className="text-sm font-bold text-blue-700 uppercase">{formData.jenis_kehadiran}</p>
+          </div>
+          <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-center">
+            <p className="text-xs text-gray-600 font-medium">TANGGAL</p>
+            <p className="text-xs font-semibold text-gray-700">{currentDate.split(',')[0]}</p>
+          </div>
+        </div>
 
+        <div className="bg-white rounded-xl shadow-md border border-gray-100">
+          <div className="relative h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-500"></div>
+          <div className="p-5 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Aktivitas Hari Ini <span className="text-red-500">*</span></label>
-              <textarea
-                value={formData.aktivitas}
-                onChange={(e) => setFormData(prev => ({ ...prev, aktivitas: e.target.value }))}
-                rows="3"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200 resize-none"
-                placeholder="Ceritakan aktivitas yang Anda lakukan hari ini..."
-              />
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Aktivitas Hari Ini <span className="text-red-500">*</span></label>
+              <textarea value={formData.aktivitas} onChange={(e) => setFormData(prev => ({ ...prev, aktivitas: e.target.value }))} rows="3" className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-teal-400" placeholder="Ceritakan aktivitas yang Anda lakukan hari ini..." />
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Kendala (opsional)</label>
-              <textarea
-                value={formData.kendala}
-                onChange={(e) => setFormData(prev => ({ ...prev, kendala: e.target.value }))}
-                rows="2"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200 resize-none"
-                placeholder="Ada kendala dalam pengerjaan tugas?"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Kendala (opsional)</label>
+                <textarea value={formData.kendala} onChange={(e) => setFormData(prev => ({ ...prev, kendala: e.target.value }))} rows="2" className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-teal-400" placeholder="Ada kendala? Ceritakan di sini..." />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Rencana Besok (opsional)</label>
+                <textarea value={formData.rencana} onChange={(e) => setFormData(prev => ({ ...prev, rencana: e.target.value }))} rows="2" className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-teal-400" placeholder="Target dan rencana untuk esok hari..." />
+              </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Rencana Selanjutnya (opsional)</label>
-              <textarea
-                value={formData.rencana}
-                onChange={(e) => setFormData(prev => ({ ...prev, rencana: e.target.value }))}
-                rows="2"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200 resize-none"
-                placeholder="Apa rencana Anda untuk hari esok?"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-              <button
-                onClick={() => navigate("/peserta/dashboard")}
-                className="px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all duration-200"
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleCheckout}
-                disabled={loading || !formData.aktivitas.trim()}
-                className="relative group overflow-hidden px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl text-white font-medium shadow-lg transition-all duration-300 disabled:opacity-50 flex items-center gap-2"
-              >
-                <span className="relative z-10 flex items-center gap-2">
-                  {loading ? <Loader2 size="16" className="animate-spin" /> : <Send size="16" />}
-                  {loading ? "Memproses..." : "Check-out & Simpan"}
-                </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-teal-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => navigate("/peserta/dashboard")} className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 font-semibold text-sm">Batal</button>
+              <button onClick={handleCheckout} disabled={loading || !formData.aktivitas.trim()} className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg text-white font-semibold text-sm flex items-center gap-2">
+                {loading ? <Loader2 size="16" className="animate-spin" /> : <Send size="16" />}
+                {loading ? "Memproses..." : "Check-out & Simpan"}
               </button>
             </div>
           </div>
         </div>
+
+        {checkinStatus.foto && (
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <p className="text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1"><Camera size="12" className="text-teal-500" /> Foto Check-in Anda</p>
+            <img src={checkinStatus.foto} alt="Check-in selfie" className="w-16 h-16 object-cover rounded-lg border border-teal-200" />
+          </div>
+        )}
       </div>
     )
   }
 
+  // BELUM CHECK-IN - DENGAN BACKGROUND PREMIUM
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-500/10 via-blue-500/5 to-transparent p-6">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl blur-md opacity-50"></div>
-            <div className="relative w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Calendar className="w-6 h-6 text-white" />
+    <>
+      <div className="w-full px-5 md:px-6 py-4 space-y-5 pb-10 min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-100">
+        {/* Header premium dengan shadow */}
+        <div className="w-full rounded-xl overflow-hidden shadow-lg">
+          <div className="bg-gradient-to-r from-teal-600 via-blue-600 to-indigo-600 p-5 text-white">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-base font-bold">Check-in Magang</h1>
+                <p className="text-white/80 text-xs mt-0.5">{currentDate}</p>
+              </div>
             </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-800 via-teal-800 to-blue-800 bg-clip-text text-transparent">
-              Check-in Hari Ini
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">{currentDate}</p>
+        </div>
+
+        {/* INFO JAM KERJA */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl p-3 border border-teal-100 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Clock size="16" className="text-teal-600" />
+            <div>
+              <p className="text-xs font-semibold text-teal-800">Jam Kerja: {formatJamKerja()}</p>
+              <p className="text-xs text-teal-600">Batas keterlambatan: {jamKerja.batas_terlambat} menit</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-        <div className="relative h-1 bg-gradient-to-r from-teal-500 to-blue-600"></div>
-        <div className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Foto Selfie/Bukti Kehadiran <span className="text-red-500">*</span></label>
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="hidden"
-                    id="foto-input"
+        {/* Camera Card */}
+        <div className="bg-white rounded-xl shadow-md border border-gray-100">
+          <div className="relative h-1 bg-gradient-to-r from-teal-500 to-blue-500"></div>
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-gray-800 flex items-center gap-1.5"><Camera size="16" className="text-teal-500" /> Foto Selfie Kehadiran<span className="text-red-500 text-xs">wajib</span></h3>
+              {stream && (<button onClick={stopCamera} className="p-1 rounded-lg bg-red-50 text-red-500 hover:bg-red-100"><CameraOff size="14" /></button>)}
+            </div>
+            
+            <canvas ref={canvasRef} className="hidden" />
+            
+            {cameraError && (
+              <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size="16" className="text-red-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-red-700 font-semibold text-xs mb-1">Izin Kamera Diperlukan</p>
+                    <p className="text-xs text-red-600">{cameraError}</p>
+                    <button onClick={startCamera} className="mt-2 px-3 py-1 bg-red-500 text-white rounded-lg text-xs font-semibold hover:bg-red-600">Coba Lagi</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {!stream && !capturedPhoto && !cameraError && (
+              <div className="text-center py-10 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-dashed border-gray-300">
+                <div className="w-16 h-16 mx-auto mb-2 bg-gradient-to-br from-teal-100 to-blue-100 rounded-xl flex items-center justify-center">
+                  <Video size="28" className="text-teal-500" />
+                </div>
+                <p className="text-gray-600 mb-3 text-sm font-medium">Ambil foto selfie sebagai bukti kehadiran</p>
+                <button onClick={startCamera} className="px-5 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg font-semibold hover:shadow-md transition-all flex items-center gap-1.5 mx-auto text-sm"><Camera size="14" /> Buka Kamera</button>
+              </div>
+            )}
+            
+            {stream && !capturedPhoto && (
+              <div className="space-y-3">
+                <div className="relative rounded-lg overflow-hidden bg-black shadow-md">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-[360px] object-cover"
                   />
-                  <label
-                    htmlFor="foto-input"
-                    className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-teal-400 transition-all duration-200"
-                  >
-                    {previewImage ? (
-                      <img src={previewImage} alt="Preview" className="w-full h-full object-cover rounded-xl" />
-                    ) : (
-                      <div className="text-center">
-                        <Camera size="32" className="mx-auto text-gray-400 mb-2" />
-                        <p className="text-sm text-gray-500">Klik untuk upload foto</p>
-                        <p className="text-xs text-gray-400">Format JPG, PNG (Max 5MB)</p>
-                      </div>
-                    )}
-                  </label>
+                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2">
+                    <button onClick={capturePhoto} className="px-5 py-2 bg-white rounded-full shadow-md font-semibold flex items-center gap-1.5 hover:bg-gray-100 transition-all text-sm">
+                      <Camera size="14" className="text-teal-500" />
+                      Ambil Foto
+                    </button>
+                  </div>
+                </div>
+                {!cameraReady && <p className="text-center text-xs text-orange-500 animate-pulse">Mempersiapkan kamera, tunggu sebentar...</p>}
+                {cameraReady && <p className="text-center text-xs text-green-500">✓ Kamera siap, silakan ambil foto</p>}
+              </div>
+            )}
+            
+            {capturedPhoto && (
+              <div className="space-y-3">
+                <div className="relative rounded-lg overflow-hidden bg-gray-100 shadow-md">
+                  <img src={capturedPhoto} alt="Selfie" className="w-full max-h-[360px] object-contain" />
+                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2">
+                    <button onClick={retakePhoto} className="px-4 py-1.5 bg-white rounded-full shadow-md font-semibold flex items-center gap-1.5 hover:bg-gray-50 transition-all text-sm">
+                      <RotateCcw size="14" className="text-orange-500" />
+                      Foto Ulang
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-center gap-1.5 text-xs text-green-600 bg-green-50 p-2 rounded-lg">
+                  <Check size="12" /> Foto berhasil diambil
                 </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Jenis Kehadiran</label>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, jenis_kehadiran: "wfo" }))}
-                    className={`flex-1 py-3 rounded-xl font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
-                      formData.jenis_kehadiran === "wfo"
-                        ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    <MapPin size="16" />
-                    WFO
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, jenis_kehadiran: "wfh" }))}
-                    className={`flex-1 py-3 rounded-xl font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
-                      formData.jenis_kehadiran === "wfh"
-                        ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    }`}
-                  >
-                    <Wifi size="16" />
-                    WFH
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Lokasi Saat Ini</label>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                  <MapPin size="18" className="text-teal-500 flex-shrink-0" />
-                  <span className="text-sm text-gray-600 flex-1">
-                    {gettingLocation ? "Mendapatkan lokasi..." : location.address || "Mendapatkan lokasi..."}
-                  </span>
-                  <button onClick={getCurrentLocation} className="p-1.5 rounded-lg hover:bg-gray-200 transition">
-                    <RefreshCw size="14" className="text-gray-500" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-gradient-to-r from-teal-50 to-blue-50">
-                <div className="flex items-center gap-3 mb-3">
-                  <Clock size="18" className="text-teal-600" />
-                  <span className="text-sm font-medium text-gray-700">Waktu Check-in</span>
-                  <span className="text-lg font-bold text-teal-600 ml-auto">{currentTime}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Smartphone size="18" className="text-teal-600" />
-                  <span className="text-sm font-medium text-gray-700">Device</span>
-                  <span className="text-sm text-gray-500 ml-auto">Web Browser</span>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
+        </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-            <button
-              onClick={() => navigate("/peserta/dashboard")}
-              className="px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all duration-200"
-            >
-              Batal
-            </button>
-            <button
-              onClick={handleCheckin}
-              disabled={loading || !formData.foto}
-              className="relative group overflow-hidden px-6 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-white font-medium shadow-lg transition-all duration-300 disabled:opacity-50 flex items-center gap-2"
-            >
-              <span className="relative z-10 flex items-center gap-2">
-                {loading ? <Loader2 size="16" className="animate-spin" /> : <CheckCircle size="16" />}
-                {loading ? "Memproses..." : "Check-in Sekarang"}
-              </span>
-              <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-            </button>
+        {/* Form Card */}
+        <div className="bg-white rounded-xl shadow-md border border-gray-100">
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Jenis Kehadiran</label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {jenisKehadiranOptions.map((option) => {
+                  const Icon = option.icon
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => handleJenisKehadiranChange(option.value)}
+                      className={`py-2.5 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 text-sm ${
+                        formData.jenis_kehadiran === option.value
+                          ? `bg-gradient-to-r ${option.color} text-white shadow-md`
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      <Icon size="16" />
+                      {option.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Alasan Izin */}
+            {showAlasanIzin && (
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <label className="block text-sm font-semibold text-blue-800 mb-1.5 flex items-center gap-1.5">
+                  <CalendarX size="14" />
+                  Alasan Izin <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={formData.alasan_izin}
+                  onChange={(e) => setFormData(prev => ({ ...prev, alasan_izin: e.target.value }))}
+                  rows="2"
+                  className="w-full px-3 py-2 bg-white border border-blue-300 rounded-lg text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all resize-none text-sm"
+                  placeholder="Contoh: Ada keperluan keluarga, sakit, dll..."
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                <Navigation size="14" className="text-teal-500" />
+                Lokasi Saat Ini
+              </label>
+              <div className={`flex items-start gap-2 p-3 rounded-lg border transition-all ${location.lat ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                <MapPin size="16" className={`flex-shrink-0 mt-0.5 ${location.lat ? 'text-green-500' : 'text-gray-400'}`} />
+                <div className="flex-1">
+                  {location.isGetting ? (
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500"><Loader2 size="12" className="animate-spin" /> Mendapatkan lokasi...</div>
+                  ) : location.error ? (
+                    <div><p className="text-xs text-red-600">{location.error}</p><button onClick={getCurrentLocation} className="mt-1 text-xs text-teal-500 flex items-center gap-1"><RefreshCw size="10" /> Coba lagi</button></div>
+                  ) : location.lat ? (
+                    <div><p className="text-sm font-medium text-gray-800">{location.address || `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`}</p><p className="text-xs text-gray-400 mt-0.5">Koordinat: {location.lat.toFixed(6)}, {location.lng.toFixed(6)}</p></div>
+                  ) : (
+                    <p className="text-sm text-gray-500">Klik refresh untuk mendapatkan lokasi</p>
+                  )}
+                </div>
+                <button onClick={getCurrentLocation} className="p-1.5 rounded-lg bg-white hover:bg-gray-100 shadow-sm" disabled={location.isGetting}><RefreshCw size="14" className={`text-teal-500 ${location.isGetting ? 'animate-spin' : ''}`} /></button>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg bg-gradient-to-r from-teal-50 via-blue-50 to-indigo-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-blue-500 rounded-lg flex items-center justify-center">
+                    <Clock size="14" className="text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">WAKTU CHECK-IN</p>
+                    <p className="text-base font-bold text-teal-600">{currentTime}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-white/50 rounded-lg">
+                  {isMobile ? <MobileIcon size="12" className="text-teal-500" /> : <Laptop size="12" className="text-teal-500" />}
+                  <span className="text-xs text-gray-600">{isMobile ? "Mobile" : "Desktop"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+              <button onClick={() => navigate("/peserta/dashboard")} className="px-5 py-2 rounded-lg border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 text-sm">Batal</button>
+              <button onClick={handleCheckin} disabled={loading || !capturedPhoto || !location.lat || (formData.jenis_kehadiran === "izin" && !formData.alasan_izin.trim())} className="px-6 py-2 bg-gradient-to-r from-teal-500 to-blue-600 rounded-lg text-white font-semibold shadow-md disabled:opacity-50 flex items-center gap-2 text-sm">
+                {loading ? <Loader2 size="14" className="animate-spin" /> : <CheckCircle size="14" />}
+                {loading ? "Memproses..." : "Konfirmasi Check-in"}
+              </button>
+            </div>
+
+            {(!capturedPhoto || !location.lat) && (
+              <div className="p-2 bg-amber-50 rounded-lg border border-amber-200">
+                <p className="text-xs text-amber-700 flex items-center gap-1">
+                  <AlertTriangle size="12" />
+                  {!capturedPhoto && !location.lat && "Silakan ambil foto selfie dan klik refresh lokasi"}
+                  {!capturedPhoto && location.lat && "Silakan ambil foto selfie terlebih dahulu"}
+                  {capturedPhoto && !location.lat && "Klik refresh untuk mendapatkan lokasi Anda"}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </div>
+
+      {/* MODAL POPUP */}
+      {popup.show && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className={`p-4 ${
+              popup.type === "success" ? "bg-gradient-to-r from-emerald-500 to-teal-500" :
+              popup.type === "error" ? "bg-gradient-to-r from-red-500 to-rose-500" :
+              "bg-gradient-to-r from-teal-500 to-blue-500"
+            }`}>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                  {popup.type === "success" && <CheckCircle size="16" className="text-white" />}
+                  {popup.type === "error" && <AlertCircle size="16" className="text-white" />}
+                </div>
+                <h3 className="text-base font-bold text-white">{popup.title}</h3>
+              </div>
+            </div>
+
+            <div className="p-5">
+              <p className="text-gray-700 text-sm whitespace-pre-line">{popup.message}</p>
+
+              <div className="flex justify-end mt-5">
+                <button
+                  onClick={() => setPopup({ show: false, title: "", message: "", type: "info" })}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-teal-500 to-blue-600 text-white text-sm font-semibold"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

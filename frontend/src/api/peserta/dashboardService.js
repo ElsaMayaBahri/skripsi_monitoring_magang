@@ -1,4 +1,4 @@
-import axiosInstance from "../../utils/axiosConfig"
+import axiosInstance from "../axios";
 
 // Get peserta dashboard data
 export const getPesertaDashboard = async () => {
