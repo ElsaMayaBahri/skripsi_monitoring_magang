@@ -12,7 +12,7 @@ import {
   ExternalLink, Image, Play, Layers, Target, ListChecks, 
   FileDigit, FileSpreadsheet, FileArchive, FileCode, FileJson,
   Presentation, FileType, Mail, Hash, Maximize2, Minimize2,
-  ArrowLeft
+  ArrowLeft, ChevronLeft, ChevronRight as ChevronRightIcon
 } from "lucide-react";
 
 function Materi() {
@@ -31,6 +31,16 @@ function Materi() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedDivisi, setSelectedDivisi] = useState([]);
   const [selectedKategori, setSelectedKategori] = useState([]);
+  
+  // Delete Modal State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteIndex, setDeleteIndex] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(8);
 
   const BASE_URL = "http://localhost:8000";
 
@@ -152,16 +162,54 @@ function Materi() {
     }
   };
 
-  const handleDelete = async (id, index) => {
-    if (!confirm("Yakin ingin menghapus materi ini?")) return;
+  // Show delete confirmation modal
+  const confirmDelete = (id, index) => {
+    setDeleteTarget(id);
+    setDeleteIndex(index);
+    setShowDeleteModal(true);
+  };
+
+  // Handle delete with modal
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await axiosInstance.delete(`/materi-pelatihan/${id}`);
+      await axiosInstance.delete(`/materi-pelatihan/${deleteTarget}`);
       const updated = [...materi];
-      updated.splice(index, 1);
+      updated.splice(deleteIndex, 1);
       setMateri(updated);
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
+      setDeleteIndex(null);
     } catch (error) {
       console.error("Error delete materi:", error);
       alert("Gagal menghapus materi");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Download file langsung (tidak buka tab baru)
+  const downloadFile = async (url, filename) => {
+    if (!url) {
+      alert("File tidak tersedia untuk diunduh");
+      return;
+    }
+    
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename || 'materi';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download error:", error);
+      alert("Gagal mengunduh file");
     }
   };
 
@@ -175,19 +223,6 @@ function Materi() {
       setPreview({ ...item, index, fileUrl: null });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const downloadFile = (url, filename) => {
-    if (url) {
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename || 'materi';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } else {
-      alert("File tidak tersedia untuk diunduh");
     }
   };
 
@@ -219,7 +254,7 @@ function Materi() {
     return iconMap[kategori] || iconMap['Other'];
   };
 
-  // Preview content untuk grid view - Tampilan premium untuk semua file
+  // Preview content untuk grid view
   const getGridViewPreview = (item) => {
     const kategori = item.kategori;
     const fileUrl = item.file_materi;
@@ -253,7 +288,6 @@ function Materi() {
       );
     }
     
-    // Premium preview untuk file yang tidak bisa preview langsung di grid
     return (
       <div className={`w-full h-full flex flex-col items-center justify-center bg-gradient-to-br ${fileInfo.previewBg}`}>
         <div className="relative">
@@ -308,7 +342,6 @@ function Materi() {
       );
     }
 
-    // Premium preview untuk file yang tidak bisa preview langsung (DOC, PPT, Excel, dll)
     if ((kategori === "PPT" || kategori === "Word" || kategori === "Excel" || kategori === "Archive" || kategori === "Other") && fileUrl) {
       return (
         <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
@@ -365,12 +398,22 @@ function Materi() {
     return matchesSearch && matchesDivisi && matchesKategori;
   });
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredMateri.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedMateri = filteredMateri.slice(startIndex, startIndex + itemsPerPage);
+
+  const goToPage = (page) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
   const toggleDivisiFilter = (divisi) => {
     setSelectedDivisi(prev => 
       prev.includes(divisi) 
         ? prev.filter(d => d !== divisi)
         : [...prev, divisi]
     );
+    setCurrentPage(1);
   };
 
   const toggleKategoriFilter = (kategori) => {
@@ -379,12 +422,14 @@ function Materi() {
         ? prev.filter(k => k !== kategori)
         : [...prev, kategori]
     );
+    setCurrentPage(1);
   };
 
   const resetFilters = () => {
     setSelectedDivisi([]);
     setSelectedKategori([]);
     setSearchQuery("");
+    setCurrentPage(1);
   };
 
   const stats = {
@@ -432,7 +477,7 @@ function Materi() {
           </div>
         </div>
 
-        {/* STATS CARDS - Tanpa hover effect gerak */}
+        {/* STATS CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-4 shadow-md">
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-full -mr-12 -mt-12"></div>
@@ -539,7 +584,7 @@ function Materi() {
                   type="text" 
                   placeholder="Cari judul materi..." 
                   value={searchQuery} 
-                  onChange={(e) => setSearchQuery(e.target.value)} 
+                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} 
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400" 
                 />
               </div>
@@ -617,179 +662,318 @@ function Materi() {
                 <button onClick={resetFilters} className="text-blue-600 text-sm mt-2 hover:text-blue-700">Reset Filter</button>
               </div>
             ) : viewMode === "grid" ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredMateri.map((item, idx) => {
-                  const fileInfo = getFileIcon(item.kategori);
-                  const IconComponent = fileInfo.icon;
-                  const fileUrl = item.file_materi;
-                  
-                  return (
-                    <div key={idx} onClick={() => handlePreview(item, idx)} className="bg-white rounded-2xl border border-slate-200 shadow-sm cursor-pointer overflow-hidden">
-                      <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 overflow-hidden">
-                        {getGridViewPreview(item)}
-                        <div className="absolute top-3 right-3">
-                          <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm shadow-sm ${fileInfo.color}`}>
-                            {item.kategori}
-                          </span>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {paginatedMateri.map((item, idx) => {
+                    const fileInfo = getFileIcon(item.kategori);
+                    const IconComponent = fileInfo.icon;
+                    const fileUrl = item.file_materi;
+                    const actualIndex = startIndex + idx;
+                    
+                    return (
+                      <div key={actualIndex} onClick={() => handlePreview(item, actualIndex)} className="bg-white rounded-2xl border border-slate-200 shadow-sm cursor-pointer overflow-hidden group hover:shadow-lg transition-all duration-300">
+                        <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 overflow-hidden">
+                          {getGridViewPreview(item)}
+                          <div className="absolute top-3 right-3">
+                            <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm shadow-sm ${fileInfo.color}`}>
+                              {item.kategori}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="text-[10px] font-semibold px-2.5 py-1 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 rounded-full border border-blue-100">
-                            {item.divisi || "UMUM"}
-                          </span>
-                          {isCoo && (
-                            <div className="flex gap-1">
-                              <button onClick={(e) => { e.stopPropagation(); navigate(`/coo/edit-materi/${item.id_materi}`); }} className="p-1.5 bg-white rounded-lg shadow-sm hover:bg-blue-50 transition-colors">
-                                <Edit2 size={12} className="text-slate-500 hover:text-blue-600" />
-                              </button>
-                              <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id_materi, idx); }} className="p-1.5 bg-white rounded-lg shadow-sm hover:bg-red-50 transition-colors">
-                                <Trash2 size={12} className="text-slate-500 hover:text-red-600" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        <h3 className="font-semibold text-slate-800 text-base mb-2 line-clamp-2">{item.judul}</h3>
-                        <p className="text-xs text-slate-500 line-clamp-2 mb-3">{item.deskripsi || "Tidak ada deskripsi"}</p>
-                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
-                          <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                            <Calendar size={10} />
-                            {item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID") : "-"}
-                          </span>
-                          <button onClick={(e) => { e.stopPropagation(); downloadFile(fileUrl, item.judul); }} className="p-1.5 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
-                            <Download size={12} className="text-white" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              /* LIST VIEW PREMIUM */
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 border-b-2 border-slate-200">
-                        <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Materi</th>
-                        <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Divisi</th>
-                        <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Kategori</th>
-                        <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Tanggal</th>
-                        <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Views</th>
-                        <th className="text-center px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Aksi</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredMateri.map((item, idx) => {
-                        const fileInfo = getFileIcon(item.kategori);
-                        const IconComponent = fileInfo.icon;
-                        const fileUrl = item.file_materi;
-                        return (
-                          <tr key={idx} className="cursor-pointer" onClick={() => handlePreview(item, idx)}>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-4">
-                                <div className={`relative w-12 h-12 bg-gradient-to-br ${fileInfo.bgGradient} rounded-xl flex items-center justify-center shadow-md border ${fileInfo.borderColor}`}>
-                                  <IconComponent size={20} className={fileInfo.color} />
-                                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>
-                                </div>
-                                <div>
-                                  <span className="font-semibold text-slate-800 text-sm">{item.judul}</span>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <p className="text-[11px] text-slate-400 line-clamp-1">{item.deskripsi || "Tidak ada deskripsi"}</p>
-                                    <span className="text-[9px] text-slate-300">•</span>
-                                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                                      <HardDrive size={10} />
-                                      {item.file_name || item.kategori}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100 shadow-sm">
-                                <div className="w-5 h-5 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
-                                  <Building2 size={10} className="text-white" />
-                                </div>
-                                <span className="text-xs font-semibold text-blue-700">{item.divisi || "-"}</span>
-                              </div>
-                             </td>
-                            <td className="px-6 py-4">
-                              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm bg-gradient-to-br ${fileInfo.bgGradient} ${fileInfo.borderColor}`}>
-                                <IconComponent size={14} className={fileInfo.color} />
-                                <span className={`text-xs font-semibold ${fileInfo.color}`}>
-                                  {item.kategori}
-                                </span>
-                              </div>
-                             </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg w-fit">
-                                <Calendar size={12} className="text-slate-400" />
-                                <span className="font-medium">{item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID") : "-"}</span>
-                              </div>
-                             </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-yellow-50 px-3 py-1.5 rounded-lg border border-amber-100">
-                                  <Eye size={12} className="text-amber-500" />
-                                  <span className="text-xs font-bold text-amber-700">{item.views || 0}</span>
-                                </div>
-                              </div>
-                             </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center justify-center gap-2">
-                                <button 
-                                  onClick={(e) => { e.stopPropagation(); downloadFile(fileUrl, item.judul); }} 
-                                  className="p-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md"
-                                >
-                                  <Download size={14} />
+                        <div className="p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="text-[10px] font-semibold px-2.5 py-1 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 rounded-full border border-blue-100">
+                              {item.divisi || "UMUM"}
+                            </span>
+                            {isCoo && (
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={(e) => { e.stopPropagation(); navigate(`/coo/edit-materi/${item.id_materi}`); }} className="p-1.5 bg-white rounded-lg shadow-sm hover:bg-blue-50 transition-colors">
+                                  <Edit2 size={12} className="text-slate-500 hover:text-blue-600" />
                                 </button>
-                                {isCoo && (
-                                  <>
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); navigate(`/coo/edit-materi/${item.id_materi}`); }} 
-                                      className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-md"
-                                    >
-                                      <Edit2 size={14} />
-                                    </button>
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); handleDelete(item.id_materi, idx); }} 
-                                      className="p-2.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 transition-all duration-200 shadow-md"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </>
-                                )}
+                                <button onClick={(e) => { e.stopPropagation(); confirmDelete(item.id_materi, actualIndex); }} className="p-1.5 bg-white rounded-lg shadow-sm hover:bg-red-50 transition-colors">
+                                  <Trash2 size={12} className="text-slate-500 hover:text-red-600" />
+                                </button>
                               </div>
-                             </td>
-                           </tr>
+                            )}
+                          </div>
+                          <h3 className="font-semibold text-slate-800 text-base mb-2 line-clamp-2">{item.judul}</h3>
+                          <p className="text-xs text-slate-500 line-clamp-2 mb-3">{item.deskripsi || "Tidak ada deskripsi"}</p>
+                          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+                            <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                              <Calendar size={10} />
+                              {item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID") : "-"}
+                            </span>
+                            <button onClick={(e) => { e.stopPropagation(); downloadFile(fileUrl, item.judul); }} className="p-1.5 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
+                              <Download size={12} className="text-white" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Pagination Grid View */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-8 px-4 py-3 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500">Halaman</span>
+                      <span className="text-sm font-bold text-slate-800">{currentPage}</span>
+                      <span className="text-xs text-slate-500">dari</span>
+                      <span className="text-sm font-bold text-slate-800">{totalPages}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+                      {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => goToPage(pageNum)}
+                            className={`w-9 h-9 rounded-xl text-sm font-semibold transition-all ${
+                              currentPage === pageNum
+                                ? "bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md"
+                                : "border border-slate-200 text-slate-600 hover:bg-blue-50"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
                         );
                       })}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="px-6 py-4 border-t border-slate-200 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                      <p className="text-xs text-slate-600">Menampilkan <span className="font-bold text-slate-800">{filteredMateri.length}</span> dari <span className="font-bold text-slate-800">{materi.length}</span> materi</p>
-                    </div>
-                    <div className="h-4 w-px bg-slate-200"></div>
-                    <div className="flex items-center gap-1">
-                      <Star size={12} className="text-amber-400 fill-amber-400" />
-                      <span className="text-[10px] text-slate-500">Terbaru</span>
+                      <button
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      >
+                        <ChevronRightIcon size={18} />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Zap size={12} className="text-amber-500" />
-                    <span className="text-[10px] text-slate-400 font-medium">Data real-time</span>
+                )}
+              </>
+            ) : (
+              <>
+                {/* LIST VIEW PREMIUM */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 border-b-2 border-slate-200">
+                          <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">#</th>
+                          <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Materi</th>
+                          <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Divisi</th>
+                          <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Kategori</th>
+                          <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Tanggal</th>
+                          <th className="text-left px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Views</th>
+                          <th className="text-center px-6 py-4 text-xs font-bold text-slate-700 uppercase tracking-wider">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginatedMateri.map((item, idx) => {
+                          const fileInfo = getFileIcon(item.kategori);
+                          const IconComponent = fileInfo.icon;
+                          const fileUrl = item.file_materi;
+                          const actualIndex = startIndex + idx;
+                          return (
+                            <tr key={actualIndex} className="cursor-pointer group hover:bg-slate-50 transition-colors" onClick={() => handlePreview(item, actualIndex)}>
+                              <td className="px-6 py-4">
+                                <span className="text-sm font-semibold text-slate-500">{startIndex + idx + 1}</span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-4">
+                                  <div className={`relative w-12 h-12 bg-gradient-to-br ${fileInfo.bgGradient} rounded-xl flex items-center justify-center shadow-md border ${fileInfo.borderColor}`}>
+                                    <IconComponent size={20} className={fileInfo.color} />
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-slate-800 text-sm">{item.judul}</span>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <p className="text-[11px] text-slate-400 line-clamp-1">{item.deskripsi || "Tidak ada deskripsi"}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100 shadow-sm">
+                                  <div className="w-5 h-5 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                                    <Building2 size={10} className="text-white" />
+                                  </div>
+                                  <span className="text-xs font-semibold text-blue-700">{item.divisi || "-"}</span>
+                                </div>
+                               </td>
+                              <td className="px-6 py-4">
+                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm bg-gradient-to-br ${fileInfo.bgGradient} ${fileInfo.borderColor}`}>
+                                  <IconComponent size={14} className={fileInfo.color} />
+                                  <span className={`text-xs font-semibold ${fileInfo.color}`}>
+                                    {item.kategori}
+                                  </span>
+                                </div>
+                               </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg w-fit">
+                                  <Calendar size={12} className="text-slate-400" />
+                                  <span className="font-medium">{item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID") : "-"}</span>
+                                </div>
+                               </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-yellow-50 px-3 py-1.5 rounded-lg border border-amber-100">
+                                    <Eye size={12} className="text-amber-500" />
+                                    <span className="text-xs font-bold text-amber-700">{item.views || 0}</span>
+                                  </div>
+                                </div>
+                               </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); downloadFile(fileUrl, item.judul); }} 
+                                    className="p-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md"
+                                  >
+                                    <Download size={14} />
+                                  </button>
+                                  {isCoo && (
+                                    <>
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); navigate(`/coo/edit-materi/${item.id_materi}`); }} 
+                                        className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600 transition-all duration-200 shadow-md"
+                                      >
+                                        <Edit2 size={14} />
+                                      </button>
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); confirmDelete(item.id_materi, actualIndex); }} 
+                                        className="p-2.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 text-white hover:from-red-600 hover:to-rose-600 transition-all duration-200 shadow-md"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                               </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
+                  
+                  {/* Pagination List View */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">Menampilkan</span>
+                        <span className="text-sm font-bold text-slate-800">{startIndex + 1}</span>
+                        <span className="text-xs text-slate-500">-</span>
+                        <span className="text-sm font-bold text-slate-800">{Math.min(startIndex + itemsPerPage, filteredMateri.length)}</span>
+                        <span className="text-xs text-slate-500">dari</span>
+                        <span className="text-sm font-bold text-slate-800">{filteredMateri.length}</span>
+                        <span className="text-xs text-slate-500">materi</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => goToPage(currentPage - 1)}
+                          disabled={currentPage === 1}
+                          className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                        >
+                          <ChevronLeft size={18} />
+                        </button>
+                        {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => goToPage(pageNum)}
+                              className={`w-9 h-9 rounded-xl text-sm font-semibold transition-all ${
+                                currentPage === pageNum
+                                  ? "bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md"
+                                  : "border border-slate-200 text-slate-600 hover:bg-blue-50"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                        <button
+                          onClick={() => goToPage(currentPage + 1)}
+                          disabled={currentPage === totalPages}
+                          className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                        >
+                          <ChevronRightIcon size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              </>
             )}
           </>
         )}
       </div>
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[10000] p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-300">
+            <div className="relative">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-500 to-rose-500 rounded-t-2xl"></div>
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-red-100 rounded-xl">
+                    <Trash2 className="w-6 h-6 text-red-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-slate-800">Hapus Materi</h3>
+                </div>
+                <p className="text-slate-600 mb-6">
+                  Apakah Anda yakin ingin menghapus materi <strong className="text-red-600">"{deleteTarget ? materi[deleteIndex]?.judul : ""}"</strong>?
+                  <br />
+                  <span className="text-sm text-slate-400">Data yang dihapus tidak dapat dikembalikan.</span>
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setDeleteTarget(null);
+                      setDeleteIndex(null);
+                    }}
+                    className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 rounded-xl text-white font-medium hover:shadow-lg transition-all disabled:opacity-50"
+                  >
+                    {deleting ? "Menghapus..." : "Ya, Hapus"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PREVIEW MODAL PREMIUM */}
       {preview && (
@@ -862,7 +1046,10 @@ function Materi() {
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .animate-in { animation: fadeIn 0.2s ease-out; }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .animate-in { animation-duration: 0.2s; animation-fill-mode: both; }
+        .fade-in { animation-name: fadeIn; }
+        .zoom-in-95 { animation-name: zoomIn; }
       `}</style>
     </div>
   );

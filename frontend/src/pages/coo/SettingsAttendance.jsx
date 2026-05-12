@@ -36,7 +36,7 @@ const SettingsAttendance = () => {
   const [jamKerja, setJamKerja] = useState({
     jam_masuk: '08:00',
     jam_pulang: '17:00',
-    batas_terlambat: 15
+    batas_terlambat: 15 // Default value 15 menit
   });
   const [hariLibur, setHariLibur] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -54,14 +54,14 @@ const SettingsAttendance = () => {
   const [successDetail, setSuccessDetail] = useState("");
   const [successType, setSuccessType] = useState("");
 
-  // 🟢 PERBAIKAN 1: Fungsi timeToMinutes dengan pengecekan tipe data
+  // Fungsi timeToMinutes dengan pengecekan tipe data yang lebih baik
   const timeToMinutes = (timeStr) => {
-    // Jika sudah dalam bentuk number (menit), return langsung
-    if (typeof timeStr === 'number') {
+    // Jika sudah dalam bentuk number (menit)
+    if (typeof timeStr === 'number' && !isNaN(timeStr)) {
       return timeStr;
     }
     
-    // Jika string kosong atau null/undefined
+    // Jika null atau undefined
     if (!timeStr) return 15;
     
     // Jika string, parse dengan split
@@ -80,7 +80,7 @@ const SettingsAttendance = () => {
       if (!isNaN(num)) return num;
     }
     
-    return 15;
+    return 15; // Default 15 menit
   };
 
   const showPremiumPopup = (message, detail, type = "success") => {
@@ -111,7 +111,7 @@ const SettingsAttendance = () => {
     }
   };
 
-  // 🟢 PERBAIKAN 2: fetchJamKerja dengan pengecekan tipe data batas_terlambat
+  // 🟢 PERBAIKAN: fetchJamKerja dengan nilai default yang aman
   const fetchJamKerja = async () => {
     try {
       const response = await getJamKerja();
@@ -122,13 +122,21 @@ const SettingsAttendance = () => {
         const jamMasuk = data.jam_masuk ? data.jam_masuk.substring(0, 5) : '08:00';
         const jamPulang = data.jam_pulang ? data.jam_pulang.substring(0, 5) : '17:00';
         
-        let batasTerlambatMenit = 15;
+        // 🔥 PERBAIKAN UTAMA: Pastikan batas_terlambat tidak menjadi 0 atau null
+        let batasTerlambatMenit = 15; // Default value
+        
         if (data.batas_terlambat !== null && data.batas_terlambat !== undefined) {
           if (typeof data.batas_terlambat === 'number') {
             batasTerlambatMenit = data.batas_terlambat;
           } else if (typeof data.batas_terlambat === 'string') {
-            batasTerlambatMenit = timeToMinutes(data.batas_terlambat);
+            const parsed = timeToMinutes(data.batas_terlambat);
+            batasTerlambatMenit = parsed > 0 ? parsed : 15;
           }
+        }
+        
+        // 🔥 JANGAN BIARKAN NILAI 0
+        if (batasTerlambatMenit === 0 || batasTerlambatMenit === null || isNaN(batasTerlambatMenit)) {
+          batasTerlambatMenit = 15;
         }
         
         setJamKerja({
@@ -137,9 +145,22 @@ const SettingsAttendance = () => {
           batas_terlambat: batasTerlambatMenit
         });
         setIdJamKerja(data.id_jam_kerja || data.id);
+      } else {
+        // Jika response gagal, tetap gunakan default
+        setJamKerja({
+          jam_masuk: '08:00',
+          jam_pulang: '17:00',
+          batas_terlambat: 15
+        });
       }
     } catch (error) {
       console.error('Error fetching working hours:', error);
+      // Jika error, tetap set ke default
+      setJamKerja({
+        jam_masuk: '08:00',
+        jam_pulang: '17:00',
+        batas_terlambat: 15
+      });
     }
   };
 
@@ -178,8 +199,8 @@ const SettingsAttendance = () => {
       showPremiumPopup('Validasi Gagal', 'Jam masuk dan jam pulang harus diisi', 'error');
       return;
     }
-    if (jamKerja.batas_terlambat === null || jamKerja.batas_terlambat === undefined) {
-      showPremiumPopup('Validasi Gagal', 'Batas toleransi keterlambatan harus diisi', 'error');
+    if (jamKerja.batas_terlambat === null || jamKerja.batas_terlambat === undefined || jamKerja.batas_terlambat === 0) {
+      showPremiumPopup('Validasi Gagal', 'Batas toleransi keterlambatan harus diisi (minimal 1 menit)', 'error');
       return;
     }
 
@@ -318,6 +339,18 @@ const SettingsAttendance = () => {
   const formatTime = (time) => {
     if (!time) return '-';
     return time.substring(0, 5);
+  };
+
+  // Handling input batas_terlambat agar tidak bisa 0
+  const handleBatasTerlambatChange = (value) => {
+    let newValue = parseInt(value) || 0;
+    if (newValue < 1) {
+      newValue = 1;
+    }
+    if (newValue > 120) {
+      newValue = 120;
+    }
+    setJamKerja({ ...jamKerja, batas_terlambat: newValue });
   };
 
   if (loading && hariLibur.length === 0 && !jamKerja.jam_masuk) {
@@ -572,10 +605,10 @@ const SettingsAttendance = () => {
                     <div className="flex items-center gap-3">
                       <input
                         type="number"
-                        min="0"
+                        min="1"
                         max="120"
                         value={jamKerja.batas_terlambat}
-                        onChange={(e) => setJamKerja({ ...jamKerja, batas_terlambat: parseInt(e.target.value) || 0 })}
+                        onChange={(e) => handleBatasTerlambatChange(e.target.value)}
                         className="flex-1 border border-blue-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                         placeholder="Masukkan jumlah menit"
                       />
@@ -587,6 +620,9 @@ const SettingsAttendance = () => {
                     </p>
                     <p className="text-xs text-slate-400 mt-1">
                       Contoh: Jika jam masuk 08:00 dan batas terlambat 15 menit, maka peserta masih dianggap hadir jika check-in sebelum pukul 08:15
+                    </p>
+                    <p className="text-xs text-amber-600 mt-2 font-medium">
+                      ⚡ Minimal 1 menit, maksimal 120 menit
                     </p>
                   </div>
                 </div>
@@ -687,10 +723,10 @@ const SettingsAttendance = () => {
                             <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-medium rounded-full">
                               {getNamaHari(libur.tanggal)}
                             </span>
-                           </td>
+                            </td>
                           <td className="px-6 py-4">
                             <span className="text-slate-800 font-medium">{libur.keterangan}</span>
-                           </td>
+                            </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-center gap-2">
                               <button
@@ -706,7 +742,7 @@ const SettingsAttendance = () => {
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
-                           </td>
+                            </td>
                         </tr>
                       );
                     })}

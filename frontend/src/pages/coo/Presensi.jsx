@@ -144,7 +144,9 @@ function Presensi() {
         url += `?${params.toString()}`
       }
       
+      console.log("Fetching presensi from:", url)
       const response = await axiosInstance.get(url)
+      console.log("Presensi response:", response)
       
       let presensiList = []
       if (response.data && response.data.success && response.data.data) {
@@ -157,8 +159,43 @@ function Presensi() {
       calculateStats(presensiList)
     } catch (err) {
       console.error("Error fetching presensi:", err)
-      setError("Gagal memuat data presensi")
+      
+      let errorMessage = "Gagal memuat data presensi"
+      
+      if (err.response) {
+        if (err.response.status === 404) {
+          errorMessage = "API Presensi tidak ditemukan (404). Pastikan route /api/presensi sudah ditambahkan di backend Laravel."
+          console.error("Detail 404 Error:", {
+            url: err.config?.url,
+            method: err.config?.method,
+            status: err.response.status,
+            statusText: err.response.statusText
+          })
+        } else if (err.response.status === 401) {
+          errorMessage = "Sesi login telah berakhir. Silakan login kembali."
+        } else if (err.response.status === 403) {
+          errorMessage = "Anda tidak memiliki akses ke data presensi."
+        } else if (err.response.status === 500) {
+          errorMessage = "Terjadi kesalahan pada server. Silakan coba lagi nanti."
+        } else {
+          errorMessage = err.response.data?.message || `Error ${err.response.status}: Gagal memuat data presensi`
+        }
+      } else if (err.request) {
+        errorMessage = "Tidak dapat terhubung ke server. Periksa koneksi internet atau pastikan backend sedang berjalan."
+        console.error("No response received:", err.request)
+      } else {
+        errorMessage = err.message || "Terjadi kesalahan yang tidak diketahui"
+      }
+      
+      setError(errorMessage)
       setPresensiData([])
+      setStats({
+        total: 0,
+        hadir: 0,
+        terlambat: 0,
+        tidakHadir: 0,
+        persenKehadiran: 0
+      })
     } finally {
       setLoading(false)
     }
@@ -221,14 +258,12 @@ function Presensi() {
     setIsModalOpen(true)
   }
 
-  // Show confirm modal before export
   const showConfirmExport = (type) => {
     setExportType(type)
     setShowConfirmModal(true)
     setShowExportDropdown(false)
   }
 
-  // Execute export after confirmation
   const executeExport = () => {
     setShowConfirmModal(false)
     if (exportType === 'excel') {
@@ -239,7 +274,6 @@ function Presensi() {
     setExportType(null)
   }
 
-  // Export ke Excel (Client-side)
   const handleExportExcel = () => {
     setIsExporting(true)
     try {
@@ -271,7 +305,6 @@ function Presensi() {
     }
   }
 
-  // Export ke PDF langsung download dengan logo
   const handleExportPDF = () => {
     setIsExporting(true)
     
@@ -285,7 +318,6 @@ function Presensi() {
       const startDateFormatted = startDate ? formatDatePDF(startDate) : "Semua"
       const endDateFormatted = endDate ? formatDatePDF(endDate) : "Semua"
       
-      // Buat elemen div untuk di-convert ke PDF
       const element = document.createElement('div')
       element.style.padding = '30px'
       element.style.fontFamily = "'Times New Roman', Arial, sans-serif"
@@ -347,7 +379,7 @@ function Presensi() {
           </thead>
           <tbody>
             ${filteredData.map((item, index) => `
-              <tr style="border-bottom: 1px solid #e2e8f0;">
+              <tr>
                 <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${index + 1}</td>
                 <td style="border: 1px solid #cbd5e1; padding: 8px;">${getNamaPeserta(item)}</td>
                 <td style="border: 1px solid #cbd5e1; padding: 8px;">${getDivisiPeserta(item)}</td>
@@ -411,7 +443,6 @@ function Presensi() {
     setEndDate("")
   }
 
-  // Pagination
   const totalPages = Math.ceil(filteredData.length / itemsPerPage)
   const paginatedData = filteredData.slice(
     (currentPage - 1) * itemsPerPage,
@@ -499,7 +530,7 @@ function Presensi() {
           </div>
         )}
 
-        {/* ===== HEADER ===== */}
+        {/* HEADER */}
         <div className="mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
@@ -557,7 +588,7 @@ function Presensi() {
           </div>
         </div>
 
-        {/* ===== STATS CARDS ===== (SAME AS BEFORE) */}
+        {/* STATS CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="flex items-center justify-between mb-2">
@@ -604,7 +635,7 @@ function Presensi() {
           </div>
         </div>
 
-        {/* ===== FILTERS ===== (SAME AS BEFORE) */}
+        {/* FILTERS */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
@@ -641,7 +672,6 @@ function Presensi() {
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                placeholder="Tanggal Mulai"
               />
             </div>
 
@@ -651,7 +681,6 @@ function Presensi() {
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                placeholder="Tanggal Selesai"
               />
             </div>
             
@@ -666,16 +695,37 @@ function Presensi() {
           </div>
         </div>
 
-        {/* ===== ERROR MESSAGE ===== */}
+        {/* ERROR MESSAGE */}
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-            <AlertCircle size={16} className="text-red-500" />
-            <p className="text-sm text-red-600 flex-1">{error}</p>
-            <button onClick={fetchPresensi} className="text-red-600 hover:text-red-700 text-sm font-medium">Coba Lagi</button>
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <AlertCircle size={18} className="text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-red-700 font-medium mb-1">Error Memuat Data</p>
+                <p className="text-sm text-red-600">{error}</p>
+                {error.includes("404") && (
+                  <div className="mt-3 p-3 bg-red-100 rounded-lg text-xs text-red-700">
+                    <p className="font-medium mb-1">📋 Informasi untuk Backend Developer:</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>Route <code className="bg-red-200 px-1 rounded">/api/presensi</code> tidak ditemukan</li>
+                      <li>Tambahkan route presensi di <code className="bg-red-200 px-1 rounded">routes/api.php</code></li>
+                      <li>Pastikan route berada di dalam <code className="bg-red-200 px-1 rounded">{`Route::middleware('auth:sanctum')->group()`}</code></li>
+                      <li>Jalankan <code className="bg-red-200 px-1 rounded">php artisan route:clear</code> dan <code className="bg-red-200 px-1 rounded">php artisan route:cache</code></li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <button 
+                onClick={fetchPresensi} 
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded-lg text-white text-xs font-medium transition flex-shrink-0"
+              >
+                Coba Lagi
+              </button>
+            </div>
           </div>
         )}
 
-        {/* ===== TABLE ===== (SAME AS BEFORE) */}
+        {/* TABLE */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -712,28 +762,28 @@ function Presensi() {
                           </div>
                           <span className="font-medium text-slate-800 text-sm">{getNamaPeserta(item)}</span>
                         </div>
-                      </td>
+                       </td>
                       <td className="px-5 py-3">
                         <span className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-full font-medium">
                           {getDivisiPeserta(item)}
                         </span>
-                      </td>
+                       </td>
                       <td className="px-5 py-3 text-sm text-slate-600">
                         {formatDateOnly(item.check_in || item.tanggal)}
-                      </td>
+                       </td>
                       <td className="px-5 py-3">
                         <span className="text-sm text-slate-600">
                           {formatDateTime(item.check_in)}
                         </span>
-                      </td>
+                       </td>
                       <td className="px-5 py-3">
                         <span className="text-sm text-slate-600">
                           {formatDateTime(item.check_out)}
                         </span>
-                      </td>
+                       </td>
                       <td className="px-5 py-3">
                         {getStatusBadge(item.status)}
-                      </td>
+                       </td>
                       <td className="px-5 py-3 text-center">
                         <button
                           onClick={() => handleViewDetail(item)}
@@ -741,7 +791,7 @@ function Presensi() {
                         >
                           <Eye size={14} />
                         </button>
-                      </td>
+                       </td>
                     </tr>
                   ))
                 )}
@@ -790,7 +840,7 @@ function Presensi() {
           )}
         </div>
 
-        {/* ===== MODAL DETAIL PRESENSI ===== (SAME AS BEFORE) */}
+        {/* MODAL DETAIL PRESENSI */}
         {isModalOpen && selectedPresensi && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl max-w-md w-full max-h-[85vh] overflow-y-auto shadow-xl">

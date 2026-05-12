@@ -23,10 +23,10 @@ export const createMateri = async (formData) => {
   return response.data
 }
 
-// Update materi (with file upload) - FIXED: Use POST only
+// Update materi (with file upload) - Use PUT method
 export const updateMateri = async (id, formData) => {
-  // Langsung pakai POST, karena route sudah mendukung POST untuk update
-  const response = await axiosInstance.post(`/materi-pelatihan/${id}`, formData, {
+  // Gunakan method PUT untuk update (sesuai REST API backend)
+  const response = await axiosInstance.put(`/materi-pelatihan/${id}`, formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },

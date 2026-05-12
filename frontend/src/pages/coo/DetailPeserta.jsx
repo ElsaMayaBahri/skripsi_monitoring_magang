@@ -44,7 +44,12 @@ import {
   Heart,
   ThumbsUp,
   MessageCircle,
-  Bell
+  Bell,
+  Server,
+  Database,
+  Wifi,
+  WifiOff,
+  RefreshCw
 } from "lucide-react";
 import {
   getDetailPeserta,
@@ -62,6 +67,7 @@ function DetailPeserta() {
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [errorDetails, setErrorDetails] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
   
   // Data states
@@ -72,38 +78,174 @@ function DetailPeserta() {
   const [laporanAkhir, setLaporanAkhir] = useState(null);
   const [statistik, setStatistik] = useState(null);
   const [aktivitas, setAktivitas] = useState([]);
+  
+  // Track which API calls failed
+  const [failedApis, setFailedApis] = useState([]);
 
-  // Fetch semua data
+  // Fetch semua data - PERBAIKAN: Tangani setiap API secara independen
   const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setErrorDetails(null);
+    setFailedApis([]);
+    
+    const failedEndpoints = [];
     
     try {
-      const [
-        detailRes,
-        kehadiranRes,
-        tugasRes,
-        kuisRes,
-        laporanRes,
-        statistikRes,
-        aktivitasRes
-      ] = await Promise.all([
-        getDetailPeserta(id),
-        getRiwayatKehadiran(id),
-        getProgressTugas(id),
-        getHasilKuis(id),
-        getLaporanAkhir(id),
-        getStatistikPeserta(id),
-        getAktivitasTerbaru(id, 10)
-      ]);
+      // Fetch Detail Peserta - WAJIB berhasil
+      try {
+        const detailRes = await getDetailPeserta(id);
+        // Cek response structure
+        if (detailRes && detailRes.success && detailRes.data) {
+          setDetailPeserta(detailRes.data);
+        } else if (detailRes && detailRes.data) {
+          setDetailPeserta(detailRes.data);
+        } else if (detailRes) {
+          setDetailPeserta(detailRes);
+        } else {
+          throw new Error("Data peserta tidak ditemukan");
+        }
+      } catch (err) {
+        console.error("Error fetching detail peserta:", err);
+        failedEndpoints.push({ 
+          endpoint: '/coo/peserta/{id}/detail', 
+          error: err.response?.status === 404 ? "Endpoint tidak ditemukan (404)" : (err.message || "Gagal memuat data") 
+        });
+        setError("Gagal memuat data peserta. Silakan coba lagi.");
+        setErrorDetails({
+          status: err.response?.status,
+          endpoint: '/coo/peserta/{id}/detail',
+          message: err.message
+        });
+        setLoading(false);
+        return;
+      }
       
-      setDetailPeserta(detailRes?.data || detailRes);
-      setRiwayatKehadiran(kehadiranRes?.data || kehadiranRes || []);
-      setProgressTugas(tugasRes?.data || tugasRes || []);
-      setHasilKuis(kuisRes?.data || kuisRes || []);
-      setLaporanAkhir(laporanRes?.data || laporanRes);
-      setStatistik(statistikRes?.data || statistikRes);
-      setAktivitas(aktivitasRes?.data || aktivitasRes || []);
+      // Fetch Kehadiran - OPTIONAL, jika gagal tetap lanjut
+      try {
+        const kehadiranRes = await getRiwayatKehadiran(id);
+        if (kehadiranRes && kehadiranRes.success && kehadiranRes.data) {
+          setRiwayatKehadiran(kehadiranRes.data);
+        } else if (kehadiranRes && Array.isArray(kehadiranRes)) {
+          setRiwayatKehadiran(kehadiranRes);
+        } else if (kehadiranRes && kehadiranRes.data && Array.isArray(kehadiranRes.data)) {
+          setRiwayatKehadiran(kehadiranRes.data);
+        } else {
+          setRiwayatKehadiran([]);
+        }
+      } catch (err) {
+        console.error("Error fetching kehadiran:", err);
+        failedEndpoints.push({ endpoint: '/coo/peserta/{id}/kehadiran', error: err.response?.status === 404 ? "Endpoint tidak ditemukan (404)" : err.message });
+        setRiwayatKehadiran([]);
+      }
+      
+      // Fetch Progress Tugas - OPTIONAL
+      try {
+        const tugasRes = await getProgressTugas(id);
+        if (tugasRes && tugasRes.success && tugasRes.data) {
+          setProgressTugas(tugasRes.data);
+        } else if (tugasRes && Array.isArray(tugasRes)) {
+          setProgressTugas(tugasRes);
+        } else if (tugasRes && tugasRes.data && Array.isArray(tugasRes.data)) {
+          setProgressTugas(tugasRes.data);
+        } else {
+          setProgressTugas([]);
+        }
+      } catch (err) {
+        console.error("Error fetching progress tugas:", err);
+        failedEndpoints.push({ endpoint: '/coo/peserta/{id}/progress-tugas', error: err.response?.status === 404 ? "Endpoint tidak ditemukan (404)" : err.message });
+        setProgressTugas([]);
+      }
+      
+      // Fetch Hasil Kuis - OPTIONAL
+      try {
+        const kuisRes = await getHasilKuis(id);
+        if (kuisRes && kuisRes.success && kuisRes.data) {
+          setHasilKuis(kuisRes.data);
+        } else if (kuisRes && Array.isArray(kuisRes)) {
+          setHasilKuis(kuisRes);
+        } else if (kuisRes && kuisRes.data && Array.isArray(kuisRes.data)) {
+          setHasilKuis(kuisRes.data);
+        } else {
+          setHasilKuis([]);
+        }
+      } catch (err) {
+        console.error("Error fetching hasil kuis:", err);
+        failedEndpoints.push({ endpoint: '/coo/peserta/{id}/hasil-kuis', error: err.response?.status === 404 ? "Endpoint tidak ditemukan (404)" : err.message });
+        setHasilKuis([]);
+      }
+      
+      // Fetch Laporan Akhir - OPTIONAL
+      try {
+        const laporanRes = await getLaporanAkhir(id);
+        if (laporanRes && laporanRes.success && laporanRes.data) {
+          setLaporanAkhir(laporanRes.data);
+        } else if (laporanRes && laporanRes.data) {
+          setLaporanAkhir(laporanRes.data);
+        } else {
+          setLaporanAkhir(null);
+        }
+      } catch (err) {
+        console.error("Error fetching laporan akhir:", err);
+        failedEndpoints.push({ endpoint: '/coo/peserta/{id}/laporan-akhir', error: err.response?.status === 404 ? "Endpoint tidak ditemukan (404)" : err.message });
+        setLaporanAkhir(null);
+      }
+      
+      // Fetch Statistik - OPTIONAL, buat data dummy jika gagal
+      try {
+        const statistikRes = await getStatistikPeserta(id);
+        if (statistikRes && statistikRes.success && statistikRes.data) {
+          setStatistik(statistikRes.data);
+        } else if (statistikRes && statistikRes.data) {
+          setStatistik(statistikRes.data);
+        } else {
+          // Data statistik default jika API belum tersedia
+          setStatistik({
+            progress: 0,
+            kehadiran: 0,
+            rataNilai: 0,
+            totalTugas: 0,
+            totalKuis: 0,
+            nilaiTertinggi: 0,
+            peringkat: null,
+            totalPeserta: 0
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching statistik:", err);
+        failedEndpoints.push({ endpoint: '/coo/peserta/{id}/statistik', error: err.response?.status === 404 ? "Endpoint tidak ditemukan (404)" : err.message });
+        // Data statistik default
+        setStatistik({
+          progress: 0,
+          kehadiran: 0,
+          rataNilai: 0,
+          totalTugas: 0,
+          totalKuis: 0,
+          nilaiTertinggi: 0,
+          peringkat: null,
+          totalPeserta: 0
+        });
+      }
+      
+      // Fetch Aktivitas - OPTIONAL
+      try {
+        const aktivitasRes = await getAktivitasTerbaru(id, 10);
+        if (aktivitasRes && aktivitasRes.success && aktivitasRes.data) {
+          setAktivitas(aktivitasRes.data);
+        } else if (aktivitasRes && Array.isArray(aktivitasRes)) {
+          setAktivitas(aktivitasRes);
+        } else if (aktivitasRes && aktivitasRes.data && Array.isArray(aktivitasRes.data)) {
+          setAktivitas(aktivitasRes.data);
+        } else {
+          setAktivitas([]);
+        }
+      } catch (err) {
+        console.error("Error fetching aktivitas:", err);
+        failedEndpoints.push({ endpoint: '/coo/peserta/{id}/aktivitas', error: err.response?.status === 404 ? "Endpoint tidak ditemukan (404)" : err.message });
+        setAktivitas([]);
+      }
+      
+      setFailedApis(failedEndpoints);
       
     } catch (err) {
       console.error("Error fetching detail peserta:", err);
@@ -149,6 +291,18 @@ function DetailPeserta() {
     });
   };
 
+  // Teks untuk instruksi backend
+  const backendRouteCode = `// routes/api.php
+Route::prefix('coo')->middleware(['auth:sanctum'])->group(function () {
+    Route::get('/peserta/{id}/detail', [DetailPesertaController::class, 'getDetail']);
+    Route::get('/peserta/{id}/kehadiran', [DetailPesertaController::class, 'getKehadiran']);
+    Route::get('/peserta/{id}/progress-tugas', [DetailPesertaController::class, 'getProgressTugas']);
+    Route::get('/peserta/{id}/hasil-kuis', [DetailPesertaController::class, 'getHasilKuis']);
+    Route::get('/peserta/{id}/laporan-akhir', [DetailPesertaController::class, 'getLaporanAkhir']);
+    Route::get('/peserta/{id}/statistik', [DetailPesertaController::class, 'getStatistik']);
+    Route::get('/peserta/{id}/aktivitas', [DetailPesertaController::class, 'getAktivitas']);
+});`;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30 flex items-center justify-center">
@@ -162,19 +316,85 @@ function DetailPeserta() {
 
   if (error || !detailPeserta) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md mx-4 text-center">
-          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle size={40} className="text-red-500" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 overflow-hidden">
+          <div className="relative">
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-500 to-rose-500"></div>
+            
+            <div className="p-6 text-center">
+              <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle size={40} className="text-red-500" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-800 mb-2">Gagal Memuat Data</h2>
+              <p className="text-slate-500 mb-4">{error || "Data peserta tidak ditemukan"}</p>
+              
+              {/* Error Details Card */}
+              {errorDetails && (
+                <div className="bg-red-50 rounded-xl p-4 mb-6 text-left border border-red-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Server size={14} className="text-red-500" />
+                    <span className="text-xs font-semibold text-red-700">Error Details</span>
+                  </div>
+                  <p className="text-xs text-red-600 font-mono mb-1">Status: {errorDetails.status || 'N/A'}</p>
+                  <p className="text-xs text-red-600 font-mono break-all">Endpoint: {errorDetails.endpoint}</p>
+                  <p className="text-xs text-red-600 mt-2">{errorDetails.message}</p>
+                </div>
+              )}
+              
+              {/* Failed APIs List */}
+              {failedApis.length > 0 && (
+                <div className="bg-amber-50 rounded-xl p-4 mb-6 text-left border border-amber-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <WifiOff size={14} className="text-amber-500" />
+                    <span className="text-xs font-semibold text-amber-700">API Endpoints yang gagal ({failedApis.length})</span>
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {failedApis.map((api, idx) => (
+                      <div key={idx} className="text-xs font-mono text-amber-600 border-b border-amber-100 pb-1">
+                        <p>📡 {api.endpoint}</p>
+                        <p className="text-amber-500 text-[10px] ml-2">{api.error}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Instructions for Backend Developer */}
+              <div className="bg-slate-100 rounded-xl p-4 mb-6 text-left">
+                <div className="flex items-center gap-2 mb-2">
+                  <Database size={14} className="text-slate-500" />
+                  <span className="text-xs font-semibold text-slate-700">Untuk Backend Developer</span>
+                </div>
+                <p className="text-xs text-slate-600 mb-2">
+                  Endpoint API berikut belum tersedia di backend. Silakan tambahkan route dan controller berikut:
+                </p>
+                <div className="bg-slate-900 rounded-lg p-3 font-mono text-[10px] text-green-400 overflow-x-auto">
+                  <pre className="whitespace-pre-wrap break-all">{backendRouteCode}</pre>
+                </div>
+                <p className="text-xs text-slate-500 mt-3">
+                  ⚡ Jalankan: <code className="bg-slate-200 px-2 py-0.5 rounded">php artisan make:controller Api/DetailPesertaController</code>
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  ⚡ Kemudian: <code className="bg-slate-200 px-2 py-0.5 rounded">php artisan route:clear &amp;&amp; php artisan route:cache</code>
+                </p>
+              </div>
+              
+              <button
+                onClick={() => navigate("/coo/data-management")}
+                className="px-6 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-lg transition-all w-full"
+              >
+                Kembali ke Data Management
+              </button>
+              
+              <button
+                onClick={() => fetchAllData()}
+                className="mt-3 px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl font-semibold hover:bg-slate-50 transition-all w-full flex items-center justify-center gap-2"
+              >
+                <RefreshCw size={16} />
+                Coba Lagi
+              </button>
+            </div>
           </div>
-          <h2 className="text-xl font-bold text-slate-800 mb-2">Gagal Memuat Data</h2>
-          <p className="text-slate-500 mb-6">{error || "Data peserta tidak ditemukan"}</p>
-          <button
-            onClick={() => navigate("/coo/data-management")}
-            className="px-6 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-lg transition-all"
-          >
-            Kembali ke Data Management
-          </button>
         </div>
       </div>
     );
@@ -185,6 +405,26 @@ function DetailPeserta() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
+      
+      {/* Warning Banner if some APIs failed */}
+      {failedApis.length > 0 && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 text-center">
+          <div className="flex items-center justify-center gap-2 text-xs text-amber-700">
+            <AlertCircle size={14} />
+            <span>Beberapa data tidak dapat dimuat ({failedApis.length} endpoint gagal). Silakan hubungi backend developer untuk memperbaiki API berikut:</span>
+          </div>
+          <div className="flex flex-wrap justify-center gap-2 mt-1">
+            {failedApis.slice(0, 3).map((api, idx) => (
+              <span key={idx} className="text-[10px] font-mono bg-amber-100 px-2 py-0.5 rounded text-amber-600">
+                {api.endpoint}
+              </span>
+            ))}
+            {failedApis.length > 3 && (
+              <span className="text-[10px] text-amber-500">+{failedApis.length - 3} lainnya</span>
+            )}
+          </div>
+        </div>
+      )}
       
       {/* DECORATIVE HEADER BAR */}
       <div className="relative h-32 bg-gradient-to-r from-teal-600 via-blue-600 to-indigo-600 rounded-b-3xl shadow-xl overflow-hidden">
@@ -491,11 +731,11 @@ function DetailPeserta() {
                 </button>
               </div>
 
+              {/* TAB CONTENTS - Same as before */}
               <div className="p-6">
                 {/* TAB OVERVIEW */}
                 {activeTab === "overview" && (
                   <div className="space-y-6">
-                    {/* Ringkasan */}
                     <div>
                       <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
                         <Sparkles size={16} className="text-teal-500" />
@@ -521,7 +761,6 @@ function DetailPeserta() {
                       </div>
                     </div>
 
-                    {/* Info Tambahan */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="bg-white rounded-xl border border-slate-200 p-4">
                         <div className="flex items-center gap-2 mb-2">

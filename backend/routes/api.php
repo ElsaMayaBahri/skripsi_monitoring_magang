@@ -127,6 +127,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/mentors/{id}', [MentorController::class, 'destroy']);
 
     Route::get('/mentor-list', [MentorController::class, 'getMentorList']);
+
+    // ==================== PRESENSI ROUTES (untuk COO/Admin) ====================
+Route::prefix('presensi')->group(function () {
+    Route::get('/', [PresensiController::class, 'index']);
+    Route::get('/stats', [PresensiController::class, 'getStats']);
+    Route::get('/export', [PresensiController::class, 'export']);
+    Route::get('/{id}', [PresensiController::class, 'show']);
+});
     
     // ==================== PESERTA ROUTES (CRUD - untuk Admin/COO) ====================
     Route::get('/peserta', [PesertaController::class, 'index']);
@@ -144,6 +152,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/presensi/today', [PresensiController::class, 'getTodayPresensi']);
         Route::post('/presensi/checkin', [PresensiController::class, 'checkIn']);
         Route::post('/presensi/checkout', [PresensiController::class, 'checkOut']);
+    });
+    
+    // ==================== PRESENSI ROUTES (untuk COO/Admin) ====================
+    Route::prefix('presensi')->group(function () {
+        Route::get('/', [PresensiController::class, 'index']);
+        Route::get('/stats', [PresensiController::class, 'getStats']);
+        Route::get('/export', [PresensiController::class, 'export']);
+        Route::get('/{id}', [PresensiController::class, 'show']);
     });
     
     // ==================== JAM KERJA ROUTES ====================
