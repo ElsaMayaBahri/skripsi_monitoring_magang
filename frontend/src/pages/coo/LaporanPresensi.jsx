@@ -20,10 +20,26 @@ import {
   FileSpreadsheet,
   ChevronDown
 } from "lucide-react"
-import axiosInstance from "../../api/axios"
+import { getAllPresensi, exportPresensiReport } from "../../api/coo/presensiService"
 import * as XLSX from 'xlsx'
 import html2pdf from 'html2pdf.js'
 import logo from "../../assets/logo.png"
+import axiosInstance from "../../api/axios"
+
+// Helper function untuk menormalisasi divisi (string atau object)
+const normalizeDivisi = (divisi) => {
+  if (!divisi) return "-"
+  if (typeof divisi === "string") return divisi
+  if (typeof divisi === "object" && divisi !== null) {
+    return divisi.nama_divisi || divisi.nama || "-"
+  }
+  return "-"
+}
+
+// Helper function untuk mendapatkan status (support kedua field)
+const getStatusValue = (item) => {
+  return (item.status || item.status_kehadiran || "").toString().toLowerCase()
+}
 
 function LaporanPresensi() {
   const [presensiData, setPresensiData] = useState([])
@@ -46,7 +62,7 @@ function LaporanPresensi() {
   // Fetch divisi list
   const fetchDivisi = async () => {
     try {
-      const response = await axiosInstance.get("/divisi")
+      const response = await axiosInstance.get("/divisi/aktif")
       let divisiData = []
       if (response.data && response.data.success && response.data.data) {
         divisiData = response.data.data
@@ -56,6 +72,7 @@ function LaporanPresensi() {
       setDivisiList(divisiData)
     } catch (err) {
       console.error("Error fetching divisi:", err)
+      setDivisiList([])
     }
   }
 
@@ -110,41 +127,65 @@ function LaporanPresensi() {
     }
   }
 
-  // Fetch presensi data from backend dengan filter tanggal range
+  // Fetch presensi data from backend
   const fetchPresensi = async () => {
     setLoading(true)
     setError(null)
     try {
-      let url = "/presensi"
-      const params = new URLSearchParams()
+      const response = await getAllPresensi()
       
-      if (startDate) {
-        params.append("start_date", startDate)
-      }
-      if (endDate) {
-        params.append("end_date", endDate)
-      }
-      
-      if (params.toString()) {
-        url += `?${params.toString()}`
-      }
-      
-      const response = await axiosInstance.get(url)
+      console.log("Response dari API:", response)
       
       let presensiList = []
-      if (response.data && response.data.success && response.data.data) {
-        presensiList = response.data.data
-      } else if (response.data && Array.isArray(response.data)) {
+      if (response && response.success && response.data) {
         presensiList = response.data
+      } else if (response && Array.isArray(response)) {
+        presensiList = response
+      } else if (response && response.data && Array.isArray(response.data)) {
+        presensiList = response.data
+      }
+      
+      console.log("Presensi list:", presensiList)
+      
+      // Filter berdasarkan tanggal jika ada
+      let filteredByDate = presensiList
+      if (startDate && endDate) {
+        const start = new Date(startDate)
+        const end = new Date(endDate)
+        end.setHours(23, 59, 59)
+        
+        filteredByDate = presensiList.filter(item => {
+          const itemDate = new Date(item.tanggal || item.created_at)
+          return itemDate >= start && itemDate <= end
+        })
+      } else if (startDate) {
+        const start = new Date(startDate)
+        const end = new Date(startDate)
+        end.setHours(23, 59, 59)
+        
+        filteredByDate = presensiList.filter(item => {
+          const itemDate = new Date(item.tanggal || item.created_at)
+          return itemDate >= start && itemDate <= end
+        })
       }
       
       // Process data to calculate summary per participant
       const participantMap = new Map()
       
-      presensiList.forEach(item => {
+      filteredByDate.forEach(item => {
         const nama = item.peserta?.nama || item.nama || "-"
-        const divisi = item.peserta?.divisi || item.divisi || "-"
-        const status = item.status || ""
+        
+        // Normalisasi divisi
+        const rawDivisi = item.peserta?.divisi || item.divisi || "-"
+        let divisi = "-"
+        if (typeof rawDivisi === "string") {
+          divisi = rawDivisi
+        } else if (typeof rawDivisi === "object" && rawDivisi !== null) {
+          divisi = rawDivisi.nama_divisi || rawDivisi.nama || "-"
+        }
+        
+        // 🔥 PERBAIKAN: Gunakan status atau status_kehadiran
+        const status = (item.status || item.status_kehadiran || "").toString().toLowerCase()
         const checkIn = item.check_in
         const checkOut = item.check_out
         
@@ -166,18 +207,19 @@ function LaporanPresensi() {
         const participant = participantMap.get(nama)
         participant.daysCount++
         
-        if (status === "Hadir") {
+        // 🔥 PERBAIKAN: Gunakan status yang sudah di-lowercase
+        if (status === "hadir") {
           participant.totalHadir++
           if (checkIn) participant.totalCheckIn += parseTimeToMinutes(checkIn)
           if (checkOut) participant.totalCheckOut += parseTimeToMinutes(checkOut)
-        } else if (status === "Terlambat") {
+        } else if (status === "terlambat") {
           participant.totalTerlambat++
           participant.totalHadir++
           if (checkIn) participant.totalCheckIn += parseTimeToMinutes(checkIn)
           if (checkOut) participant.totalCheckOut += parseTimeToMinutes(checkOut)
-        } else if (status === "Izin") {
+        } else if (status === "izin") {
           participant.totalIzin++
-        } else if (status === "Tidak Hadir") {
+        } else {
           participant.totalAbsen++
         }
       })
@@ -201,7 +243,7 @@ function LaporanPresensi() {
       setPresensiData(processedData)
     } catch (err) {
       console.error("Error fetching presensi:", err)
-      setError("Gagal memuat data presensi")
+      setError(err.response?.data?.message || err.message || "Gagal memuat data presensi")
       setPresensiData([])
     } finally {
       setLoading(false)
@@ -220,7 +262,12 @@ function LaporanPresensi() {
     let filtered = [...presensiData]
     
     if (selectedDivisi !== "all") {
-      filtered = filtered.filter(p => p.divisi === selectedDivisi)
+      filtered = filtered.filter((p) => {
+        const namaDivisi = typeof p.divisi === "object" 
+          ? (p.divisi?.nama_divisi || p.divisi?.nama) 
+          : p.divisi
+        return String(namaDivisi) === String(selectedDivisi)
+      })
     }
     
     setFilteredData(filtered)
@@ -264,22 +311,28 @@ function LaporanPresensi() {
   }
 
   // Export ke Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     setIsExporting(true)
     try {
-      const exportData = filteredData.map((item, index) => ({
-        "No": index + 1,
-        "Nama Peserta": item.nama,
-        "Divisi": item.divisi,
-        "Total Hadir": item.totalHadir,
-        "Terlambat": item.totalTerlambat,
-        "Izin": item.totalIzin,
-        "Absen": item.totalAbsen,
-        "Persentase Kehadiran": `${item.persenKehadiran}%`,
-        "Rata-rata Check-In": item.rataRataCheckIn,
-        "Rata-rata Check-Out": item.rataRataCheckOut,
-        "Status": item.persenKehadiran >= 95 ? "Excellent" : item.persenKehadiran >= 80 ? "Baik" : item.persenKehadiran >= 60 ? "Cukup" : "Kurang"
-      }))
+      const exportData = filteredData.map((item, index) => {
+        const divisiName = typeof item.divisi === "object" 
+          ? (item.divisi?.nama_divisi || item.divisi?.nama || "-")
+          : (item.divisi || "-")
+        
+        return {
+          "No": index + 1,
+          "Nama Peserta": item.nama,
+          "Divisi": divisiName,
+          "Total Hadir": item.totalHadir,
+          "Terlambat": item.totalTerlambat,
+          "Izin": item.totalIzin,
+          "Absen": item.totalAbsen,
+          "Persentase Kehadiran": `${item.persenKehadiran}%`,
+          "Rata-rata Check-In": item.rataRataCheckIn,
+          "Rata-rata Check-Out": item.rataRataCheckOut,
+          "Status": item.persenKehadiran >= 95 ? "Excellent" : item.persenKehadiran >= 80 ? "Baik" : item.persenKehadiran >= 60 ? "Cukup" : "Kurang"
+        }
+      })
 
       const ws = XLSX.utils.json_to_sheet(exportData)
       const wb = XLSX.utils.book_new()
@@ -297,11 +350,19 @@ function LaporanPresensi() {
     }
   }
 
-  // Export ke PDF langsung download dengan logo
+  // Export ke PDF
   const handleExportPDF = () => {
     setIsExporting(true)
     
     try {
+      const pdfStats = {
+        total: filteredData.length,
+        totalHadir: filteredData.reduce((acc, p) => acc + p.totalHadir, 0),
+        rataKehadiran: filteredData.length > 0 
+          ? Math.round(filteredData.reduce((acc, p) => acc + p.persenKehadiran, 0) / filteredData.length)
+          : 0
+      }
+      
       const today = new Date().toLocaleDateString('id-ID', {
         day: 'numeric',
         month: 'long',
@@ -311,7 +372,6 @@ function LaporanPresensi() {
       const startDateFormatted = startDate ? formatDatePDF(startDate) : "Semua"
       const endDateFormatted = endDate ? formatDatePDF(endDate) : "Semua"
       
-      // Buat elemen div untuk di-convert ke PDF
       const element = document.createElement('div')
       element.style.padding = '30px'
       element.style.fontFamily = "'Times New Roman', Arial, sans-serif"
@@ -341,35 +401,39 @@ function LaporanPresensi() {
         
         <div style="display: flex; gap: 15px; margin-bottom: 25px; padding: 15px; background: #f8fafc; border-radius: 8px;">
           <div style="flex: 1; text-align: center;">
-            <div style="font-size: 22px; font-weight: bold; color: #2563eb;">${stats.total}</div>
+            <div style="font-size: 22px; font-weight: bold; color: #2563eb;">${pdfStats.total}</div>
             <div style="font-size: 10px; color: #64748b;">Total Peserta</div>
           </div>
           <div style="flex: 1; text-align: center;">
-            <div style="font-size: 22px; font-weight: bold; color: #16a34a;">${stats.totalHadir}</div>
+            <div style="font-size: 22px; font-weight: bold; color: #16a34a;">${pdfStats.totalHadir}</div>
             <div style="font-size: 10px; color: #64748b;">Total Kehadiran</div>
           </div>
           <div style="flex: 1; text-align: center;">
-            <div style="font-size: 22px; font-weight: bold; color: #7c3aed;">${stats.rataKehadiran}%</div>
+            <div style="font-size: 22px; font-weight: bold; color: #7c3aed;">${pdfStats.rataKehadiran}%</div>
             <div style="font-size: 10px; color: #64748b;">Rata-rata Kehadiran</div>
           </div>
         </div>
         
         <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
           <thead>
-            <tr>
-              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">No</th>
-              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: left;">Nama Peserta</th>
-              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: left;">Divisi</th>
-              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Hadir</th>
-              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Terlambat</th>
-              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Izin</th>
-              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Absen</th>
-              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Kehadiran</th>
-              <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Status</th>
+            <tr style="background-color: #1e3a5f;">
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">No</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: left;">Nama Peserta</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: left;">Divisi</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Hadir</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Terlambat</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Izin</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Absen</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Kehadiran</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Status</th>
             </tr>
           </thead>
           <tbody>
             ${filteredData.map((item, index) => {
+              const divisiName = typeof item.divisi === "object" 
+                ? (item.divisi?.nama_divisi || item.divisi?.nama || "-")
+                : (item.divisi || "-")
+              
               let statusText = ''
               if (item.persenKehadiran >= 95) {
                 statusText = 'Excellent'
@@ -381,18 +445,19 @@ function LaporanPresensi() {
                 statusText = 'Kurang'
               }
               return `
-              <tr style="border-bottom: 1px solid #e2e8f0;">
-                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 8px;">${item.nama}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 8px;">${item.divisi}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.totalHadir}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.totalTerlambat}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.totalIzin}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.totalAbsen}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.persenKehadiran}%</td>
-                <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${statusText}</td>
-              </tr>
-            `}).join('')}
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                  <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${index + 1}</td>
+                  <td style="border: 1px solid #cbd5e1; padding: 8px;">${item.nama?.replace(/[<>]/g, '') || '-'}</td>
+                  <td style="border: 1px solid #cbd5e1; padding: 8px;">${divisiName.replace(/[<>]/g, '')}</td>
+                  <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.totalHadir}</td>
+                  <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.totalTerlambat}</td>
+                  <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.totalIzin}</td>
+                  <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.totalAbsen}</td>
+                  <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.persenKehadiran}%</td>
+                  <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${statusText}</td>
+                </tr>
+              `
+            }).join('')}
             ${filteredData.length === 0 ? `
               <tr>
                 <td colspan="9" style="border: 1px solid #cbd5e1; padding: 40px; text-align: center; color: #94a3b8;">Tidak ada data laporan</td>
@@ -454,6 +519,16 @@ function LaporanPresensi() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   )
+
+  // Helper untuk mendapatkan nama divisi yang sudah dinormalisasi
+  const getDivisiName = (divisi) => {
+    if (!divisi) return "-"
+    if (typeof divisi === "string") return divisi
+    if (typeof divisi === "object" && divisi !== null) {
+      return divisi.nama_divisi || divisi.nama || "-"
+    }
+    return "-"
+  }
 
   const getKehadiranBadge = (persen) => {
     if (persen >= 95) return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-medium"><Award size={10} /> Excellent</span>
@@ -518,7 +593,7 @@ function LaporanPresensi() {
           </div>
         )}
 
-        {/* ===== HEADER ===== */}
+        {/* HEADER */}
         <div className="mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
@@ -576,7 +651,7 @@ function LaporanPresensi() {
           </div>
         </div>
 
-        {/* ===== STATS CARDS (3 cards) ===== */}
+        {/* STATS CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="flex items-center justify-between mb-2">
@@ -612,7 +687,7 @@ function LaporanPresensi() {
           </div>
         </div>
 
-        {/* ===== FILTERS - Tanggal Range dan Divisi ===== */}
+        {/* FILTERS */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="w-full md:w-56">
@@ -661,7 +736,7 @@ function LaporanPresensi() {
           </div>
         </div>
 
-        {/* ===== ERROR MESSAGE ===== */}
+        {/* ERROR MESSAGE */}
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
             <AlertCircle size={16} className="text-red-500" />
@@ -670,7 +745,7 @@ function LaporanPresensi() {
           </div>
         )}
 
-        {/* ===== TABLE ===== */}
+        {/* TABLE */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -704,14 +779,14 @@ function LaporanPresensi() {
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm">
-                            {item.nama.charAt(0)}
+                            {item.nama?.charAt(0) || "?"}
                           </div>
                           <span className="font-medium text-slate-800 text-sm">{item.nama}</span>
                         </div>
                       </td>
                       <td className="px-5 py-3">
                         <span className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-full font-medium">
-                          {item.divisi}
+                          {getDivisiName(item.divisi)}
                         </span>
                       </td>
                       <td className="px-5 py-3 text-center text-sm font-semibold text-emerald-600">
@@ -788,7 +863,7 @@ function LaporanPresensi() {
           )}
         </div>
 
-        {/* ===== INFO BANNER ===== */}
+        {/* INFO BANNER */}
         <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100">
           <div className="flex items-center gap-2">
             <BarChart3 size={14} className="text-blue-500" />

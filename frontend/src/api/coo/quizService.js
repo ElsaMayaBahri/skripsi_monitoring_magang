@@ -85,3 +85,27 @@ export const downloadQuizTemplate = async () => {
 
 // Alias untuk getAllQuiz (kompatibilitas dengan Quiz.jsx)
 export const getAllQuiz = getQuiz;
+
+// Di quizService.js - jika pakai dummy mode, tambahkan level di dummy data
+const dummyQuizList = [
+  {
+    id: 1,
+    judul_kuis: "Pengenalan Budaya Perusahaan",
+    divisi: "Semua Divisi",
+    durasi: 30,
+    total_soal: 20,
+    status: "aktif",
+    level: 1,  // <-- TAMBAHKAN
+    // ...
+  },
+  {
+    id: 2,
+    judul_kuis: "Kompetensi IT Dasar",
+    divisi: "IT",
+    durasi: 45,
+    total_soal: 30,
+    status: "aktif",
+    level: 2,  // <-- TAMBAHKAN
+    // ...
+  },
+];

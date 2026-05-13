@@ -42,7 +42,11 @@ Route::get('/sanctum/csrf-cookie', function () {
 
 Route::post('/login', [AuthController::class, 'login']);
 
+// Endpoint untuk mendapatkan daftar divisi (bisa diakses publik)
 Route::get('/divisi-list', [MentorController::class, 'getDivisiList']);
+
+// Endpoint untuk mendapatkan divisi aktif saja (untuk dropdown form)
+Route::get('/divisi/aktif', [DivisiController::class, 'getActiveDivisi']);
 
 /*
 |--------------------------------------------------------------------------
@@ -129,12 +133,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/mentor-list', [MentorController::class, 'getMentorList']);
 
     // ==================== PRESENSI ROUTES (untuk COO/Admin) ====================
-Route::prefix('presensi')->group(function () {
-    Route::get('/', [PresensiController::class, 'index']);
-    Route::get('/stats', [PresensiController::class, 'getStats']);
-    Route::get('/export', [PresensiController::class, 'export']);
-    Route::get('/{id}', [PresensiController::class, 'show']);
-});
+    Route::prefix('presensi')->group(function () {
+        Route::get('/', [PresensiController::class, 'index']);
+        Route::get('/stats', [PresensiController::class, 'getStats']);
+        Route::get('/export', [PresensiController::class, 'export']);
+        Route::get('/{id}', [PresensiController::class, 'show']);
+    });
     
     // ==================== PESERTA ROUTES (CRUD - untuk Admin/COO) ====================
     Route::get('/peserta', [PesertaController::class, 'index']);
@@ -152,14 +156,6 @@ Route::prefix('presensi')->group(function () {
         Route::get('/presensi/today', [PresensiController::class, 'getTodayPresensi']);
         Route::post('/presensi/checkin', [PresensiController::class, 'checkIn']);
         Route::post('/presensi/checkout', [PresensiController::class, 'checkOut']);
-    });
-    
-    // ==================== PRESENSI ROUTES (untuk COO/Admin) ====================
-    Route::prefix('presensi')->group(function () {
-        Route::get('/', [PresensiController::class, 'index']);
-        Route::get('/stats', [PresensiController::class, 'getStats']);
-        Route::get('/export', [PresensiController::class, 'export']);
-        Route::get('/{id}', [PresensiController::class, 'show']);
     });
     
     // ==================== JAM KERJA ROUTES ====================
@@ -234,9 +230,16 @@ Route::prefix('presensi')->group(function () {
         Route::get('/export', [NilaiController::class, 'export']);
     });
     
+    // ==================== ACTIVITY LOGS ROUTES ====================
+    Route::prefix('activity-logs')->group(function () {
+        Route::get('/', [ActivityLogController::class, 'index']);
+        Route::post('/', [ActivityLogController::class, 'store']);
+    });
+    
     // ==================== QUIZ ROUTES ====================
     Route::prefix('quiz')->group(function () {
         Route::get('/', [QuizController::class, 'index']);
+        Route::get('/results/all', [QuizController::class, 'getAllResults']);
         Route::post('/', [QuizController::class, 'store']);
         Route::get('/{id}', [QuizController::class, 'show']);
         Route::put('/{id}', [QuizController::class, 'update']);

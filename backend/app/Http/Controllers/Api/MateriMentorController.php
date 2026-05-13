@@ -312,12 +312,13 @@ class MateriMentorController extends Controller
                 $path = $file->storeAs($folder, $filename, 'public');
                 $data['file_materi'] = $path;
                 $data['link'] = null;
-            } else {
-                $data['file_materi'] = $materi->file_materi;
             }
 
             if ($request->tipe_materi === 'link') {
                 $data['link'] = $request->link;
+                if ($materi->file_materi && Storage::disk('public')->exists($materi->file_materi)) {
+                    Storage::disk('public')->delete($materi->file_materi);
+                }
                 $data['file_materi'] = null;
             }
 
@@ -331,6 +332,7 @@ class MateriMentorController extends Controller
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Validasi gagal',
@@ -401,7 +403,7 @@ class MateriMentorController extends Controller
     }
 
     /**
-     * Get divisi list for dropdown
+     * Get divisi list for dropdown (HANYA DIVISI AKTIF)
      * GET /api/mentor/materi/divisi-list
      */
     public function getDivisiList()
@@ -416,13 +418,83 @@ class MateriMentorController extends Controller
                 ], 403);
             }
 
-            $divisilist = Divisi::where('status', 'aktif')
-                ->orWhere('status_akun', 'aktif')
-                ->get(['id_divisi', 'nama_divisi']);
+            // Hanya ambil divisi dengan status 'aktif'
+            $divisiList = Divisi::where(function($query) {
+                    $query->where('status', 'aktif')
+                          ->orWhere('status_akun', 'aktif');
+                })
+                ->select('id_divisi', 'nama_divisi', 'status')
+                ->orderBy('nama_divisi', 'asc')
+                ->get();
 
             return response()->json([
                 'success' => true,
-                'data' => $divisilist
+                'data' => $divisiList,
+                'total' => $divisiList->count()
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get all materi for COO/Peserta (tanpa filter mentor)
+     * GET /api/materi-pelatihan
+     */
+    public function getAllMateriPelatihan(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            
+            // Query materi dengan divisi yang aktif saja
+            $query = MateriMentor::with(['divisi'])
+                ->whereHas('divisi', function($q) {
+                    $q->where('status', 'aktif')
+                      ->orWhere('status_akun', 'aktif');
+                });
+
+            // Filter berdasarkan divisi (hanya divisi aktif)
+            if ($request->has('id_divisi') && !empty($request->id_divisi)) {
+                $query->where('id_divisi', $request->id_divisi);
+            }
+
+            // Filter berdasarkan tipe materi
+            if ($request->has('tipe_materi') && !empty($request->tipe_materi)) {
+                $query->where('tipe_materi', $request->tipe_materi);
+            }
+
+            // Search berdasarkan judul
+            if ($request->has('search') && !empty($request->search)) {
+                $query->where('judul', 'like', '%' . $request->search . '%');
+            }
+
+            $materi = $query->orderBy('created_at', 'desc')->get();
+
+            $transformedMateri = $materi->map(function ($item) {
+                return [
+                    'id_materi_pelatihan' => $item->id_materi,
+                    'judul' => $item->judul,
+                    'deskripsi' => $item->deskripsi,
+                    'tipe_materi' => $item->tipe_materi ?? 'dokumen',
+                    'file_materi' => $item->file_materi,
+                    'file_url' => $item->file_materi ? Storage::url($item->file_materi) : null,
+                    'link' => $item->link,
+                    'id_divisi' => $item->id_divisi,
+                    'divisi' => $item->divisi ? $item->divisi->nama_divisi : null,
+                    'views' => $item->views ?? 0,
+                    'created_at' => $item->created_at,
+                    'updated_at' => $item->updated_at,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $transformedMateri,
+                'total' => $materi->count()
             ]);
 
         } catch (\Exception $e) {

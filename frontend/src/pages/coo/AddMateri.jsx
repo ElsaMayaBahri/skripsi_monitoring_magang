@@ -102,11 +102,11 @@ function AddMateri() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.kategori]);
 
-  // Fungsi fetch divisi menggunakan axiosInstance
+  // Fungsi fetch divisi - HANYA AMBIL DIVISI AKTIF
   const fetchDivisi = async () => {
     setLoadingDivisi(true);
     try {
-      const response = await axiosInstance.get("/divisi");
+      const response = await axiosInstance.get("/divisi/aktif");
       
       let divisiData = [];
       if (response.data && response.data.success && response.data.data) {
@@ -294,8 +294,8 @@ function AddMateri() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-[1400px] mx-auto">
 
-        {/* HEADER */}
-        <div className="mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        {/* HEADER - Tanpa tombol Kembali */}
+        <div className="mb-8">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-xl shadow-md">
               <Sparkles className="w-4 h-4 text-white" />
@@ -310,14 +310,6 @@ function AddMateri() {
               </p>
             </div>
           </div>
-          {/* Tombol Kembali Premium */}
-          <button
-            onClick={() => navigate("/coo/materi")}
-            className="group flex items-center gap-2 px-5 py-2.5 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl text-slate-600 text-sm font-medium hover:bg-white hover:border-slate-300 hover:shadow-md transition-all duration-200"
-          >
-            <ArrowLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
-            <span>Kembali</span>
-          </button>
         </div>
 
         {/* ERROR ALERT */}
@@ -408,6 +400,12 @@ function AddMateri() {
                           </div>
                         )}
                       </div>
+                      {!loadingDivisi && divisiList.length === 0 && (
+                        <p className="mt-1.5 text-[10px] text-amber-600 flex items-center gap-1">
+                          <AlertCircle size={10} />
+                          <span>Tidak ada divisi aktif. Periksa kembali data divisi.</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>

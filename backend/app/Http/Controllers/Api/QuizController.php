@@ -59,7 +59,7 @@ class QuizController extends Controller
     }
     
     /**
-     * Get all quiz results for dashboard
+     * Get all quiz results for dashboard - FIXED with correct column names
      */
     public function getAllResults()
     {
@@ -68,35 +68,152 @@ class QuizController extends Controller
             if (!Schema::hasTable('jawaban_kuis')) {
                 return response()->json([
                     'success' => true,
+                    'data' => [],
+                    'message' => 'Tabel jawaban_kuis belum ada'
+                ]);
+            }
+            
+            // Cek apakah ada data di jawaban_kuis
+            $checkData = DB::table('jawaban_kuis')->count();
+            Log::info('Jumlah data jawaban_kuis: ' . $checkData);
+            
+            if ($checkData == 0) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'message' => 'Belum ada data jawaban kuis'
+                ]);
+            }
+            
+            // FIXED: Gunakan 'id' bukan 'id_user', dan 'name' bukan 'nama'
+            $results = DB::table('jawaban_kuis as jk')
+                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id')  // FIX: u.id (bukan id_user)
+                ->leftJoin('kuis as k', 'jk.id_kuis', '=', 'k.id_kuis')
+                ->select(
+                    'jk.id_jawaban',
+                    'jk.id_user',
+                    'u.name as user_name',  // FIX: u.name (bukan u.nama)
+                    'u.divisi as user_divisi',
+                    'jk.id_kuis',
+                    'k.judul_kuis as quiz_title',
+                    'k.divisi as quiz_divisi',
+                    'jk.skor',
+                    'jk.jawaban',
+                    'jk.created_at'
+                )
+                ->orderBy('jk.created_at', 'desc')
+                ->get();
+            
+            Log::info('Hasil query jawaban_kuis: ' . $results->count() . ' records');
+            
+            // Jika ada data, format hasilnya
+            if ($results->isNotEmpty()) {
+                // Kelompokkan berdasarkan user dan quiz untuk menghitung rata-rata
+                $groupedResults = [];
+                
+                foreach ($results as $item) {
+                    $key = $item->id_user . '_' . $item->id_kuis;
+                    
+                    if (!isset($groupedResults[$key])) {
+                        $groupedResults[$key] = [
+                            'user_id' => $item->id_user,
+                            'user_name' => $item->user_name ?? 'Pengguna',
+                            'quiz_id' => $item->id_kuis,
+                            'quiz_title' => $item->quiz_title ?? 'Kuis',
+                            'divisi' => $item->user_divisi ?? $item->quiz_divisi ?? 'Umum',
+                            'total_score' => 0,
+                            'count' => 0,
+                            'answers' => []
+                        ];
+                    }
+                    
+                    $groupedResults[$key]['total_score'] += $item->skor;
+                    $groupedResults[$key]['count']++;
+                    $groupedResults[$key]['answers'][] = [
+                        'jawaban' => $item->jawaban,
+                        'skor' => $item->skor
+                    ];
+                }
+                
+                // Format hasil akhir
+                $formattedResults = [];
+                foreach ($groupedResults as $group) {
+                    $formattedResults[] = [
+                        'user_id' => $group['user_id'],
+                        'user_name' => $group['user_name'],
+                        'quiz_id' => $group['quiz_id'],
+                        'quiz_title' => $group['quiz_title'],
+                        'divisi' => $group['divisi'],
+                        'score' => $group['count'] > 0 ? round($group['total_score'] / $group['count'], 2) : 0,
+                        'total_answers' => $group['count'],
+                        'created_at' => now()
+                    ];
+                }
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => $formattedResults,
+                    'total' => count($formattedResults),
+                    'raw_count' => $results->count()
+                ]);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'data' => [],
+                'message' => 'Tidak ada data jawaban kuis ditemukan'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error getAllResults: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            
+            return response()->json([
+                'success' => true,
+                'data' => [],
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
+        }
+    }
+    
+    /**
+     * Get quiz results by quiz ID
+     */
+    public function getResultsByQuiz($quizId)
+    {
+        try {
+            if (!Schema::hasTable('jawaban_kuis')) {
+                return response()->json([
+                    'success' => true,
                     'data' => []
                 ]);
             }
             
-            $results = JawabanKuis::with(['user', 'quiz'])
-                ->select('user_id', 'quiz_id', DB::raw('AVG(score) as score'))
-                ->groupBy('user_id', 'quiz_id')
-                ->get()
-                ->map(function($item) {
-                    return [
-                        'user_id' => $item->user_id,
-                        'quiz_id' => $item->quiz_id,
-                        'score' => round($item->score, 2),
-                        'divisi' => $item->user->divisi ?? $item->quiz->divisi ?? 'Umum',
-                        'user_name' => $item->user->nama ?? 'Pengguna',
-                        'quiz_title' => $item->quiz->judul_kuis ?? 'Kuis'
-                    ];
-                });
+            // FIX: Gunakan 'id' bukan 'id_user', dan 'name' bukan 'nama'
+            $results = DB::table('jawaban_kuis as jk')
+                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id')  // FIX: u.id
+                ->select(
+                    'jk.id_user',
+                    'u.name as user_name',  // FIX: u.name
+                    'u.divisi',
+                    'jk.skor as score',
+                    'jk.created_at'
+                )
+                ->where('jk.id_kuis', $quizId)
+                ->orderBy('jk.skor', 'desc')
+                ->get();
             
             return response()->json([
                 'success' => true,
                 'data' => $results
             ]);
+            
         } catch (\Exception $e) {
-            Log::error('Error getAllResults: ' . $e->getMessage());
+            Log::error('Error getResultsByQuiz: ' . $e->getMessage());
             return response()->json([
-                'success' => true,
-                'data' => []
-            ]);
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
     
@@ -132,7 +249,7 @@ class QuizController extends Controller
                 'divisi' => $request->divisi,
                 'durasi' => $request->durasi ?? 30,
                 'passing' => $request->passing ?? 75,
-                'status' => 'aktif', // Default status aktif
+                'status' => 'aktif',
                 'total_soal' => count($request->questions ?? []),
                 'questions' => $request->questions,
                 'peserta' => 0,
@@ -206,7 +323,7 @@ class QuizController extends Controller
                 'divisi' => 'nullable|string|max:100',
                 'durasi' => 'nullable|integer|min:1|max:180',
                 'passing' => 'nullable|integer|min:0|max:100',
-                'status' => 'sometimes|in:aktif,nonaktif', // 🔥 TAMBAHKAN VALIDASI STATUS
+                'status' => 'sometimes|in:aktif,nonaktif',
                 'questions' => 'nullable|array',
                 'tanggal_mulai' => 'nullable|date',
                 'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
@@ -227,7 +344,7 @@ class QuizController extends Controller
             if ($request->has('divisi')) $quiz->divisi = $request->divisi;
             if ($request->has('durasi')) $quiz->durasi = $request->durasi;
             if ($request->has('passing')) $quiz->passing = $request->passing;
-            if ($request->has('status')) $quiz->status = $request->status; // 🔥 UPDATE STATUS
+            if ($request->has('status')) $quiz->status = $request->status;
             if ($request->has('questions')) {
                 $quiz->questions = $request->questions;
                 $quiz->total_soal = count($request->questions);
@@ -326,7 +443,6 @@ class QuizController extends Controller
             $file = $request->file('file');
             $extension = $file->getClientOriginalExtension();
             
-            // Untuk file Excel, perlu library tambahan, sementara kita support CSV dulu
             if (in_array($extension, ['xlsx', 'xls'])) {
                 return response()->json([
                     'success' => false,
@@ -336,18 +452,15 @@ class QuizController extends Controller
             
             $content = file_get_contents($file->getPathname());
             
-            // Deteksi encoding dan convert ke UTF-8
             $encoding = mb_detect_encoding($content, ['UTF-8', 'ISO-8859-1', 'Windows-1252'], true);
             if ($encoding !== 'UTF-8') {
                 $content = mb_convert_encoding($content, 'UTF-8', $encoding);
             }
             
-            // Remove BOM if exists
             if (substr($content, 0, 3) === "\xEF\xBB\xBF") {
                 $content = substr($content, 3);
             }
             
-            // Parse CSV
             $lines = explode("\n", trim($content));
             if (count($lines) < 2) {
                 return response()->json([
@@ -356,7 +469,6 @@ class QuizController extends Controller
                 ], 400);
             }
             
-            // Ambil header dari baris pertama
             $headers = str_getcsv(array_shift($lines));
             $headers = array_map(function($header) {
                 return strtolower(trim(str_replace(' ', '_', $header)));
@@ -397,12 +509,10 @@ class QuizController extends Controller
                         continue;
                     }
                     
-                    // Parse questions dari JSON
                     $questions = null;
                     if (!empty($data['questions'])) {
                         $questions = json_decode($data['questions'], true);
                         if (json_last_error() !== JSON_ERROR_NONE) {
-                            // Coba format pipe: text|opt0|opt1|opt2|opt3|correct
                             $parts = explode('|', $data['questions']);
                             if (count($parts) >= 6) {
                                 $questions = [[
@@ -418,7 +528,6 @@ class QuizController extends Controller
                         }
                     }
                     
-                    // Cek apakah kuis dengan judul yang sama sudah ada
                     $existingQuiz = Kuis::where('judul_kuis', $judul)->first();
                     if ($existingQuiz) {
                         $failed++;
@@ -432,7 +541,7 @@ class QuizController extends Controller
                         'divisi' => $data['divisi'] ?? null,
                         'durasi' => intval($data['durasi'] ?? 30),
                         'passing' => intval($data['passing'] ?? 75),
-                        'status' => 'aktif', // Default status aktif untuk import
+                        'status' => 'aktif',
                         'total_soal' => $questions ? count($questions) : 0,
                         'questions' => $questions,
                         'peserta' => 0,
@@ -497,16 +606,12 @@ class QuizController extends Controller
             $callback = function() use ($headers, $exampleData) {
                 $handle = fopen('php://output', 'w');
                 
-                // Add BOM for UTF-8 to fix Excel encoding
                 fputs($handle, "\xEF\xBB\xBF");
                 
-                // Write headers
                 fputcsv($handle, $headers);
                 
-                // Write example data
                 fputcsv($handle, $exampleData);
                 
-                // Add second example for multiple questions
                 $multipleQuestions = json_encode([
                     [
                         'text' => 'Apa kepanjangan dari HTML?',

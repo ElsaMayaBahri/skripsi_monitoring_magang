@@ -5,7 +5,6 @@ import axiosInstance from "../axios"
 export const getAllPeserta = async () => {
   try {
     const response = await axiosInstance.get("/peserta")
-    // Handle response dari backend
     if (response.data && response.data.success === true) {
       return response.data.data || []
     }
@@ -70,7 +69,7 @@ export const getAllUsers = async () => {
         name: p.user?.nama || p.nama || "Peserta",
         email: p.user?.email || p.email,
         role: "peserta",
-        divisi: p.divisi?.nama_divisi || p.nama_divisi || "-",
+        divisi: p.divisi?.nama_divisi || p.nama_divisi || p.divisi || "-",
         status: p.user?.status_akun === "aktif" || p.status_akun === "aktif",
         created_at: p.created_at
       })),
@@ -79,7 +78,7 @@ export const getAllUsers = async () => {
         name: m.user?.nama || m.nama || m.name || "Mentor",
         email: m.user?.email || m.email,
         role: "mentor",
-        divisi: m.divisi?.nama_divisi || m.nama_divisi || "-",
+        divisi: m.divisi?.nama_divisi || m.nama_divisi || m.divisi || "-",
         status: m.user?.status_akun === "aktif" || m.status_akun === "aktif",
         created_at: m.created_at
       }))
@@ -92,72 +91,101 @@ export const getAllUsers = async () => {
   }
 }
 
-// Statistik kehadiran
+// Statistik kehadiran - dari PresensiController
 export const getAttendanceStatistics = async () => {
   try {
     const response = await axiosInstance.get("/presensi/stats")
+    console.log("Attendance stats response:", response.data)
+    
     if (response.data && response.data.success === true) {
+      const data = response.data.data
       return {
         success: true,
-        data: response.data.data
+        data: {
+          hadir: data.hadir || data.total_hadir || 0,
+          terlambat: data.terlambat || data.total_terlambat || 0,
+          absen: data.absen || data.total_absen || 0,
+          persentase: data.persenKehadiran || data.persentase || 0
+        }
+      }
+    }
+    
+    return {
+      success: true,
+      data: {
+        hadir: 0,
+        terlambat: 0,
+        absen: 0,
+        persentase: 0
       }
     }
   } catch (error) {
-    console.warn("Endpoint presensi stats belum ada, pakai data dummy")
-  }
-  
-  // Data dummy sementara
-  return {
-    success: true,
-    data: {
-      hadir: 75,
-      terlambat: 15,
-      absen: 10,
-      persentase: 75
+    console.error("Error get attendance statistics:", error)
+    return {
+      success: true,
+      data: {
+        hadir: 0,
+        terlambat: 0,
+        absen: 0,
+        persentase: 0
+      }
     }
   }
 }
 
-// Log aktivitas terbaru
+// Log aktivitas terbaru - dari ActivityLogController
 export const getRecentActivityLogs = async (limit = 10) => {
   try {
     const response = await axiosInstance.get(`/activity-logs?limit=${limit}`)
+    console.log("Activity logs response:", response.data)
+    
     if (response.data && response.data.success === true) {
       return {
         success: true,
         data: response.data.data
       }
     }
+    
+    return {
+      success: true,
+      data: []
+    }
   } catch (error) {
-    console.warn("Endpoint activity logs belum ada, pakai data dummy")
-  }
-  
-  // Data dummy sementara
-  return {
-    success: true,
-    data: [
-      { user: "Sistem", action: "Dashboard siap digunakan", time: "Baru saja", type: "info", detail: "Selamat datang di dashboard monitoring" }
-    ]
+    console.error("Error get activity logs:", error)
+    return {
+      success: true,
+      data: []
+    }
   }
 }
 
-// Hasil kuis semua divisi
+// Hasil kuis semua divisi - FIXED: ambil data dari response.data.data
 export const getAllQuizResults = async () => {
   try {
     const response = await axiosInstance.get("/quiz/results/all")
+    console.log("Quiz results response:", response.data)
+    
+    // FIX: Response API berbentuk { success: true, data: [...] }
     if (response.data && response.data.success === true) {
+      // Ambil data dari response.data.data (bukan response.data langsung)
+      const resultsData = response.data.data || []
+      console.log("Quiz results data array length:", resultsData.length)
+      
       return {
         success: true,
-        data: response.data.data
+        data: resultsData  // Kirim array data
       }
     }
+    
+    return {
+      success: true,
+      data: []
+    }
   } catch (error) {
-    console.warn("Endpoint quiz results belum ada, pakai data dummy")
-  }
-  
-  // Data dummy sementara
-  return {
-    success: true,
-    data: []
+    console.error("Error get quiz results:", error)
+    return {
+      success: true,
+      data: []
+    }
   }
 }

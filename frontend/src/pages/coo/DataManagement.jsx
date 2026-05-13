@@ -359,13 +359,17 @@ function DataManagement() {
 
   // Handle detail peserta - navigasi ke halaman detail peserta
   const handleDetailPeserta = (pesertaId) => {
-    // Navigasi ke halaman detail peserta dengan ID yang benar
     navigate(`/coo/peserta/${pesertaId}/detail`);
   };
 
-  // Handle detail mentor
+  // Handle detail mentor - navigasi ke halaman detail mentor
   const handleDetailMentor = (mentorId) => {
     navigate(`/coo/mentor/${mentorId}/detail`);
+  };
+
+  // Handle detail divisi
+  const handleDetailDivisi = (divisiId) => {
+    navigate(`/coo/divisi/${divisiId}/detail`);
   };
 
   // Get statistik untuk setiap tab
@@ -708,7 +712,7 @@ function DataManagement() {
               <tbody>
                 {paginatedData.length === 0 ? (
                   <tr>
-                    <td colSpan={activeTab === "peserta" ? 7 : activeTab === "mentor" ? 6 : 7} className="px-5 py-12 text-center">
+                    <td colSpan={activeTab === "peserta" ? 8 : activeTab === "mentor" ? 7 : 8} className="px-5 py-12 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl flex items-center justify-center">
                           <UsersIcon size="28" className="text-slate-400" />
@@ -743,7 +747,7 @@ function DataManagement() {
                           ) : (
                             <span className="text-slate-400 text-sm">-</span>
                           )}
-                        </td>
+                         </td>
                       )}
                       
                       {activeTab === "peserta" && (
@@ -756,7 +760,7 @@ function DataManagement() {
                           ) : (
                             <span className="text-slate-400 text-sm">-</span>
                           )}
-                        </td>
+                         </td>
                       )}
                       
                       {activeTab === "mentor" && (
@@ -765,7 +769,7 @@ function DataManagement() {
                             <UsersIcon size={10} />
                             {item.jumlahBimbingan} Peserta
                           </span>
-                        </td>
+                         </td>
                       )}
                       
                       {activeTab === "divisi" && (
@@ -791,7 +795,7 @@ function DataManagement() {
                           ) : (
                             <span className="text-slate-400 text-sm">-</span>
                           )}
-                        </td>
+                         </td>
                       )}
                       
                       <td className="px-5 py-3">
@@ -817,7 +821,7 @@ function DataManagement() {
                               } else if (activeTab === "mentor") {
                                 handleDetailMentor(item.id);
                               } else {
-                                navigate(`/coo/divisi/${item.id}/detail`);
+                                handleDetailDivisi(item.id);
                               }
                             }}
                             className="p-1.5 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition"
@@ -887,7 +891,7 @@ function DataManagement() {
           <div className="flex items-center gap-2">
             <Shield size={14} className="text-teal-500" />
             <p className="text-xs text-teal-700">
-              <strong className="font-semibold">Informasi:</strong> Klik icon <Eye size={12} className="inline" /> pada kolom aksi untuk melihat detail lengkap peserta, termasuk kehadiran, progress tugas, dan hasil kuis.
+              <strong className="font-semibold">Informasi:</strong> Klik icon <Eye size={12} className="inline" /> pada kolom aksi untuk melihat detail lengkap peserta, mentor, atau divisi.
             </p>
           </div>
         </div>

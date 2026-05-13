@@ -86,7 +86,8 @@ function CooLayout() {
   const isActive = (path) => {
     if (path === "/coo/dashboard") return location.pathname === "/coo/dashboard"
     if (path === "/coo/materi") return location.pathname.includes("/coo/materi")
-    if (path === "/coo/quiz") return location.pathname.includes("/coo/quiz")
+    if (path === "/coo/quiz") return location.pathname === "/coo/quiz" || location.pathname === "/coo/add-quiz" || location.pathname.includes("/coo/edit-quiz")
+    if (path === "/coo/daftar-hasil-kuis") return location.pathname === "/coo/daftar-hasil-kuis"
     if (path === "/coo/presensi") return location.pathname === "/coo/presensi"
     if (path === "/coo/laporan-presensi") return location.pathname === "/coo/laporan-presensi"
     if (path === "/coo/settings-attendance") return location.pathname === "/coo/settings-attendance"
@@ -96,25 +97,49 @@ function CooLayout() {
     return location.pathname.includes(path)
   }
 
+  // ✅ PERBAIKI: Fungsi untuk mendapatkan judul halaman tanpa ID
   const getPageTitle = () => {
-    const path = location.pathname.replace("/coo/", "")
-    const titles = {
-      "dashboard": "Dashboard",
-      "data-management": "Manajemen Data",
-      "materi": "Materi Kompetensi",
-      "add-materi": "Tambah Materi",
-      "edit-materi": "Edit Materi",
-      "quiz": "Kuis",
-      "add-quiz": "Buat Kuis Baru",
-      "quiz-detail": "Detail Kuis",
-      "add-question": "Tambah Pertanyaan",
-      "presensi": "Data Presensi Peserta",
-      "laporan-presensi": "Laporan Rekap Presensi",
-      "settings-attendance": "Pengaturan Hari Libur & Jam Kerja",
-      "profile": "Profil Saya",
-      "settings": "Pengaturan Akun"
+    const pathname = location.pathname
+    
+    // Dashboard
+    if (pathname === "/coo/dashboard") return "Dashboard"
+    
+    // Manajemen Data
+    if (pathname === "/coo/data-management") return "Manajemen Data"
+    
+    // Materi
+    if (pathname === "/coo/materi") return "Materi Kompetensi"
+    if (pathname === "/coo/add-materi") return "Tambah Materi"
+    if (pathname.includes("/coo/edit-materi")) return "Edit Materi"
+    
+    // Kuis
+    if (pathname === "/coo/quiz") return "Kuis"
+    if (pathname === "/coo/add-quiz") return "Buat Kuis Baru"
+    if (pathname === "/coo/daftar-hasil-kuis") return "Hasil Kuis Peserta"
+    if (pathname.includes("/coo/edit-quiz")) return "Edit Kuis"
+    if (pathname.includes("/coo/quiz/") && pathname.includes("/hasil")) return "Detail Hasil Kuis"
+    if (pathname.includes("/coo/quiz/") && !pathname.includes("/hasil") && !pathname.includes("/add") && !pathname.includes("/edit")) {
+      return "Detail Kuis"
     }
-    return titles[path] || path.charAt(0).toUpperCase() + path.slice(1)
+    
+    // Presensi
+    if (pathname === "/coo/presensi") return "Data Presensi Peserta"
+    if (pathname === "/coo/laporan-presensi") return "Laporan Rekap Presensi"
+    
+    // Pengaturan
+    if (pathname === "/coo/settings-attendance") return "Pengaturan Hari Libur & Jam Kerja"
+    
+    // Profile
+    if (pathname === "/coo/profile") return "Profil Saya"
+    if (pathname === "/coo/settings") return "Pengaturan Akun"
+    
+    // Default: ambil dari path terakhir tanpa parameter ID
+    const lastPath = pathname.split('/').filter(p => p && !/^\d+$/.test(p)).pop()
+    if (lastPath) {
+      return lastPath.charAt(0).toUpperCase() + lastPath.slice(1).replace(/-/g, ' ')
+    }
+    
+    return "COO Panel"
   }
 
   const handleLogoutClick = () => {
@@ -153,8 +178,15 @@ function CooLayout() {
   const isQuizActive = () => {
     return location.pathname === "/coo/quiz" || 
            location.pathname === "/coo/add-quiz" || 
-           location.pathname.includes("/coo/quiz-detail") ||
-           location.pathname.includes("/coo/add-question")
+           location.pathname.includes("/coo/edit-quiz")
+  }
+
+  const isDaftarHasilKuisActive = () => {
+    return location.pathname === "/coo/daftar-hasil-kuis"
+  }
+
+  const isQuizResultActive = () => {
+    return location.pathname.includes("/quiz/") && location.pathname.includes("/hasil")
   }
 
   return (
@@ -313,7 +345,7 @@ function CooLayout() {
                   <div 
                     onClick={() => !collapsed && setQuizOpen(!quizOpen)}
                     className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                      isQuizActive()
+                      isQuizActive() || isDaftarHasilKuisActive()
                         ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
                         : "text-gray-600 hover:bg-gray-100"
                     }`}
@@ -352,6 +384,17 @@ function CooLayout() {
                         }`}>
                           <PlusCircle size={14} />
                           <span>Buat Kuis</span>
+                        </div>
+                      </Link>
+                      {/* Menu Hasil Kuis */}
+                      <Link to="/coo/daftar-hasil-kuis">
+                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                          isDaftarHasilKuisActive()
+                            ? "bg-teal-50 text-teal-600 font-medium"
+                            : "text-gray-500 hover:bg-gray-100"
+                        }`}>
+                          <BarChart3 size={14} />
+                          <span>Hasil Kuis</span>
                         </div>
                       </Link>
                     </div>
@@ -491,6 +534,7 @@ function CooLayout() {
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-500">COO</span>
                   <ChevronRight size={12} className="text-gray-400" />
+                  {/* ✅ PERBAIKI: Sekarang hanya menampilkan nama halaman tanpa ID */}
                   <span className="font-semibold text-gray-800 bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
                     {getPageTitle()}
                   </span>

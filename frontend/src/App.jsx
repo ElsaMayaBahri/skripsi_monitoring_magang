@@ -29,8 +29,10 @@ import AddMateriCOO from "./pages/coo/AddMateri";
 import EditMateriCOO from "./pages/coo/EditMateri";
 import DataManagement from "./pages/coo/DataManagement";
 import DetailPesertaCOO from "./pages/coo/DetailPeserta";
+import DetailMentorCOO from "./pages/coo/DetailMentor";
 import ProfileCOO from "./pages/coo/Profile";
 import SettingsCOO from "./pages/coo/Settings";
+import DaftarHasilKuis from "./pages/coo/DaftarHasilKuis"; // ✅ SATU IMPORT SAJA
 
 // QUIZ COO PAGES
 import Quiz from "./pages/coo/Quiz";
@@ -226,6 +228,8 @@ function App() {
           <Route path="edit-materi/:id" element={<EditMateriCOO />} />
           <Route path="quiz" element={<Quiz />} />
           <Route path="quiz/:id" element={<QuizDetail />} />
+          <Route path="quiz/:id/hasil" element={<DaftarHasilKuis />} />
+          <Route path="daftar-hasil-kuis" element={<DaftarHasilKuis />} /> {/* ✅ ROUTE BARU UNTUK SIDEBAR */}
           <Route path="add-quiz" element={<AddQuiz />} />
           <Route path="add-question/:quizId" element={<AddQuestion />} />
           <Route path="edit-quiz/:id" element={<EditQuiz />} />
@@ -234,6 +238,7 @@ function App() {
           <Route path="settings-attendance" element={<SettingsAttendance />} />
           <Route path="data-management" element={<DataManagement />} />
           <Route path="peserta/:id/detail" element={<DetailPesertaCOO />} />
+          <Route path="mentor/:id/detail" element={<DetailMentorCOO />} />
           <Route path="profile" element={<ProfileCOO />} />
           <Route path="settings" element={<SettingsCOO />} />
         </Route>
@@ -279,9 +284,9 @@ function App() {
           <Route path="profile" element={<ProfileMentor />} />
         </Route>
 
-        // ============================================
-        // PESERTA ROUTES - Created by: Peserta Developer
-        // ============================================
+        {/* ============================================ */}
+        {/* PESERTA ROUTES - Created by: Peserta Developer */}
+        {/* ============================================ */}
         <Route
           path="/peserta"
           element={
@@ -302,7 +307,7 @@ function App() {
           <Route path="kuis-kompetensi/:id" element={<KuisKompetensi />} />
           <Route path="daftar-kuis-kompetensi" element={<DaftarKuisKompetensi />} />
           
-          {/* Tugas Routes - Perbaikan di sini */}
+          {/* Tugas Routes */}
           <Route path="tugas" element={<DaftarTugasPeserta />} />
           <Route path="tugas/:id/kumpul" element={<DetailTugas />} />
           
@@ -313,6 +318,7 @@ function App() {
           {/* Profile Route */}
           <Route path="profile" element={<ProfilePeserta />} />
         </Route>
+
         {/* ============================================ */}
         {/* 404 NOT FOUND ROUTE - Created by: System Architect */}
         {/* ============================================ */}

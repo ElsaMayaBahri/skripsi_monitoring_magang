@@ -64,8 +64,8 @@ class PresensiController extends Controller
                     'nama' => $user ? $user->nama : ($peserta ? $peserta->nama : '-'),
                     'divisi' => $peserta ? $peserta->divisi : '-',
                     'tanggal' => $item->tanggal,
-                    'check_in' => $item->check_in ? $item->tanggal . ' ' . $item->check_in : null,
-                    'check_out' => $item->check_out ? $item->tanggal . ' ' . $item->check_out : null,
+                    'check_in' => $item->check_in,  // FIX: langsung ambil check_in tanpa gabung tanggal
+                    'check_out' => $item->check_out, // FIX: langsung ambil check_out tanpa gabung tanggal
                     'status' => $status,
                     'keterlambatan' => $keterlambatan,
                     'device' => $item->device ?? null,

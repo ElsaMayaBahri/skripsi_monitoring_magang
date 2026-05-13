@@ -29,7 +29,11 @@ import {
   AlertCircle,
   Check,
   Eye,
-  Lightbulb
+  Lightbulb,
+  Star,
+  Zap,
+  Crown,
+  Trophy
 } from "lucide-react"
 
 // Import service functions
@@ -81,6 +85,7 @@ function AddQuiz() {
     deskripsi: "",
     durasi: 60,
     passing: 75,
+    level: 1,
     tanggal_mulai: "",
     tanggal_selesai: "",
     questions: []
@@ -96,7 +101,6 @@ function AddQuiz() {
     fetchDivisi()
   }, [])
 
-  // 🟢 PERBAIKAN: Ganti api.getDivisi() dengan axiosInstance
   const fetchDivisi = async () => {
     setLoadingDivisi(true)
     try {
@@ -240,7 +244,6 @@ function AddQuiz() {
     setImportFile(file)
   }
 
-  // 🟢 PERBAIKAN: Ganti api.downloadQuizTemplate() dengan downloadQuizTemplate()
   const handleDownloadTemplate = async () => {
     setDownloadingTemplate(true)
     try {
@@ -335,6 +338,7 @@ function AddQuiz() {
       const questionsIndex = headers.findIndex(h => h === 'questions')
       const tglMulaiIndex = headers.findIndex(h => h === 'tanggal_mulai')
       const tglSelesaiIndex = headers.findIndex(h => h === 'tanggal_selesai')
+      const levelIndex = headers.findIndex(h => h === 'level')
       
       setImportProgress(40)
       
@@ -353,6 +357,7 @@ function AddQuiz() {
           const divisi = divisiIndex >= 0 ? values[divisiIndex] : ""
           const durasi = durasiIndex >= 0 ? parseInt(values[durasiIndex]) || 60 : 60
           const passing = passingIndex >= 0 ? parseInt(values[passingIndex]) || 75 : 75
+          const level = levelIndex >= 0 ? parseInt(values[levelIndex]) || 1 : 1
           const questionsStr = questionsIndex >= 0 ? values[questionsIndex] : ""
           const tglMulai = tglMulaiIndex >= 0 ? values[tglMulaiIndex] : ""
           const tglSelesai = tglSelesaiIndex >= 0 ? values[tglSelesaiIndex] : ""
@@ -364,6 +369,7 @@ function AddQuiz() {
               divisi: divisi,
               durasi: durasi,
               passing: passing,
+              level: level,
               tanggal_mulai: tglMulai,
               tanggal_selesai: tglSelesai
             }
@@ -418,6 +424,7 @@ function AddQuiz() {
         divisi: quizInfo?.divisi || prev.divisi,
         durasi: quizInfo?.durasi || prev.durasi,
         passing: quizInfo?.passing || prev.passing,
+        level: quizInfo?.level || prev.level,
         tanggal_mulai: quizInfo?.tanggal_mulai || prev.tanggal_mulai,
         tanggal_selesai: quizInfo?.tanggal_selesai || prev.tanggal_selesai,
         questions: [...prev.questions, ...allImportedQuestions]
@@ -504,7 +511,6 @@ function AddQuiz() {
     })
   }
 
-  // 🟢 PERBAIKAN: Ganti api.createQuiz() dengan createQuiz()
   const handleSubmit = async () => {
     if (quiz.questions.length === 0) {
       setError("Minimal 1 soal harus ditambahkan")
@@ -523,6 +529,7 @@ function AddQuiz() {
         divisi: quiz.divisi,
         durasi: quiz.durasi,
         passing: quiz.passing,
+        level: quiz.level,
         tanggal_mulai: quiz.tanggal_mulai,
         tanggal_selesai: quiz.tanggal_selesai,
         questions: quiz.questions.map(q => ({
@@ -536,7 +543,7 @@ function AddQuiz() {
       const response = await createQuiz(formData)
       
       if (response.success) {
-        showPremiumPopup("Kuis Berhasil Dibuat", `${quiz.judul} · ${quiz.questions.length} soal · ${quiz.durasi} menit`, "quiz")
+        showPremiumPopup("Kuis Berhasil Dibuat", `${quiz.judul} · Level ${quiz.level} · ${quiz.questions.length} soal · ${quiz.durasi} menit`, "quiz")
       } else {
         setError(response.message || "Gagal membuat kuis")
         setTimeout(() => setError(null), 3000)
@@ -547,6 +554,39 @@ function AddQuiz() {
       setTimeout(() => setError(null), 3000)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const getLevelIcon = (level, size = 14) => {
+    switch(level) {
+      case 1: return <Star size={size} />
+      case 2: return <Zap size={size} />
+      case 3: return <Target size={size} />
+      case 4: return <Crown size={size} />
+      case 5: return <Trophy size={size} />
+      default: return <Star size={size} />
+    }
+  }
+
+  const getLevelColor = (level) => {
+    switch(level) {
+      case 1: return "from-emerald-500 to-teal-500"
+      case 2: return "from-blue-500 to-cyan-500"
+      case 3: return "from-purple-500 to-pink-500"
+      case 4: return "from-amber-500 to-orange-500"
+      case 5: return "from-rose-500 to-red-500"
+      default: return "from-emerald-500 to-teal-500"
+    }
+  }
+
+  const getLevelBg = (level) => {
+    switch(level) {
+      case 1: return "bg-emerald-100"
+      case 2: return "bg-blue-100"
+      case 3: return "bg-purple-100"
+      case 4: return "bg-amber-100"
+      case 5: return "bg-rose-100"
+      default: return "bg-emerald-100"
     }
   }
 
@@ -646,7 +686,6 @@ function AddQuiz() {
         <div className="mb-6">
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="flex">
-              {/* STEP 1 */}
               <div className={`flex-1 flex items-center gap-3 px-5 py-4 transition-all duration-300 ${
                 currentStep === 1 
                   ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-500' 
@@ -673,7 +712,6 @@ function AddQuiz() {
                 </div>
               </div>
 
-              {/* STEP 2 */}
               <div className={`flex-1 flex items-center gap-3 px-5 py-4 transition-all duration-300 ${
                 currentStep === 2 
                   ? quiz.questions.length > 0
@@ -858,7 +896,7 @@ function AddQuiz() {
                 </div>
               </div>
               
-              {/* TIPS SECTION - Horizontal */}
+              {/* TIPS SECTION */}
               <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-5 py-4">
                   <div className="flex items-center gap-3">
@@ -903,7 +941,7 @@ function AddQuiz() {
                     </div>
                     <div>
                       <h3 className="font-bold text-slate-800">Pengaturan Kuis</h3>
-                      <p className="text-xs text-slate-400">Atur durasi dan standar kelulusan</p>
+                      <p className="text-xs text-slate-400">Atur durasi, standar kelulusan, dan level</p>
                     </div>
                   </div>
                   <div className="space-y-4">
@@ -920,6 +958,7 @@ function AddQuiz() {
                         onChange={(e) => setQuiz({ ...quiz, durasi: parseInt(e.target.value) })} 
                       />
                     </div>
+                    
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1.5">
                         <Target className="w-3 h-3 inline mr-1" /> Passing Grade (%) <span className="text-red-500">*</span>
@@ -933,6 +972,45 @@ function AddQuiz() {
                         onChange={(e) => setQuiz({ ...quiz, passing: parseInt(e.target.value) })} 
                       />
                     </div>
+
+                    {/* LEVEL KUIS - DITAMBAHKAN DI SINI */}
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                        <Star className="w-3 h-3 inline mr-1" /> Level Kuis <span className="text-red-500">*</span>
+                      </label>
+                      <div className="grid grid-cols-5 gap-2">
+                        {[1, 2, 3, 4, 5].map(level => (
+                          <button
+                            key={level}
+                            type="button"
+                            onClick={() => setQuiz({ ...quiz, level: level })}
+                            className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all duration-200 ${
+                              quiz.level === level
+                                ? `${getLevelBg(level)} border-${level === 1 ? 'emerald' : level === 2 ? 'blue' : level === 3 ? 'purple' : level === 4 ? 'amber' : 'rose'}-400 shadow-md`
+                                : 'border-slate-200 bg-white hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                              quiz.level === level
+                                ? `bg-gradient-to-r ${getLevelColor(level)} text-white shadow-sm`
+                                : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {getLevelIcon(level, 18)}
+                            </div>
+                            <span className={`text-[10px] font-medium ${
+                              quiz.level === level ? 'text-slate-800' : 'text-slate-500'
+                            }`}>
+                              Level {level}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+                        <HelpCircle size={10} />
+                        Level 1= Pemula, Level 2= Menengah, Level 3= Lanjutan, Level 4= Expert, Level 5= Master
+                      </p>
+                    </div>
+
                     <button 
                       onClick={handleNextStep} 
                       className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center gap-2 group"
@@ -947,7 +1025,7 @@ function AddQuiz() {
           </div>
         )}
 
-        {/* STEP 2: DAFTAR PERTANYAAN */}
+        {/* STEP 2: DAFTAR PERTANYAAN (SAMA SEPERTI SEBELUMNYA) */}
         {currentStep === 2 && (
           <div className="space-y-5">
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1019,6 +1097,7 @@ function AddQuiz() {
                         <li>divisi - Nama divisi</li>
                         <li>durasi - Durasi dalam menit</li>
                         <li>passing - Nilai passing grade</li>
+                        <li>level - Level kuis (1-5)</li>
                         <li>questions - JSON array berisi soal</li>
                         <li>tanggal_mulai - Tanggal mulai (YYYY-MM-DD)</li>
                         <li>tanggal_selesai - Tanggal selesai (YYYY-MM-DD)</li>
@@ -1213,7 +1292,7 @@ function AddQuiz() {
               </button>
             </div>
 
-            {/* SUMMARY CARD - PREMIUM */}
+            {/* SUMMARY CARD */}
             <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl p-4 border border-slate-200 shadow-sm">
               <div className="flex items-center justify-between gap-2 text-sm flex-wrap">
                 <div className="flex items-center gap-2">
@@ -1232,7 +1311,14 @@ function AddQuiz() {
                 <div className="w-px h-5 bg-slate-300"></div>
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <Calendar size={12} className="text-purple-600" />
+                    {getLevelIcon(quiz.level, 12)}
+                  </div>
+                  <span className="font-medium text-slate-700">Level {quiz.level}</span>
+                </div>
+                <div className="w-px h-5 bg-slate-300"></div>
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center">
+                    <Calendar size={12} className="text-amber-600" />
                   </div>
                   <span className="font-medium text-slate-700">
                     {quiz.tanggal_mulai || "-"} s.d {quiz.tanggal_selesai || "-"}
@@ -1240,8 +1326,8 @@ function AddQuiz() {
                 </div>
                 <div className="w-px h-5 bg-slate-300"></div>
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center">
-                    <ListChecks size={12} className="text-amber-600" />
+                  <div className="w-7 h-7 bg-rose-100 rounded-lg flex items-center justify-center">
+                    <ListChecks size={12} className="text-rose-600" />
                   </div>
                   <span className="font-bold text-slate-800">{quiz.questions.length} soal</span>
                 </div>
@@ -1459,7 +1545,6 @@ function AddQuiz() {
         </div>
       )}
 
-      {/* PERBAIKAN: Hapus 'jsx' dari tag style */}
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
