@@ -14,7 +14,7 @@ import {
   File,
   FileArchive
 } from "lucide-react";
-import api from "../../utils/api";
+import { getMentorMateriById } from "../../api/mentor/materiMentorService";
 
 function LihatMateri() {
   const { id } = useParams();
@@ -24,11 +24,14 @@ function LihatMateri() {
 
   useEffect(() => {
     const fetchMateri = async () => {
+      setLoading(true);
       try {
-        const response = await api.getMentorMateriById(id);
+        const response = await getMentorMateriById(id);
         console.log("Materi detail:", response);
-        if (response.success && response.data) {
+        if (response && response.success && response.data) {
           setMateri(response.data);
+        } else if (response && response.data && !response.success) {
+          setError(response.message || "Materi tidak ditemukan");
         } else {
           setError("Materi tidak ditemukan");
         }
@@ -151,11 +154,11 @@ function LihatMateri() {
                 <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
                   <span className="flex items-center gap-1">
                     <Calendar size={14} />
-                    {new Date(materi.created_at).toLocaleDateString('id-ID')}
+                    {materi.created_at ? new Date(materi.created_at).toLocaleDateString('id-ID') : '-'}
                   </span>
                   <span className="flex items-center gap-1">
                     <Eye size={14} />
-                    {materi.views} dilihat
+                    {materi.views || 0} dilihat
                   </span>
                   <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${tipeInfo.bg} ${tipeInfo.color} border ${tipeInfo.border}`}>
                     <TipeIcon size={12} />

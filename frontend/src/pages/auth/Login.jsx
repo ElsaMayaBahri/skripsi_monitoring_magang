@@ -98,13 +98,21 @@ function Login() {
 
       console.log("LOGIN RESPONSE:", response.data)
 
-      const token = response.data.token || response.data.data?.token
-      const user = response.data.user || response.data.data?.user
-      const role = response.data.role || response.data.data?.role
+      const { success, token, user, message } = response.data
+
+      if (!success) {
+        throw new Error(message || "Login gagal")
+      }
 
       if (!token) {
         throw new Error("Token tidak ditemukan dari backend")
       }
+
+      if (!user) {
+        throw new Error("Data user tidak ditemukan dari backend")
+      }
+
+      const role = user.role
 
       // Simpan data kredensial baru
       localStorage.setItem("token", token)
@@ -130,7 +138,7 @@ function Login() {
       } else if (role === "peserta") {
         navigate("/peserta/dashboard", { replace: true })
       } else {
-        navigate("/login", { replace: true })
+        setError("Role tidak dikenali")
       }
 
     } catch (err) {
@@ -138,22 +146,25 @@ function Login() {
 
       if (err.response) {
         const status = err.response.status
-        const message = err.response.data?.message
-
-        if (status === 401) {
+        const responseData = err.response.data
+        
+        // Handle response error dari backend
+        if (responseData?.message) {
+          setError(responseData.message)
+        } else if (status === 401) {
           setError("Email atau password salah")
         } else if (status === 403) {
-          setError("Akun tidak aktif")
+          setError("Akun tidak aktif. Silakan hubungi administrator.")
         } else if (status === 422) {
-          const errors = err.response.data?.errors
+          const errors = responseData?.errors
           if (errors) {
             const firstError = Object.values(errors)[0]
             setError(Array.isArray(firstError) ? firstError[0] : firstError)
           } else {
-            setError(message || "Validasi gagal")
+            setError(responseData?.message || "Validasi gagal")
           }
         } else {
-          setError(message || "Login gagal")
+          setError(responseData?.message || "Login gagal")
         }
       } else if (err.request) {
         setError("Tidak bisa connect ke server. Pastikan backend berjalan.")

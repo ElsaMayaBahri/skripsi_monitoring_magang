@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { api } from "../../utils/api";
+import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
+import { deletePeserta } from "../../api/admin/pesertaService";
+import { deleteMentor } from "../../api/admin/mentorService";
 import { logActivity } from "../../utils/activityLogger";
 import {
   Users as UsersIcon,
@@ -145,9 +147,9 @@ function Users() {
     
     try {
       const [divisiRes, mentorRes, pesertaRes] = await Promise.all([
-        api.getDivisi(),
-        api.getMentors(),
-        api.getPeserta()
+        getDivisi(),
+        getMentors(),
+        getPeserta()
       ]);
       
       let divisiData = [];
@@ -429,29 +431,31 @@ function Users() {
   const non_aktif = filtered.filter((d) => d.status === "non_aktif").length;
 
   const confirmDelete = async () => {
-    const { user } = deleteModal;
-    if (!user) return;
-    
-    setDeleteModal(prev => ({ ...prev, loading: true }));
-    
-    try {
-      if (tab === "peserta") {
-        await api.deletePeserta(user.id);
-        logActivity("delete", "peserta", user.name);
-      } else {
-        await api.deleteMentor(user.id);
-        logActivity("delete", "mentor", user.name);
-      }
-      await loadAllData(false);
-      await loadData();
-      setDeleteModal({ open: false, user: null, index: null, loading: false });
-      setSuccessModal({ open: true, message: `${user.name} berhasil dihapus.`, type: "success" });
-    } catch (err) {
-      setDeleteModal(prev => ({ ...prev, loading: false }));
-      setSuccessModal({ open: true, message: err.message || "Gagal menghapus", type: "error" });
+  const { user } = deleteModal;
+  if (!user) return;
+  
+  setDeleteModal(prev => ({ ...prev, loading: true }));
+  
+  try {
+    if (tab === "peserta") {
+      // GANTI: api.deletePeserta(user.id) -> deletePeserta(user.id)
+      await deletePeserta(user.id);
+      logActivity("delete", "peserta", user.name);
+    } else {
+      // GANTI: api.deleteMentor(user.id) -> deleteMentor(user.id)
+      await deleteMentor(user.id);
+      logActivity("delete", "mentor", user.name);
     }
-  };
-
+    await loadAllData(false);
+    await loadData();
+    setDeleteModal({ open: false, user: null, index: null, loading: false });
+    setSuccessModal({ open: true, message: `${user.name} berhasil dihapus.`, type: "success" });
+  } catch (err) {
+    console.error("Error deleting:", err);
+    setDeleteModal(prev => ({ ...prev, loading: false }));
+    setSuccessModal({ open: true, message: err.response?.data?.message || err.message || "Gagal menghapus", type: "error" });
+  }
+};
   const handleAdd = () => {
     navigate(tab === "mentor" ? "/admin/add-mentor" : "/admin/add-peserta");
   };

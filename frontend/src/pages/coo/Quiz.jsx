@@ -1,7 +1,12 @@
-// Quiz.jsx - Halaman Manajemen Kuis
+// Quiz.jsx - Halaman Manajemen Kuis untuk COO (Sistem Bertingkat) - FIXED
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { api } from "../../utils/api"
+import {
+  getAllQuiz,
+  deleteQuiz,
+  importQuiz
+} from "../../api/coo/quizService"
+import axiosInstance from "../../api/axios"
 import {
   Search,
   Plus,
@@ -23,18 +28,31 @@ import {
   Upload,
   FileSpreadsheet,
   CheckCircle,
-  TrendingUp,
   Info,
   Filter,
   SlidersHorizontal,
   Building2,
-  Tag
+  Tag,
+  BarChart3,
+  Crown,
+  Star,
+  Zap,
+  Target,
+  Trophy,
+  Hash,
+  Lock,
+  Unlock,
+  ChevronDown,
+  ChevronUp,
+  Grid3x3,
+  List,
+  Settings2
 } from "lucide-react"
 
 function Quiz() {
+  const navigate = useNavigate()
   const [quiz, setQuiz] = useState([])
   const [search, setSearch] = useState("")
-  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showImportModal, setShowImportModal] = useState(false)
@@ -43,20 +61,19 @@ function Quiz() {
   const [importProgress, setImportProgress] = useState(0)
   const [showSuccessToast, setShowSuccessToast] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
+  const [expandedLevels, setExpandedLevels] = useState({ 1: true, 2: true, 3: true, 4: true, 5: true })
   
   // Filter states
   const [showFilter, setShowFilter] = useState(false)
-  const [selectedDivisi, setSelectedDivisi] = useState("all")
+  const [selectedDivisis, setSelectedDivisis] = useState([])
   const [selectedStatus, setSelectedStatus] = useState("all")
+  const [selectedLevel, setSelectedLevel] = useState("all")
   const [divisiList, setDivisiList] = useState([])
   
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deletingQuizId, setDeletingQuizId] = useState(null)
   const [deletingQuizTitle, setDeletingQuizTitle] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
-
-  const navigate = useNavigate()
-  const perPage = 5
 
   useEffect(() => {
     loadQuizData()
@@ -67,7 +84,7 @@ function Quiz() {
     setLoading(true)
     setError(null)
     try {
-      const response = await api.getQuiz()
+      const response = await getAllQuiz()
       console.log("Quiz response:", response)
       
       let quizData = []
@@ -88,8 +105,9 @@ function Quiz() {
         total_soal: q.total_soal || q.questions?.length || 0,
         questions: q.questions || [],
         created_at: q.created_at || q.createdAt,
-        status: q.status || "aktif",
-        passing: q.passing || 75
+        status: q.status === "aktif" || q.status === "active" ? "aktif" : "nonaktif",
+        passing: q.passing || 75,
+        level: q.level || 1
       }))
       
       setQuiz(transformedData)
@@ -104,19 +122,32 @@ function Quiz() {
 
   const fetchDivisi = async () => {
     try {
-      const response = await api.getDivisi()
+      const response = await axiosInstance.get("/divisi/aktif")
       let divisiData = []
-      if (response.success && response.data) {
-        divisiData = response.data
-      } else if (Array.isArray(response)) {
-        divisiData = response
+      if (response.data && response.data.success && response.data.data) {
+        divisiData = response.data.data
       } else if (response.data && Array.isArray(response.data)) {
         divisiData = response.data
       }
       setDivisiList(divisiData)
     } catch (error) {
       console.error("Error fetching divisi:", error)
+      setDivisiList([])
     }
+  }
+
+  const toggleDivisi = (divisiName) => {
+    setSelectedDivisis(prev => {
+      if (prev.includes(divisiName)) {
+        return prev.filter(d => d !== divisiName)
+      } else {
+        return [...prev, divisiName]
+      }
+    })
+  }
+
+  const resetDivisiFilters = () => {
+    setSelectedDivisis([])
   }
 
   const openDeleteModal = (id, title, e) => {
@@ -131,7 +162,7 @@ function Quiz() {
     
     setIsDeleting(true)
     try {
-      await api.deleteQuiz(deletingQuizId)
+      await deleteQuiz(deletingQuizId)
       await loadQuizData()
       setShowDeleteModal(false)
       showSuccessToastMessage("Kuis berhasil dihapus")
@@ -152,6 +183,11 @@ function Quiz() {
 
   const handleViewDetail = (id) => {
     navigate(`/coo/quiz/${id}`)
+  }
+
+  const handleViewResults = (id, e) => {
+    e.stopPropagation()
+    navigate(`/coo/quiz/${id}/hasil`)
   }
 
   const handleFileChange = (e) => {
@@ -199,7 +235,7 @@ function Quiz() {
         })
       }, 200)
       
-      const response = await api.importQuiz(formData)
+      const response = await importQuiz(formData)
       
       clearInterval(interval)
       setImportProgress(100)
@@ -223,14 +259,14 @@ function Quiz() {
   }
 
   const resetFilters = () => {
-    setSelectedDivisi("all")
+    setSelectedDivisis([])
     setSelectedStatus("all")
+    setSelectedLevel("all")
     setSearch("")
   }
 
   const formatDate = (dateString) => {
     if (!dateString) return "Tanggal tidak tersedia"
-    
     try {
       const date = new Date(dateString)
       if (isNaN(date.getTime())) {
@@ -241,36 +277,78 @@ function Quiz() {
         month: "long",
         year: "numeric"
       })
-    } catch (error) {
+    } catch {
       return "Tanggal error"
     }
   }
 
-  // Filter logic
+  const toggleLevel = (level) => {
+    setExpandedLevels(prev => ({
+      ...prev,
+      [level]: !prev[level]
+    }))
+  }
+
+  const getLevelBadge = (level) => {
+    const levelConfig = {
+      1: { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200", icon: <Star size={12} className="text-emerald-500" />, label: "Level 1 - Pemula" },
+      2: { bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-200", icon: <Zap size={12} className="text-blue-500" />, label: "Level 2 - Menengah" },
+      3: { bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200", icon: <Target size={12} className="text-purple-500" />, label: "Level 3 - Lanjutan" },
+      4: { bg: "bg-amber-100", text: "text-amber-700", border: "border-amber-200", icon: <Crown size={12} className="text-amber-500" />, label: "Level 4 - Expert" },
+      5: { bg: "bg-rose-100", text: "text-rose-700", border: "border-rose-200", icon: <Trophy size={12} className="text-rose-500" />, label: "Level 5 - Master" }
+    }
+    const config = levelConfig[level] || levelConfig[1]
+    return (
+      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${config.bg} ${config.text} border ${config.border}`}>
+        {config.icon}
+        <span className="text-[10px] font-semibold">{config.label}</span>
+      </div>
+    )
+  }
+
+  const getLevelIcon = (level, size = 20) => {
+    switch(level) {
+      case 1: return <Star size={size} className="text-emerald-500" />
+      case 2: return <Zap size={size} className="text-blue-500" />
+      case 3: return <Target size={size} className="text-purple-500" />
+      case 4: return <Crown size={size} className="text-amber-500" />
+      case 5: return <Trophy size={size} className="text-rose-500" />
+      default: return <Star size={size} className="text-emerald-500" />
+    }
+  }
+
+  const getLevelColor = (level) => {
+    switch(level) {
+      case 1: return "from-emerald-500 to-teal-500"
+      case 2: return "from-blue-500 to-cyan-500"
+      case 3: return "from-purple-500 to-pink-500"
+      case 4: return "from-amber-500 to-orange-500"
+      case 5: return "from-rose-500 to-red-500"
+      default: return "from-emerald-500 to-teal-500"
+    }
+  }
+
   const filtered = quiz.filter(q => {
     const matchesSearch = q.judul?.toLowerCase().includes(search.toLowerCase())
-    const matchesDivisi = selectedDivisi === "all" || q.divisi === selectedDivisi
-    const matchesStatus = selectedStatus === "all" || q.status?.toLowerCase() === selectedStatus.toLowerCase()
-    return matchesSearch && matchesDivisi && matchesStatus
+    const matchesDivisi = selectedDivisis.length === 0 || selectedDivisis.includes(q.divisi)
+    const matchesStatus = selectedStatus === "all" || q.status === selectedStatus
+    const matchesLevel = selectedLevel === "all" || q.level === parseInt(selectedLevel)
+    return matchesSearch && matchesDivisi && matchesStatus && matchesLevel
   })
 
-  const totalPage = Math.ceil(filtered.length / perPage)
-  const currentData = filtered.slice(
-    (page - 1) * perPage,
-    page * perPage
-  )
+  const groupedQuiz = {}
+  filtered.forEach(q => {
+    if (!groupedQuiz[q.level]) {
+      groupedQuiz[q.level] = []
+    }
+    groupedQuiz[q.level].push(q)
+  })
 
+  const sortedLevels = [1, 2, 3, 4, 5].filter(level => groupedQuiz[level] && groupedQuiz[level].length > 0)
+  
   const totalQuiz = quiz.length
-  const totalSoal = quiz.reduce(
-    (acc, q) => acc + (q.total_soal || 0),
-    0
-  )
-  const totalPeserta = quiz.reduce(
-    (acc, q) => acc + (q.peserta || 0),
-    0
-  )
-
-  const isEmpty = currentData.length === 0
+  const totalSoal = quiz.reduce((acc, q) => acc + (q.total_soal || 0), 0)
+  const totalPeserta = quiz.reduce((acc, q) => acc + (q.peserta || 0), 0)
 
   if (loading) {
     return (
@@ -278,26 +356,6 @@ function Quiz() {
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4" />
           <p className="text-slate-600">Memuat data kuis...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error && quiz.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-blue-50/20 p-5 lg:p-6">
-        <div className="max-w-[1400px] mx-auto">
-          <div className="bg-white border border-red-200 rounded-xl p-8 text-center shadow-sm">
-            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-slate-800 mb-2">Gagal Memuat Data</h3>
-            <p className="text-slate-600 mb-6">{error}</p>
-            <button
-              onClick={loadQuizData}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-            >
-              Coba Lagi
-            </button>
-          </div>
         </div>
       </div>
     )
@@ -349,9 +407,7 @@ function Quiz() {
                   <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
                     <AlertCircle size={32} className="text-red-500" />
                   </div>
-                  <p className="text-slate-700 font-medium mb-1">
-                    Apakah Anda yakin?
-                  </p>
+                  <p className="text-slate-700 font-medium mb-1">Apakah Anda yakin?</p>
                   <p className="text-sm text-slate-500">
                     Kuis "<span className="font-semibold text-slate-700">{deletingQuizTitle}</span>" akan dihapus secara permanen. 
                     Tindakan ini tidak dapat dibatalkan.
@@ -405,10 +461,7 @@ function Quiz() {
                   <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 via-indigo-800 to-purple-800 bg-clip-text text-transparent">
                     Manajemen Kuis
                   </h1>
-                  <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                    <span className="w-1 h-1 bg-emerald-500 rounded-full"></span>
-                    Kelola, pantau, dan optimalkan semua kuis
-                  </p>
+                
                 </div>
               </div>
             </div>
@@ -420,10 +473,7 @@ function Quiz() {
                   type="text"
                   placeholder="Cari judul kuis..."
                   value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value)
-                    setPage(1)
-                  }}
+                  onChange={(e) => setSearch(e.target.value)}
                   className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 w-64 text-sm text-slate-700 shadow-sm"
                 />
               </div>
@@ -436,9 +486,9 @@ function Quiz() {
                     : "bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600"
                 }`}
               >
-                <SlidersHorizontal size={16} />
+                <Filter size={16} />
                 Filter
-                {(selectedDivisi !== "all" || selectedStatus !== "all") && (
+                {(selectedDivisis.length > 0 || selectedStatus !== "all" || selectedLevel !== "all") && (
                   <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
                 )}
               </button>
@@ -472,158 +522,79 @@ function Quiz() {
                 </div>
                 <h3 className="font-semibold text-slate-800">Filter Kuis</h3>
               </div>
-              <button 
-                onClick={resetFilters} 
-                className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-indigo-50 transition"
-              >
+              <button onClick={resetFilters} className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-indigo-50 transition">
                 <X size={12} />
-                Reset Filter
+                Reset Semua Filter
               </button>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Filter Divisi */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div>
                 <label className="text-xs font-semibold text-slate-600 flex items-center gap-1 mb-2">
                   <Building2 size={12} />
                   Divisi
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => {
-                      setSelectedDivisi("all")
-                      setPage(1)
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      selectedDivisi === "all"
-                        ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    Semua Divisi
-                  </button>
+                <select
+                  value={selectedDivisis.length === 1 ? selectedDivisis[0] : "all"}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    if (value === "all") {
+                      setSelectedDivisis([])
+                    } else {
+                      setSelectedDivisis([value])
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                >
+                  <option value="all">Semua Divisi</option>
                   {divisiList.map(div => (
-                    <button
-                      key={div.id_divisi}
-                      onClick={() => {
-                        setSelectedDivisi(div.nama_divisi)
-                        setPage(1)
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                        selectedDivisi === div.nama_divisi
-                          ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
-                    >
+                    <option key={div.id_divisi} value={div.nama_divisi}>
                       {div.nama_divisi}
-                    </button>
+                    </option>
                   ))}
-                </div>
+                </select>
               </div>
               
-              {/* Filter Status */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600 flex items-center gap-1 mb-2">
+                  <Hash size={12} />
+                  Level Kuis
+                </label>
+                <select
+                  value={selectedLevel}
+                  onChange={(e) => setSelectedLevel(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                >
+                  <option value="all">Semua Level</option>
+                  <option value="1">Level 1 - Pemula</option>
+                  <option value="2">Level 2 - Menengah</option>
+                  <option value="3">Level 3 - Lanjutan</option>
+                  <option value="4">Level 4 - Expert</option>
+                  <option value="5">Level 5 - Master</option>
+                </select>
+              </div>
+              
               <div>
                 <label className="text-xs font-semibold text-slate-600 flex items-center gap-1 mb-2">
                   <Tag size={12} />
                   Status
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => {
-                      setSelectedStatus("all")
-                      setPage(1)
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      selectedStatus === "all"
-                        ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    Semua Status
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedStatus("aktif")
-                      setPage(1)
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      selectedStatus === "aktif"
-                        ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    Aktif
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedStatus("draft")
-                      setPage(1)
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      selectedStatus === "draft"
-                        ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    Draft
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedStatus("arsip")
-                      setPage(1)
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      selectedStatus === "arsip"
-                        ? "bg-gradient-to-r from-slate-600 to-slate-700 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    Arsip
-                  </button>
-                </div>
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                >
+                  <option value="all">Semua Status</option>
+                  <option value="aktif">Aktif</option>
+                  <option value="nonaktif">Nonaktif</option>
+                </select>
               </div>
             </div>
-            
-            {/* Filter info */}
-            {(selectedDivisi !== "all" || selectedStatus !== "all" || search) && (
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] text-slate-500">Filter aktif:</span>
-                  {selectedDivisi !== "all" && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[10px]">
-                      <Building2 size={10} />
-                      {selectedDivisi}
-                      <button onClick={() => setSelectedDivisi("all")} className="hover:text-indigo-900">
-                        <X size={10} />
-                      </button>
-                    </span>
-                  )}
-                  {selectedStatus !== "all" && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px]">
-                      <Tag size={10} />
-                      {selectedStatus}
-                      <button onClick={() => setSelectedStatus("all")} className="hover:text-purple-900">
-                        <X size={10} />
-                      </button>
-                    </span>
-                  )}
-                  {search && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px]">
-                      <Search size={10} />
-                      "{search}"
-                      <button onClick={() => setSearch("")} className="hover:text-slate-800">
-                        <X size={10} />
-                      </button>
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
         {/* STATS CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-5 mb-8">
           <div className="relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-full -mr-16 -mt-16"></div>
             <div className="relative flex items-center justify-between">
@@ -633,12 +604,6 @@ function Quiz() {
               </div>
               <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
                 <Layers className="w-6 h-6 text-white" />
-              </div>
-            </div>
-            <div className="mt-4 pt-3 border-t border-slate-100">
-              <div className="flex items-center gap-1">
-                <TrendingUp size={12} className="text-indigo-500" />
-                <span className="text-[10px] text-indigo-600 font-semibold">Aktif</span>
               </div>
             </div>
           </div>
@@ -654,12 +619,6 @@ function Quiz() {
                 <BookOpen className="w-6 h-6 text-white" />
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-100">
-              <div className="flex items-center gap-1">
-                <TrendingUp size={12} className="text-emerald-500" />
-                <span className="text-[10px] text-emerald-600 font-semibold">Tersedia</span>
-              </div>
-            </div>
           </div>
 
           <div className="relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
@@ -673,245 +632,268 @@ function Quiz() {
                 <Users className="w-6 h-6 text-white" />
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-100">
-              <div className="flex items-center gap-1">
-                <TrendingUp size={12} className="text-blue-500" />
-                <span className="text-[10px] text-blue-600 font-semibold">Berpartisipasi</span>
+          </div>
+
+          <div className="relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-full -mr-16 -mt-16"></div>
+            <div className="relative flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-bold text-slate-800">{sortedLevels.length}</p>
+                <p className="text-sm text-slate-500 mt-1">Level Aktif</p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Grid3x3 className="w-6 h-6 text-white" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* ERROR ALERT */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-            <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700">
-              <X size={14} />
-            </button>
+        {/* LEVEL ROADMAP */}
+        <div className="mb-8 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 rounded-2xl p-5 border border-indigo-100">
+          <div className="flex items-center gap-2 mb-4">
+            <Target size={18} className="text-indigo-600" />
+            <h3 className="font-semibold text-slate-800">Roadmap Kuis Bertingkat</h3>
+            <span className="text-xs text-slate-400 ml-2">Peserta harus lulus level sebelumnya untuk melanjutkan</span>
           </div>
-        )}
-
-        {/* TABLE SECTION */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gradient-to-r from-slate-100 to-slate-50 border-b border-slate-200">
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Kuis</th>
-                  <th className="text-center px-6 py-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Divisi</th>
-                  <th className="text-center px-6 py-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Soal</th>
-                  <th className="text-center px-6 py-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Dibuat</th>
-                  <th className="text-center px-6 py-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {isEmpty ? (
-                  <tr>
-                    <td colSpan="5" className="text-center px-6 py-16">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl flex items-center justify-center">
-                          <File size="32" className="text-slate-400" />
-                        </div>
-                        <p className="text-slate-500 font-medium">Tidak ada kuis yang sesuai dengan filter</p>
-                        <button
-                          onClick={resetFilters}
-                          className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-all"
-                        >
-                          Reset Filter
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  currentData.map((q) => {
-                    const quizId = q.id
-                    return (
-                      <tr
-                        key={quizId}
-                        className="hover:bg-gradient-to-r hover:from-slate-50 hover:to-indigo-50/30 transition-all duration-200 group cursor-pointer"
-                      >
-                        <td 
-                          className="text-left px-6 py-4 cursor-pointer"
-                          onClick={() => handleViewDetail(quizId)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-all duration-300 shadow-sm">
-                              <File size={16} className="text-indigo-600" />
-                            </div>
-                            <div>
-                              <p className="font-semibold text-slate-800 text-sm group-hover:text-indigo-600 transition">
-                                {q.judul}
-                              </p>
-                              <div className="flex items-center gap-3 mt-0.5">
-                                <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                                  <Clock size={9} />
-                                  {q.durasi} menit
-                                </span>
-                                <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                                  <Users size={9} />
-                                  {q.peserta} peserta
-                                </span>
-                                <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                                  <CheckCircle size={9} />
-                                  Passing: {q.passing}%
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td 
-                          className="text-center px-6 py-4 cursor-pointer"
-                          onClick={() => handleViewDetail(quizId)}
-                        >
-                          <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">
-                            <span className="text-xs font-medium text-slate-600">
-                              {q.divisi}
-                            </span>
-                          </div>
-                        </td>
-                        <td 
-                          className="text-center px-6 py-4 cursor-pointer"
-                          onClick={() => handleViewDetail(quizId)}
-                        >
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">
-                            <span className="font-bold text-slate-700 text-sm">
-                              {q.total_soal}
-                            </span>
-                            <span className="text-xs text-slate-500">soal</span>
-                          </div>
-                        </td>
-                        <td className="text-center px-6 py-4">
-                          <div className="flex items-center justify-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
-                              <Calendar size={12} className="text-slate-500" />
-                            </div>
-                            <span className="text-sm text-slate-600 font-medium">
-                              {formatDate(q.created_at)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="text-center px-6 py-4">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewDetail(quizId);
-                              }}
-                              className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                              title="Lihat Detail"
-                            >
-                              <Eye size={16} />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEdit(quizId, e);
-                              }}
-                              className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-all duration-200"
-                              title="Edit Kuis"
-                            >
-                              <Edit3 size={16} />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openDeleteModal(quizId, q.judul, e);
-                              }}
-                              className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200"
-                              title="Hapus Kuis"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
+          
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {[1, 2, 3, 4, 5].map(level => {
+              const hasQuiz = filtered.some(q => q.level === level)
+              const quizCount = filtered.filter(q => q.level === level).length
+              
+              return (
+                <div key={level} className="flex flex-col items-center flex-1 min-w-[80px]">
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${
+                    hasQuiz 
+                      ? `bg-gradient-to-r ${getLevelColor(level)} text-white shadow-lg`
+                      : "bg-slate-200 text-slate-400"
+                  }`}>
+                    {getLevelIcon(level, 24)}
+                  </div>
+                  <span className="text-xs font-semibold mt-2 text-slate-700">Level {level}</span>
+                  <span className="text-[10px] text-slate-400">{quizCount} kuis</span>
+                  {level < 5 && (
+                    <div className="hidden lg:block w-full h-0.5 bg-gradient-to-r from-indigo-300 to-purple-300 mt-2"></div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
 
-        {/* PAGINATION */}
-        {!isEmpty && totalPage > 1 && (
-          <div className="flex justify-center items-center gap-2 pt-6">
-            <button
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-              className={`p-2.5 rounded-xl border transition-all duration-200 ${
-                page === 1
-                  ? "border-slate-200 text-slate-300 cursor-not-allowed"
-                  : "border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md"
-              }`}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            
-            <div className="flex gap-1.5">
-              {[...Array(Math.min(totalPage, 5))].map((_, i) => {
-                let pageNum = i + 1
-                if (totalPage > 5 && page > 3) {
-                  pageNum = page - 2 + i
-                  if (pageNum > totalPage) return null
-                }
-                if (totalPage > 5 && page > 3 && i === 0 && pageNum > 2) {
-                  return (
-                    <span key="ellipsis1" className="px-3 py-2 text-slate-400 text-sm">...</span>
-                  )
-                }
-                if (totalPage > 5 && page < totalPage - 2 && i === 3 && pageNum < totalPage - 1) {
-                  return (
-                    <span key="ellipsis2" className="px-3 py-2 text-slate-400 text-sm">...</span>
-                  )
-                }
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setPage(pageNum)}
-                    className={`w-9 h-9 rounded-xl font-medium text-sm transition-all duration-200 ${
-                      page === pageNum
-                        ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md"
-                        : "bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600"
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                )
-              })}
+        {/* QUIZ LIST GROUPED BY LEVEL */}
+        <div className="space-y-5">
+          {sortedLevels.map(level => (
+            <div key={level} className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
+              {/* Level Header - Clickable to Expand/Collapse */}
+              <div 
+                className={`px-6 py-4 border-b flex items-center justify-between cursor-pointer transition-all duration-200 hover:opacity-80 ${
+                  level === 1 ? "bg-gradient-to-r from-emerald-50 to-emerald-100/50" :
+                  level === 2 ? "bg-gradient-to-r from-blue-50 to-blue-100/50" :
+                  level === 3 ? "bg-gradient-to-r from-purple-50 to-purple-100/50" :
+                  level === 4 ? "bg-gradient-to-r from-amber-50 to-amber-100/50" :
+                  "bg-gradient-to-r from-rose-50 to-rose-100/50"
+                }`}
+                onClick={() => toggleLevel(level)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-r ${getLevelColor(level)} shadow-md`}>
+                    {getLevelIcon(level, 18)}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-slate-800 text-lg">Level {level}</h3>
+                      <span className="text-xs text-slate-500 bg-white/50 px-2 py-0.5 rounded-full">
+                        {groupedQuiz[level].length} Kuis
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      {level === 1 && "Pemula - Dasar-dasar kompetensi yang harus dikuasai"}
+                      {level === 2 && "Menengah - Pemahaman lanjutan dan aplikasi dasar"}
+                      {level === 3 && "Lanjutan - Analisis dan evaluasi kasus kompleks"}
+                      {level === 4 && "Expert - Penguasaan mendalam dan optimalisasi"}
+                      {level === 5 && "Master - Kreasi, inovasi, dan kepemimpinan"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 text-xs text-slate-500">
+                    <Users size={14} />
+                    <span>{groupedQuiz[level].reduce((sum, q) => sum + (q.peserta || 0), 0)} peserta</span>
+                  </div>
+                  <div className="w-px h-5 bg-slate-300 mx-2"></div>
+                  <div className="text-slate-400">
+                    {expandedLevels[level] ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Level Content - Expandable */}
+              {expandedLevels[level] && (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100">
+                        <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Kuis</th>
+                        <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Divisi</th>
+                        <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Soal</th>
+                        <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Durasi</th>
+                        <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Peserta</th>
+                        <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Passing</th>
+                        <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                        <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {groupedQuiz[level].map((q) => {
+                        const quizId = q.id
+                        return (
+                          <tr
+                            key={quizId}
+                            className="hover:bg-slate-50/70 transition-all duration-200 group cursor-pointer"
+                            onClick={() => handleViewDetail(quizId)}
+                          >
+                            <td className="text-left px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-all duration-300 shadow-sm">
+                                  <File size={16} className="text-indigo-600" />
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-slate-800 text-sm group-hover:text-indigo-600 transition">
+                                    {q.judul}
+                                  </p>
+                                  <div className="flex items-center gap-3 mt-0.5">
+                                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                      <Clock size={9} />
+                                      {q.durasi} menit
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">•</span>
+                                    <span className="text-[10px] text-slate-400">
+                                      Dibuat: {formatDate(q.created_at)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="text-center px-6 py-4">
+                              <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">
+                                <span className="text-xs font-medium text-slate-600">{q.divisi}</span>
+                              </div>
+                            </td>
+                            <td className="text-center px-6 py-4">
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">
+                                <span className="font-bold text-slate-700 text-sm">{q.total_soal}</span>
+                                <span className="text-xs text-slate-500">soal</span>
+                              </div>
+                            </td>
+                            <td className="text-center px-6 py-4">
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">
+                                <Clock size={12} className="text-slate-500" />
+                                <span className="text-xs font-medium text-slate-600">{q.durasi} menit</span>
+                              </div>
+                            </td>
+                            <td className="text-center px-6 py-4">
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">
+                                <Users size={12} className="text-slate-500" />
+                                <span className="text-xs font-medium text-slate-600">{q.peserta}</span>
+                              </div>
+                            </td>
+                            <td className="text-center px-6 py-4">
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">
+                                <Target size={12} className="text-slate-500" />
+                                <span className="text-xs font-medium text-slate-600">{q.passing}%</span>
+                              </div>
+                            </td>
+                            <td className="text-center px-6 py-4">
+                              {q.status === "aktif" ? (
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 shadow-sm">
+                                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                                  <span className="text-xs font-medium text-emerald-600">Aktif</span>
+                                </div>
+                              ) : (
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">
+                                  <div className="w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
+                                  <span className="text-xs font-medium text-slate-500">Nonaktif</span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="text-center px-6 py-4">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={(e) => handleViewResults(quizId, e)}
+                                  className="p-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-all duration-200"
+                                  title="Lihat Hasil Peserta"
+                                >
+                                  <BarChart3 size={16} />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewDetail(quizId);
+                                  }}
+                                  className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                                  title="Lihat Detail"
+                                >
+                                  <Eye size={16} />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEdit(quizId, e);
+                                  }}
+                                  className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-all duration-200"
+                                  title="Edit Kuis"
+                                >
+                                  <Edit3 size={16} />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openDeleteModal(quizId, q.judul, e);
+                                  }}
+                                  className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200"
+                                  title="Hapus Kuis"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-
-            <button
-              onClick={() => setPage(Math.min(totalPage, page + 1))}
-              disabled={page === totalPage}
-              className={`p-2.5 rounded-xl border transition-all duration-200 ${
-                page === totalPage
-                  ? "border-slate-200 text-slate-300 cursor-not-allowed"
-                  : "border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md"
-              }`}
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        )}
+          ))}
+          
+          {sortedLevels.length === 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-lg p-12 text-center">
+              <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <File size="32" className="text-slate-400" />
+              </div>
+              <p className="text-slate-500 font-medium">Tidak ada kuis yang sesuai dengan filter</p>
+              <button onClick={resetFilters} className="mt-4 flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-all">
+                Reset Filter
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* INFO BANNER */}
-        <div className="mt-6 bg-slate-100 rounded-xl p-4 border border-slate-200">
+        <div className="mt-6 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 rounded-xl p-4 border border-indigo-100">
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 bg-slate-200 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Info size={16} className="text-slate-600" />
+            <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Info size={16} className="text-indigo-600" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-700 mb-1">Informasi</p>
+              <p className="text-xs font-semibold text-slate-700 mb-1">Sistem Kuis Bertingkat</p>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Klik ikon mata untuk melihat detail kuis, ikon pensil untuk mengedit, 
-                dan ikon tempat sampah untuk menghapus kuis. Gunakan tombol Filter untuk 
-                menyaring berdasarkan divisi atau status. Gunakan tombol Import Excel 
-                untuk mengimport banyak kuis sekaligus dengan file CSV/Excel.
+                Kuis dikelompokkan berdasarkan <strong className="text-indigo-600">Level (1-5)</strong>. 
+                Peserta harus menyelesaikan dan <strong className="text-emerald-600">LULUS</strong> (nilai ≥ passing grade) pada level sebelumnya 
+                untuk dapat mengakses kuis di level berikutnya. 
+                Gunakan ikon <BarChart3 size={12} className="inline text-purple-600" /> untuk melihat hasil dan progress peserta per level.
               </p>
             </div>
           </div>
@@ -959,6 +941,7 @@ function Quiz() {
                   <li>divisi (opsional) - Nama divisi</li>
                   <li>durasi (opsional) - Durasi dalam menit, default 30</li>
                   <li>passing (opsional) - Nilai passing grade, default 75</li>
+                  <li>level (opsional) - Level kuis (1-5), default 1</li>
                   <li>questions - JSON array berisi soal</li>
                 </ul>
               </div>
@@ -1029,39 +1012,12 @@ function Quiz() {
       )}
 
       <style jsx>{`
-        .animate-in {
-          animation: fadeIn 0.2s ease-out;
-        }
-        .slide-in-from-top-2 {
-          animation: slideInTop 0.3s ease-out;
-        }
-        .zoom-in-95 {
-          animation: zoomIn 0.2s ease-out;
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideInTop {
-          from { 
-            opacity: 0;
-            transform: translateY(-20px);
-          }
-          to { 
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @keyframes zoomIn {
-          from {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
+        .animate-in { animation: fadeIn 0.2s ease-out; }
+        .slide-in-from-top-2 { animation: slideInTop 0.3s ease-out; }
+        .zoom-in-95 { animation: zoomIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideInTop { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
       `}</style>
     </div>
   )

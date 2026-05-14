@@ -1,6 +1,8 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { api } from "../../utils/api";
+import { getPeserta, updatePeserta } from "../../api/admin/pesertaService";
+import { getMentor as getMentors } from "../../api/admin/mentorService";
+import { getDivisi } from "../../api/admin/divisiService";  
 import { logActivity } from "../../utils/activityLogger";
 import {
   ArrowLeft,
@@ -90,7 +92,7 @@ function EditPeserta() {
       setError(null);
       try {
         // Load divisi list
-        const divisiResult = await api.getDivisi();
+        const divisiResult = await getDivisi();
         let divisiData = [];
         if (divisiResult && divisiResult.success && Array.isArray(divisiResult.data)) {
           divisiData = divisiResult.data;
@@ -101,7 +103,7 @@ function EditPeserta() {
         console.log("Divisi list loaded:", divisiData);
 
         // Load mentors list
-        const mentorResult = await api.getMentors();
+        const mentorResult = await getMentors();
         let mentors = [];
         if (mentorResult && mentorResult.success && Array.isArray(mentorResult.data)) {
           mentors = mentorResult.data;
@@ -120,7 +122,7 @@ function EditPeserta() {
 
         const pesertaId = parseInt(id);
         
-        const pesertaResult = await api.getPeserta();
+        const pesertaResult = await getPeserta();
         
         let pesertaList = [];
         if (pesertaResult && pesertaResult.success && Array.isArray(pesertaResult.data)) {
@@ -349,7 +351,7 @@ function EditPeserta() {
       
       console.log("📤 Data yang akan dikirim ke API:", JSON.stringify(updateData, null, 2));
       
-      const response = await api.updatePeserta(pesertaId, updateData);
+      const response = await updatePeserta(pesertaId, updateData);
       
       console.log("📥 API Response:", response);
       

@@ -19,6 +19,7 @@ class Kuis extends Model
         'divisi',
         'durasi',
         'passing',
+        'status',        // 🔥 TAMBAHKAN INI - PENTING!
         'total_soal',
         'questions',
         'peserta',
@@ -91,7 +92,7 @@ class Kuis extends Model
     }
 
     /**
-     * Cek apakah kuis sedang aktif
+     * Cek apakah kuis sedang aktif (berdasarkan tanggal, bukan status manual)
      */
     public function getIsAktifAttribute()
     {
@@ -103,7 +104,7 @@ class Kuis extends Model
     }
 
     /**
-     * Cek apakah kuis sudah selesai
+     * Cek apakah kuis sudah selesai (berdasarkan tanggal)
      */
     public function getIsSelesaiAttribute()
     {
@@ -111,7 +112,7 @@ class Kuis extends Model
     }
 
     /**
-     * Cek apakah kuis belum dimulai
+     * Cek apakah kuis belum dimulai (berdasarkan tanggal)
      */
     public function getIsBelumMulaiAttribute()
     {
@@ -119,19 +120,45 @@ class Kuis extends Model
     }
 
     /**
-     * Get status kuis
+     * Get status kuis dinamis berdasarkan tanggal
+     * OVERRIDE: Ini akan mengabaikan nilai status di database
      */
-    public function getStatusAttribute()
+    // public function getStatusAttribute()
+    // {
+    //     if ($this->is_belum_mulai) return 'akan_datang';
+    //     if ($this->is_aktif) return 'aktif';
+    //     return 'selesai';
+    // }
+
+    /**
+     * Get status kuis dari database (manual)
+     * 🔥 PERBAIKAN: Gunakan status dari database, bukan dari tanggal
+     */
+    public function getStatusManualAttribute()
     {
-        if ($this->is_belum_mulai) return 'akan_datang';
-        if ($this->is_aktif) return 'aktif';
-        return 'selesai';
+        return $this->status ?? 'nonaktif';
     }
 
     /**
-     * Scope untuk kuis yang aktif
+     * Scope untuk kuis yang aktif (berdasarkan status manual)
      */
-    public function scopeAktif($query)
+    public function scopeStatusAktif($query)
+    {
+        return $query->where('status', 'aktif');
+    }
+
+    /**
+     * Scope untuk kuis yang nonaktif
+     */
+    public function scopeStatusNonaktif($query)
+    {
+        return $query->where('status', 'nonaktif');
+    }
+
+    /**
+     * Scope untuk kuis yang aktif berdasarkan tanggal
+     */
+    public function scopeAktifByDate($query)
     {
         $now = Carbon::now();
         return $query->where('tanggal_mulai', '<=', $now)
@@ -139,17 +166,17 @@ class Kuis extends Model
     }
 
     /**
-     * Scope untuk kuis yang sudah selesai
+     * Scope untuk kuis yang sudah selesai berdasarkan tanggal
      */
-    public function scopeSelesai($query)
+    public function scopeSelesaiByDate($query)
     {
         return $query->where('tanggal_selesai', '<', Carbon::now());
     }
 
     /**
-     * Scope untuk kuis yang akan datang
+     * Scope untuk kuis yang akan datang berdasarkan tanggal
      */
-    public function scopeAkanDatang($query)
+    public function scopeAkanDatangByDate($query)
     {
         return $query->where('tanggal_mulai', '>', Carbon::now());
     }

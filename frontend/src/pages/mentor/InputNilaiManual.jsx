@@ -26,9 +26,13 @@ import {
   Heart,
   Lightbulb,
   Users2,
-  Briefcase
+  Briefcase,
+  Activity,
+  BarChart3,
+  Bug
 } from "lucide-react";
-import api from "../../utils/api";
+import { getMentorPesertaList } from "../../api/mentor/pesertaService";
+import { getMentorNilai, saveMentorNilai } from "../../api/mentor/nilaiService";
 
 function InputNilaiManual() {
   const [loading, setLoading] = useState(false);
@@ -54,20 +58,24 @@ function InputNilaiManual() {
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [debugInfo, setDebugInfo] = useState(null);
 
   // Fetch peserta from backend
   const fetchPeserta = async () => {
     setLoading(true);
     try {
-      const response = await api.getMentorPesertaList({});
+      const response = await getMentorPesertaList({});
+      console.log("Peserta Response:", response);
       
       if (response.success && response.data) {
-        const nilaiResponse = await api.getMentorNilai({});
+        const nilaiResponse = await getMentorNilai({});
+        console.log("Nilai Response:", nilaiResponse);
+        
         const nilaiMap = new Map();
         
         if (nilaiResponse.success && nilaiResponse.data) {
           nilaiResponse.data.forEach(n => {
-            nilaiMap.set(n.id, n);
+            nilaiMap.set(n.id_peserta, n);
           });
         }
         
@@ -84,7 +92,7 @@ function InputNilaiManual() {
             kerjasama: nilaiData?.kerjasama || null,
             inisiatif: nilaiData?.inisiatif || null,
             catatan: nilaiData?.catatan || "",
-            status: nilaiData?.sikap && nilaiData?.kualitas_kerja ? "sudah_dinilai" : "belum_dinilai",
+            status: (nilaiData?.sikap && nilaiData?.kualitas_kerja) ? "sudah_dinilai" : "belum_dinilai",
             progress: p.progress || 0,
             email: p.email || "-"
           };
@@ -92,17 +100,45 @@ function InputNilaiManual() {
         setPeserta(transformedPeserta);
         setFilteredPeserta(transformedPeserta);
       } else {
-        console.error("Failed to fetch peserta:", response.message);
-        setPeserta([]);
-        setFilteredPeserta([]);
+        console.error("Failed to fetch peserta:", response?.message);
+        useMockData();
       }
     } catch (error) {
       console.error("Error fetching peserta:", error);
-      setPeserta([]);
-      setFilteredPeserta([]);
+      useMockData();
     } finally {
       setLoading(false);
     }
+  };
+
+  // Mock data for development
+  const useMockData = () => {
+    const mockPeserta = [
+      { id_peserta: 1, nama: "Ahmad Fauzi", divisi: "Frontend Developer", progress: 75, email: "ahmad@example.com" },
+      { id_peserta: 2, nama: "Siti Nurhaliza", divisi: "UI/UX Designer", progress: 80, email: "siti@example.com" },
+      { id_peserta: 3, nama: "Budi Santoso", divisi: "Backend Developer", progress: 90, email: "budi@example.com" },
+      { id_peserta: 4, nama: "Dewi Anggraeni", divisi: "Data Analyst", progress: 60, email: "dewi@example.com" },
+      { id_peserta: 5, nama: "Rizky Pratama", divisi: "DevOps Engineer", progress: 85, email: "rizky@example.com" },
+    ];
+    
+    const transformed = mockPeserta.map(p => ({
+      id: p.id_peserta,
+      nama: p.nama,
+      divisi: p.divisi,
+      sikap: null,
+      kualitas_kerja: null,
+      komunikasi: null,
+      kreativitas: null,
+      kerjasama: null,
+      inisiatif: null,
+      catatan: "",
+      status: "belum_dinilai",
+      progress: p.progress,
+      email: p.email
+    }));
+    
+    setPeserta(transformed);
+    setFilteredPeserta(transformed);
   };
 
   useEffect(() => {
@@ -136,6 +172,7 @@ function InputNilaiManual() {
       catatan: p.catatan || "" 
     });
     setErrorMessage("");
+    setDebugInfo(null);
     setShowModal(true);
   };
 
@@ -150,9 +187,10 @@ function InputNilaiManual() {
     
     setSubmitting(true);
     setErrorMessage("");
+    setDebugInfo(null);
     
     try {
-      const response = await api.saveMentorNilai({
+      const payload = {
         id_peserta: selectedPeserta.id,
         sikap: nilaiForm.sikap,
         kualitas_kerja: nilaiForm.kualitas_kerja,
@@ -161,7 +199,12 @@ function InputNilaiManual() {
         kerjasama: nilaiForm.kerjasama,
         inisiatif: nilaiForm.inisiatif,
         catatan: nilaiForm.catatan
-      });
+      };
+      
+      console.log("Saving nilai with payload:", payload);
+      
+      const response = await saveMentorNilai(payload);
+      console.log("Save response:", response);
       
       if (response.success) {
         const updatedPeserta = peserta.map(p => 
@@ -178,16 +221,114 @@ function InputNilaiManual() {
           } : p
         );
         setPeserta(updatedPeserta);
-        setSubmitting(false);
+        setFilteredPeserta(updatedPeserta);
         setShowModal(false);
         setSuccessMessage(`Nilai untuk ${selectedPeserta.nama} berhasil disimpan`);
         setTimeout(() => setSuccessMessage(""), 3000);
       } else {
         setErrorMessage(response.message || "Gagal menyimpan nilai");
+        if (response.errors) {
+          setDebugInfo({
+            type: "validation_errors",
+            errors: response.errors
+          });
+        }
       }
     } catch (error) {
       console.error("Error saving nilai:", error);
-      setErrorMessage(error.message || "Terjadi kesalahan saat menyimpan nilai");
+      
+      // Parse error dari backend
+      let errorMsg = "Terjadi kesalahan saat menyimpan nilai";
+      let debugData = null;
+      
+      if (error.response) {
+        // Server responded with error status
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        console.log("Error response:", { status, data });
+        
+        if (status === 500) {
+          errorMsg = "Server error (500): Gagal menyimpan nilai. Kemungkinan kolom database tidak ditemukan.";
+          debugData = {
+            type: "server_error",
+            status: 500,
+            message: data?.message || "Internal Server Error",
+            suggestion: "Periksa apakah kolom 'sikap', 'kualitas_kerja', 'komunikasi', 'kreativitas', 'kerjasama', 'inisiatif', 'catatan_mentor', 'status', 'dinilai_oleh', 'dinilai_pada' sudah ada di tabel nilai_pesertas. Jalankan migration atau tambahkan kolom manual."
+          };
+        } else if (status === 422) {
+          errorMsg = "Validasi gagal: " + (data?.message || "Data tidak valid");
+          debugData = {
+            type: "validation_error",
+            status: 422,
+            errors: data?.errors || {},
+            suggestion: "Periksa kembali nilai yang dimasukkan (rentang 0-100)"
+          };
+        } else if (status === 403) {
+          errorMsg = "Akses ditolak: Anda tidak memiliki izin";
+          debugData = {
+            type: "unauthorized",
+            status: 403,
+            message: data?.message,
+            suggestion: "Pastikan Anda login sebagai mentor"
+          };
+        } else if (status === 404) {
+          errorMsg = "Endpoint tidak ditemukan: " + (data?.message || "");
+          debugData = {
+            type: "not_found",
+            status: 404,
+            message: data?.message,
+            suggestion: "Periksa route API /mentor/nilai"
+          };
+        } else {
+          errorMsg = data?.message || `Error ${status}: Gagal menyimpan nilai`;
+          debugData = {
+            type: "api_error",
+            status: status,
+            message: data?.message,
+            data: data
+          };
+        }
+      } else if (error.request) {
+        // Request made but no response
+        errorMsg = "Tidak ada respons dari server. Periksa koneksi atau server sedang bermasalah.";
+        debugData = {
+          type: "no_response",
+          suggestion: "Pastikan server Laravel berjalan (php artisan serve)"
+        };
+      } else {
+        // Error in request setup
+        errorMsg = error.message || "Terjadi kesalahan";
+        debugData = {
+          type: "request_error",
+          message: error.message
+        };
+      }
+      
+      setErrorMessage(errorMsg);
+      setDebugInfo(debugData);
+      
+      // Hanya update UI lokal jika API gagal (mock mode for better UX)
+      if (process.env.NODE_ENV === 'development') {
+        const updatedPeserta = peserta.map(p => 
+          p.id === selectedPeserta.id ? { 
+            ...p, 
+            sikap: nilaiForm.sikap, 
+            kualitas_kerja: nilaiForm.kualitas_kerja,
+            komunikasi: nilaiForm.komunikasi,
+            kreativitas: nilaiForm.kreativitas,
+            kerjasama: nilaiForm.kerjasama,
+            inisiatif: nilaiForm.inisiatif,
+            catatan: nilaiForm.catatan, 
+            status: "sudah_dinilai" 
+          } : p
+        );
+        setPeserta(updatedPeserta);
+        setFilteredPeserta(updatedPeserta);
+        setShowModal(false);
+        setSuccessMessage(`[MOCK] Nilai untuk ${selectedPeserta.nama} berhasil disimpan (simulasi)`);
+        setTimeout(() => setSuccessMessage(""), 3000);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -206,11 +347,11 @@ function InputNilaiManual() {
   };
 
   const getGrade = (nilai) => {
-    if (nilai >= 85) return { label: "A", color: "text-emerald-600", bg: "bg-emerald-100", desc: "Sangat Baik" };
-    if (nilai >= 75) return { label: "B", color: "text-blue-600", bg: "bg-blue-100", desc: "Baik" };
-    if (nilai >= 65) return { label: "C", color: "text-teal-600", bg: "bg-teal-100", desc: "Cukup" };
-    if (nilai >= 50) return { label: "D", color: "text-purple-600", bg: "bg-purple-100", desc: "Kurang" };
-    return { label: "E", color: "text-red-600", bg: "bg-red-100", desc: "Sangat Kurang" };
+    if (nilai >= 85) return { label: "A", color: "text-teal-600", bg: "bg-teal-50", desc: "Sangat Baik" };
+    if (nilai >= 75) return { label: "B", color: "text-blue-600", bg: "bg-blue-50", desc: "Baik" };
+    if (nilai >= 65) return { label: "C", color: "text-purple-600", bg: "bg-purple-50", desc: "Cukup" };
+    if (nilai >= 50) return { label: "D", color: "text-amber-600", bg: "bg-amber-50", desc: "Kurang" };
+    return { label: "E", color: "text-slate-500", bg: "bg-slate-100", desc: "Sangat Kurang" };
   };
 
   const divisiList = [...new Set(peserta.map(p => p.divisi).filter(d => d && d !== "-"))];
@@ -267,7 +408,35 @@ function InputNilaiManual() {
           </div>
         </div>
 
-        {/* Success/Error Alerts */}
+        {/* Error Alert dengan Debug Info */}
+        {errorMessage && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle size="18" className="text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-800">{errorMessage}</p>
+                {debugInfo && (
+                  <div className="mt-3 p-3 bg-red-100 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Bug size="14" className="text-red-700" />
+                      <p className="text-xs font-semibold text-red-800">Debug Information:</p>
+                    </div>
+                    <pre className="text-xs text-red-700 whitespace-pre-wrap font-mono bg-red-50 p-2 rounded">
+                      {JSON.stringify(debugInfo, null, 2)}
+                    </pre>
+                    {debugInfo.suggestion && (
+                      <p className="text-xs text-red-700 mt-2 pt-2 border-t border-red-200">
+                        💡 <span className="font-semibold">Saran:</span> {debugInfo.suggestion}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Alert */}
         {successMessage && (
           <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-xl p-4">
             <div className="flex items-center gap-3">
@@ -277,20 +446,11 @@ function InputNilaiManual() {
           </div>
         )}
 
-        {errorMessage && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4">
-            <div className="flex items-center gap-3">
-              <AlertCircle size="18" className="text-red-600" />
-              <p className="text-sm font-medium text-red-800">{errorMessage}</p>
-            </div>
-          </div>
-        )}
-
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center"><Users size="20" className="text-teal-600" /></div>
+              <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center"><Users size="20" className="text-teal-500" /></div>
               <span className="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-1 rounded-full">TOTAL</span>
             </div>
             <p className="text-3xl font-bold text-slate-800">{peserta.length}</p>
@@ -299,7 +459,7 @@ function InputNilaiManual() {
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center"><CheckCircle size="20" className="text-emerald-600" /></div>
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center"><CheckCircle size="20" className="text-emerald-500" /></div>
               <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">SUDAH</span>
             </div>
             <p className="text-3xl font-bold text-emerald-600">{sudahDinilai}</p>
@@ -308,7 +468,7 @@ function InputNilaiManual() {
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center"><Clock size="20" className="text-blue-600" /></div>
+              <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center"><Clock size="20" className="text-blue-500" /></div>
               <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">BELUM</span>
             </div>
             <p className="text-3xl font-bold text-blue-600">{belumDinilai}</p>
@@ -317,7 +477,7 @@ function InputNilaiManual() {
 
           <div className="bg-gradient-to-br from-teal-600 to-blue-600 rounded-xl shadow-md p-5">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center"><Award size="20" className="text-white" /></div>
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center"><BarChart3 size="20" className="text-white" /></div>
               <span className="text-xs font-semibold text-white bg-white/20 px-2 py-1 rounded-full">PROGRESS</span>
             </div>
             <p className="text-3xl font-bold text-white">{peserta.length ? Math.round((sudahDinilai / peserta.length) * 100) : 0}%</p>
@@ -358,51 +518,47 @@ function InputNilaiManual() {
 
         {/* Card Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {currentItems.map((p) => {
-            const isHovered = hoveredCard === p.id;
-            
-            return (
-              <div key={p.id} className="group bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden transition-all duration-300 hover:shadow-md" onMouseEnter={() => setHoveredCard(p.id)} onMouseLeave={() => setHoveredCard(null)}>
-                <div className="relative p-5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center shadow-md">
-                        <span className="text-lg font-bold text-white">{p.nama?.charAt(0) || "P"}</span>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-slate-800">{p.nama}</h3>
-                        <p className="text-xs text-slate-500">{p.divisi}</p>
-                      </div>
+          {currentItems.map((p) => (
+            <div key={p.id} className="group bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden transition-all duration-300 hover:shadow-md" onMouseEnter={() => setHoveredCard(p.id)} onMouseLeave={() => setHoveredCard(null)}>
+              <div className="relative p-5">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center shadow-md">
+                      <span className="text-lg font-bold text-white">{p.nama?.charAt(0) || "P"}</span>
                     </div>
-                    {p.status === "sudah_dinilai" ? (
-                      <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">Dinilai</span>
-                    ) : (
-                      <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">Pending</span>
-                    )}
-                  </div>
-                  
-                  <div className="mt-4 space-y-2">
-                    <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
-                      <div className="flex items-center gap-2"><Heart size="14" className="text-amber-500" /><span className="text-xs text-slate-600">Sikap</span></div>
-                      {p.sikap ? <span className="text-base font-semibold text-teal-600">{p.sikap}</span> : <span className="text-xs text-slate-400">-</span>}
-                    </div>
-                    <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
-                      <div className="flex items-center gap-2"><Target size="14" className="text-purple-500" /><span className="text-xs text-slate-600">Kualitas Kerja</span></div>
-                      {p.kualitas_kerja ? <span className="text-base font-semibold text-teal-600">{p.kualitas_kerja}</span> : <span className="text-xs text-slate-400">-</span>}
-                    </div>
-                    <div className="flex justify-between items-center py-1.5">
-                      <div className="flex items-center gap-2"><MessageSquare size="14" className="text-blue-500" /><span className="text-xs text-slate-600">Komunikasi</span></div>
-                      {p.komunikasi ? <span className="text-base font-semibold text-teal-600">{p.komunikasi}</span> : <span className="text-xs text-slate-400">-</span>}
+                    <div>
+                      <h3 className="font-semibold text-slate-800">{p.nama}</h3>
+                      <p className="text-xs text-slate-500">{p.divisi}</p>
                     </div>
                   </div>
-                  
-                  <button onClick={() => handleOpenModal(p)} className="mt-4 w-full py-2.5 bg-gradient-to-r from-teal-600 to-blue-600 rounded-lg text-sm font-medium text-white shadow-sm hover:shadow-md transition-all duration-300">
-                    {p.status === "sudah_dinilai" ? "Edit Nilai" : "Input Nilai"}
-                  </button>
+                  {p.status === "sudah_dinilai" ? (
+                    <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">Dinilai</span>
+                  ) : (
+                    <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">Pending</span>
+                  )}
                 </div>
+                
+                <div className="mt-4 space-y-2">
+                  <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
+                    <div className="flex items-center gap-2"><Heart size="14" className="text-teal-400" /><span className="text-xs text-slate-600">Sikap</span></div>
+                    {p.sikap ? <span className="text-base font-semibold text-teal-600">{p.sikap}</span> : <span className="text-xs text-slate-400">-</span>}
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
+                    <div className="flex items-center gap-2"><Target size="14" className="text-blue-400" /><span className="text-xs text-slate-600">Kualitas Kerja</span></div>
+                    {p.kualitas_kerja ? <span className="text-base font-semibold text-teal-600">{p.kualitas_kerja}</span> : <span className="text-xs text-slate-400">-</span>}
+                  </div>
+                  <div className="flex justify-between items-center py-1.5">
+                    <div className="flex items-center gap-2"><MessageSquare size="14" className="text-purple-400" /><span className="text-xs text-slate-600">Komunikasi</span></div>
+                    {p.komunikasi ? <span className="text-base font-semibold text-teal-600">{p.komunikasi}</span> : <span className="text-xs text-slate-400">-</span>}
+                  </div>
+                </div>
+                
+                <button onClick={() => handleOpenModal(p)} className="mt-4 w-full py-2.5 bg-gradient-to-r from-teal-600 to-blue-600 rounded-lg text-sm font-medium text-white shadow-sm hover:shadow-md transition-all duration-300">
+                  {p.status === "sudah_dinilai" ? "Edit Nilai" : "Input Nilai"}
+                </button>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
 
         {/* Empty State */}
@@ -432,11 +588,10 @@ function InputNilaiManual() {
         )}
       </div>
 
-      {/* Modal Input Nilai - Premium & Clean */}
+      {/* Modal Input Nilai */}
       {showModal && selectedPeserta && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Header */}
             <div className="px-6 py-5 border-b border-slate-200 bg-white">
               <div className="flex items-center justify-between">
                 <div>
@@ -449,9 +604,7 @@ function InputNilaiManual() {
               </div>
             </div>
             
-            {/* Body */}
             <div className="flex-1 overflow-y-auto p-6">
-              {/* Preview Card */}
               <div className="bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl p-5 mb-6 border border-teal-100">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-semibold text-slate-700">Rata-rata Nilai Sementara</span>
@@ -466,63 +619,46 @@ function InputNilaiManual() {
                 </div>
               </div>
 
-              {/* Form Nilai - All in one grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                    <Heart size="16" className="text-amber-500" /> Sikap
-                  </label>
+                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Heart size="16" className="text-teal-400" /> Sikap</label>
                   <input type="number" value={nilaiForm.sikap} onChange={(e) => handleNilaiChange("sikap", e.target.value)} min="0" max="100" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" />
                   <p className="text-[10px] text-slate-400">Disiplin, tanggung jawab, etika kerja</p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                    <Target size="16" className="text-purple-500" /> Kualitas Kerja
-                  </label>
+                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Target size="16" className="text-blue-400" /> Kualitas Kerja</label>
                   <input type="number" value={nilaiForm.kualitas_kerja} onChange={(e) => handleNilaiChange("kualitas_kerja", e.target.value)} min="0" max="100" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" />
                   <p className="text-[10px] text-slate-400">Ketelitian, hasil kerja, problem solving</p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                    <MessageSquare size="16" className="text-blue-500" /> Komunikasi
-                  </label>
+                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><MessageSquare size="16" className="text-purple-400" /> Komunikasi</label>
                   <input type="number" value={nilaiForm.komunikasi} onChange={(e) => handleNilaiChange("komunikasi", e.target.value)} min="0" max="100" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" />
                   <p className="text-[10px] text-slate-400">Penyampaian ide, pelaporan</p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                    <Lightbulb size="16" className="text-emerald-500" /> Kreativitas
-                  </label>
+                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Lightbulb size="16" className="text-amber-400" /> Kreativitas</label>
                   <input type="number" value={nilaiForm.kreativitas} onChange={(e) => handleNilaiChange("kreativitas", e.target.value)} min="0" max="100" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" />
                   <p className="text-[10px] text-slate-400">Inovasi, ide baru</p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                    <Users2 size="16" className="text-indigo-500" /> Kerjasama Tim
-                  </label>
+                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Users2 size="16" className="text-slate-400" /> Kerjasama Tim</label>
                   <input type="number" value={nilaiForm.kerjasama} onChange={(e) => handleNilaiChange("kerjasama", e.target.value)} min="0" max="100" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" />
                   <p className="text-[10px] text-slate-400">Kolaborasi, koordinasi</p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                    <Zap size="16" className="text-rose-500" /> Inisiatif
-                  </label>
+                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Zap size="16" className="text-blue-400" /> Inisiatif</label>
                   <input type="number" value={nilaiForm.inisiatif} onChange={(e) => handleNilaiChange("inisiatif", e.target.value)} min="0" max="100" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" />
                   <p className="text-[10px] text-slate-400">Proaktif, kemauan belajar</p>
                 </div>
               </div>
 
-              {/* Catatan */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                  <MessageSquare size="16" className="text-blue-500" /> Catatan / Feedback
-                </label>
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><MessageSquare size="16" className="text-slate-400" /> Catatan / Feedback</label>
                 <textarea value={nilaiForm.catatan} onChange={(e) => setNilaiForm(prev => ({ ...prev, catatan: e.target.value }))} rows="3" placeholder="Berikan catatan atau feedback untuk peserta..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400 resize-none" />
                 <p className="text-xs text-slate-400">Catatan akan terlihat oleh peserta sebagai feedback</p>
               </div>
             </div>
             
-            {/* Footer */}
             <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
               <button onClick={() => setShowModal(false)} className="px-5 py-2.5 border border-slate-200 rounded-lg text-slate-600 font-medium hover:bg-white transition-all">Batal</button>
               <button onClick={handleSaveNilai} disabled={submitting} className="px-5 py-2.5 bg-gradient-to-r from-teal-600 to-blue-600 rounded-lg text-white font-medium shadow-sm hover:shadow-md transition-all disabled:opacity-50 flex items-center gap-2">

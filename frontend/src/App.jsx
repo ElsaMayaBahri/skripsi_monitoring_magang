@@ -1,10 +1,14 @@
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 
-// AUTH
+// ============================================
+// AUTH PAGES
+// ============================================
 import Login from "./pages/auth/Login";
 
-// ADMIN
+// ============================================
+// ADMIN PAGES - Created by: Admin Developer
+// ============================================
 import AdminLayout from "./layouts/AdminLayout";
 import DashboardAdmin from "./pages/admin/Dashboard";
 import Users from "./pages/admin/Users";
@@ -15,35 +19,45 @@ import EditMentor from "./pages/admin/EditMentor";
 import Divisi from "./pages/admin/Divisi";
 import AdminSettings from "./pages/admin/Settings";
 
-// COO
+// ============================================
+// COO PAGES - Created by: COO Developer
+// ============================================
 import CooLayout from "./layouts/CooLayout";
 import DashboardCOO from "./pages/coo/Dashboard";
 import MateriCOO from "./pages/coo/Materi";
 import AddMateriCOO from "./pages/coo/AddMateri";
 import EditMateriCOO from "./pages/coo/EditMateri";
+import DataManagement from "./pages/coo/DataManagement";
+import DetailPesertaCOO from "./pages/coo/DetailPeserta";
+import DetailMentorCOO from "./pages/coo/DetailMentor";
+import ProfileCOO from "./pages/coo/Profile";
+import SettingsCOO from "./pages/coo/Settings";
+import DaftarHasilKuis from "./pages/coo/DaftarHasilKuis"; // ✅ SATU IMPORT SAJA
 
-// QUIZ
+// QUIZ COO PAGES
 import Quiz from "./pages/coo/Quiz";
 import AddQuiz from "./pages/coo/AddQuiz";
 import AddQuestion from "./pages/coo/AddQuestion";
 import QuizDetail from "./pages/coo/QuizDetail";
 import EditQuiz from "./pages/coo/EditQuiz";
 
-// PRESENSI COO
+// PRESENSI COO PAGES
 import PresensiCOO from "./pages/coo/Presensi";
 import LaporanPresensiCOO from "./pages/coo/LaporanPresensi";
 
-// SETTINGS
+// SETTINGS COO PAGES
 import SettingsAttendance from "./pages/coo/SettingsAttendance";
 
-// MENTOR
+// ============================================
+// MENTOR PAGES - Created by: Mentor Developer
+// ============================================
 import MentorLayout from "./layouts/MentorLayout";
 import DashboardMentor from "./pages/mentor/Dashboard";
-import DaftarPeserta from "./pages/mentor/DaftarPeserta";
+import DaftarPesertaMentor from "./pages/mentor/DaftarPeserta";
 import PresensiMentor from "./pages/mentor/Presensi";
-import DailyReport from "./pages/mentor/DailyReport";
+import PresensiDailyReport from "./pages/mentor/PresensiDailyReport";
 import DaftarMateri from "./pages/mentor/DaftarMateri";
-import AddMateriMentor from "./pages/mentor/AddMateri";
+import AddMateri from "./pages/mentor/AddMateri";
 import DaftarTugasMentor from "./pages/mentor/DaftarTugas";
 import AddTugas from "./pages/mentor/AddTugas";
 import ValidasiTugas from "./pages/mentor/ValidasiTugas";
@@ -52,8 +66,12 @@ import InputNilaiManual from "./pages/mentor/InputNilaiManual";
 import NilaiAkhirMentor from "./pages/mentor/NilaiAkhir";
 import EditMateri from "./pages/mentor/EditMateri";
 import LihatMateri from "./pages/mentor/LihatMateri";
+import DetailPesertaMentor from "./pages/mentor/DetailPeserta";
+import ProfileMentor from "./pages/mentor/ProfileMentor";
 
-// PESERTA
+// ============================================
+// PESERTA PAGES - Created by: Peserta Developer
+// ============================================
 import PesertaLayout from "./layouts/PesertaLayout";
 import DashboardPeserta from "./pages/peserta/DashboardPeserta";
 import PresensiPeserta from "./pages/peserta/PresensiPeserta";
@@ -65,24 +83,29 @@ import DaftarTugasPeserta from "./pages/peserta/DaftarTugas";
 import DetailTugas from "./pages/peserta/DetailTugas";
 import NilaiAkhirPeserta from "./pages/peserta/NilaiAkhir";
 import Sertifikat from "./pages/peserta/Sertifikat";
+import ProfilePeserta from "./pages/peserta/ProfilePeserta";
+import DaftarKuisKompetensi from "./pages/peserta/DaftarKuisKompetensi"
 
-// COMPONENT
+// ============================================
+// COMPONENTS
+// ============================================
 import ProtectedRoute from "./components/ProtectedRoute";
-
-// AUTO LOGOUT
 import useIdleTimeout from "./hooks/useIdleTimeout";
 import IdleWarningModal from "./components/IdleWarningModal";
 
-// ─── Konfigurasi waktu idle ───
-const IDLE_MINUTES    = 2; // Auto-logout setelah 2 menit tidak aktif
-const WARNING_MINUTES = 1;  // Tampilkan warning 1 menit sebelum logout
+const IDLE_MINUTES = 120;
+const WARNING_MINUTES = 5;
 
+// ============================================
+// MAIN APP COMPONENT - Created by: System Architect
+// ============================================
 function App() {
   const [userRole, setUserRole] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  // Check authentication on mount
   useEffect(() => {
     const token = localStorage.getItem("token");
     const role = localStorage.getItem("role");
@@ -92,6 +115,7 @@ function App() {
     setLoading(false);
   }, []);
 
+  // Sync authentication state periodically
   useEffect(() => {
     const interval = setInterval(() => {
       const token = localStorage.getItem("token");
@@ -102,6 +126,7 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Handle auto logout when idle
   const handleAutoLogout = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
@@ -138,8 +163,10 @@ function App() {
   return (
     <>
       <Routes>
+        {/* Public Routes */}
         <Route path="/login" element={<Login />} />
 
+        {/* Root Redirect based on role */}
         <Route
           path="/"
           element={
@@ -161,7 +188,9 @@ function App() {
           }
         />
 
-        {/* ADMIN ROUTES */}
+        {/* ============================================ */}
+        {/* ADMIN ROUTES - Created by: Admin Developer */}
+        {/* ============================================ */}
         <Route
           path="/admin"
           element={
@@ -181,7 +210,9 @@ function App() {
           <Route path="divisi" element={<Divisi />} />
         </Route>
 
-        {/* COO ROUTES */}
+        {/* ============================================ */}
+        {/* COO ROUTES - Created by: COO Developer */}
+        {/* ============================================ */}
         <Route
           path="/coo"
           element={
@@ -197,15 +228,24 @@ function App() {
           <Route path="edit-materi/:id" element={<EditMateriCOO />} />
           <Route path="quiz" element={<Quiz />} />
           <Route path="quiz/:id" element={<QuizDetail />} />
+          <Route path="quiz/:id/hasil" element={<DaftarHasilKuis />} />
+          <Route path="daftar-hasil-kuis" element={<DaftarHasilKuis />} /> {/* ✅ ROUTE BARU UNTUK SIDEBAR */}
           <Route path="add-quiz" element={<AddQuiz />} />
           <Route path="add-question/:quizId" element={<AddQuestion />} />
           <Route path="edit-quiz/:id" element={<EditQuiz />} />
           <Route path="presensi" element={<PresensiCOO />} />
           <Route path="laporan-presensi" element={<LaporanPresensiCOO />} />
           <Route path="settings-attendance" element={<SettingsAttendance />} />
+          <Route path="data-management" element={<DataManagement />} />
+          <Route path="peserta/:id/detail" element={<DetailPesertaCOO />} />
+          <Route path="mentor/:id/detail" element={<DetailMentorCOO />} />
+          <Route path="profile" element={<ProfileCOO />} />
+          <Route path="settings" element={<SettingsCOO />} />
         </Route>
 
-        {/* MENTOR ROUTES */}
+        {/* ============================================ */}
+        {/* MENTOR ROUTES - Created by: Mentor Developer */}
+        {/* ============================================ */}
         <Route
           path="/mentor"
           element={
@@ -216,55 +256,76 @@ function App() {
         >
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<DashboardMentor />} />
-          <Route path="daftar-peserta" element={<DaftarPeserta />} />
-          <Route path="peserta" element={<DaftarPeserta />} />
+          <Route path="daftar-peserta" element={<DaftarPesertaMentor />} />
+          <Route path="peserta" element={<DaftarPesertaMentor />} />
+          <Route path="peserta/:id" element={<DetailPesertaMentor />} />
           <Route path="presensi" element={<PresensiMentor />} />
-          <Route path="daily-report" element={<DailyReport />} />
+          <Route path="presensi-daily-report" element={<PresensiDailyReport />} />
+          
+          {/* Materi Mentor Routes */}
           <Route path="materi" element={<DaftarMateri />} />
-          <Route path="add-materi" element={<AddMateriMentor />} />
+          <Route path="add-materi" element={<AddMateri />} />
+          <Route path="edit-materi/:id" element={<EditMateri />} />
+          <Route path="materi/:id" element={<LihatMateri />} />
+          
+          {/* Tugas Mentor Routes */}
           <Route path="tugas" element={<DaftarTugasMentor />} />
           <Route path="add-tugas" element={<AddTugas />} />
           <Route path="validasi-tugas" element={<ValidasiTugas />} />
           <Route path="validasi-tugas/:id" element={<ValidasiTugas />} />
+          
+          {/* Nilai & Laporan Routes */}
           <Route path="laporan-akhir" element={<LaporanAkhir />} />
           <Route path="input-nilai-manual" element={<InputNilaiManual />} />
           <Route path="penilaian-manual" element={<InputNilaiManual />} />
           <Route path="nilai-akhir" element={<NilaiAkhirMentor />} />
-          <Route path="/mentor/edit-materi/:id" element={<EditMateri />} />
-          <Route path="materi/:id" element={<LihatMateri />} />
+          
+          {/* Profile Mentor Route */}
+          <Route path="profile" element={<ProfileMentor />} />
         </Route>
 
-       // PESERTA ROUTES - Tambahkan route untuk daftar kuis
-<Route
-  path="/peserta"
-  element={
-    <ProtectedRoute allowedRoles={["peserta"]}>
-      <PesertaLayout />
-    </ProtectedRoute>
-  }
->
-  <Route index element={<Navigate to="dashboard" replace />} />
-  <Route path="dashboard" element={<DashboardPeserta />} />
-  <Route path="presensi" element={<PresensiPeserta />} />
-  <Route path="riwayat-presensi" element={<RiwayatPresensiPeserta />} />
-  <Route path="materi-mentor" element={<MateriMentor />} />
-  <Route path="materi-kompetensi" element={<MateriKompetensi />} />
-  
-  {/* Route untuk daftar kuis (tanpa id) */}
-  <Route path="kuis-kompetensi" element={<KuisKompetensi />} />
-  
-  {/* Route untuk detail kuis (dengan id) */}
-  <Route path="kuis-kompetensi/:id" element={<KuisKompetensi />} />
-  
-  <Route path="tugas" element={<DaftarTugasPeserta />} />
-  <Route path="tugas/:id" element={<DetailTugas />} />
-  <Route path="nilai-akhir" element={<NilaiAkhirPeserta />} />
-  <Route path="sertifikat" element={<Sertifikat />} />
-</Route>
-        {/* 404 NOT FOUND ROUTE */}
+        {/* ============================================ */}
+        {/* PESERTA ROUTES - Created by: Peserta Developer */}
+        {/* ============================================ */}
+        <Route
+          path="/peserta"
+          element={
+            <ProtectedRoute allowedRoles={["peserta"]}>
+              <PesertaLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPeserta />} />
+          <Route path="presensi" element={<PresensiPeserta />} />
+          <Route path="riwayat-presensi" element={<RiwayatPresensiPeserta />} />
+          <Route path="materi-mentor" element={<MateriMentor />} />
+          <Route path="materi-kompetensi" element={<MateriKompetensi />} />
+          
+          {/* Kuis Routes */}
+          <Route path="kuis-kompetensi" element={<KuisKompetensi />} />
+          <Route path="kuis-kompetensi/:id" element={<KuisKompetensi />} />
+          <Route path="daftar-kuis-kompetensi" element={<DaftarKuisKompetensi />} />
+          
+          {/* Tugas Routes */}
+          <Route path="tugas" element={<DaftarTugasPeserta />} />
+          <Route path="tugas/:id/kumpul" element={<DetailTugas />} />
+          
+          {/* Nilai & Sertifikat Routes */}
+          <Route path="nilai-akhir" element={<NilaiAkhirPeserta />} />
+          <Route path="sertifikat" element={<Sertifikat />} />
+          
+          {/* Profile Route */}
+          <Route path="profile" element={<ProfilePeserta />} />
+        </Route>
+
+        {/* ============================================ */}
+        {/* 404 NOT FOUND ROUTE - Created by: System Architect */}
+        {/* ============================================ */}
         <Route path="*" element={<NotFound />} />
       </Routes>
 
+      {/* Auto Logout Warning Modal */}
       {isAuthenticated && showWarning && (
         <IdleWarningModal
           countdown={countdown}
@@ -277,7 +338,9 @@ function App() {
   );
 }
 
-// COMPONENT NOT FOUND
+// ============================================
+// NOT FOUND COMPONENT 
+// ============================================
 function NotFound() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">

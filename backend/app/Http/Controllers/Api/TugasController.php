@@ -97,6 +97,8 @@ class TugasController extends Controller
                     'created_at' => $item->created_at,
                     'file_tugas' => $item->file_tugas,
                     'file_url' => $item->file_tugas ? Storage::url($item->file_tugas) : null,
+                    'file_link' => $item->file_link,
+                    'link_type' => $item->link_type,
                     'total_submissions' => $totalSubmissions,
                     'submitted_count' => $submittedCount,
                     'pending_review' => $pendingReview,
@@ -164,6 +166,8 @@ class TugasController extends Controller
                     'deadline' => $tugas->deadline->format('Y-m-d'),
                     'file_tugas' => $tugas->file_tugas,
                     'file_url' => $tugas->file_tugas ? Storage::url($tugas->file_tugas) : null,
+                    'file_link' => $tugas->file_link,
+                    'link_type' => $tugas->link_type,
                     'id_divisi' => $tugas->id_divisi,
                     'divisi' => $tugas->divisi ? $tugas->divisi->nama_divisi : null,
                     'created_at' => $tugas->created_at,
@@ -210,6 +214,8 @@ class TugasController extends Controller
                 'deadline' => 'required|date',
                 'id_peserta' => 'required',
                 'file_tugas' => 'nullable|file|max:10240',
+                'file_link' => 'nullable|string|max:500',
+                'link_type' => 'nullable|string|max:50',
             ];
 
             $request->validate($rules);
@@ -252,6 +258,12 @@ class TugasController extends Controller
                 $path = $file->storeAs('tugas', $filename, 'public');
                 $data['file_tugas'] = $path;
             }
+            
+            // Handle file link
+            if ($request->has('file_link') && !empty($request->file_link)) {
+                $data['file_link'] = $request->file_link;
+                $data['link_type'] = $request->link_type ?? null;
+            }
 
             // Buat tugas
             $tugas = Tugas::create($data);
@@ -284,6 +296,8 @@ class TugasController extends Controller
                     'judul' => $tugas->judul_tugas,
                     'file_tugas' => $tugas->file_tugas,
                     'file_url' => $tugas->file_tugas ? Storage::url($tugas->file_tugas) : null,
+                    'file_link' => $tugas->file_link,
+                    'link_type' => $tugas->link_type,
                 ]
             ]);
 
@@ -346,6 +360,8 @@ class TugasController extends Controller
                 'deadline' => 'required|date',
                 'file_tugas' => 'nullable|file|max:10240',
                 'id_divisi' => 'nullable|exists:divisis,id_divisi',
+                'file_link' => 'nullable|string|max:500',
+                'link_type' => 'nullable|string|max:50',
             ];
 
             $request->validate($rules);
@@ -368,6 +384,22 @@ class TugasController extends Controller
                 $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
                 $path = $file->storeAs('tugas', $filename, 'public');
                 $data['file_tugas'] = $path;
+                
+                // Hapus link jika upload file baru
+                $data['file_link'] = null;
+                $data['link_type'] = null;
+            }
+            
+            // Handle file link update
+            if ($request->has('file_link') && !empty($request->file_link)) {
+                $data['file_link'] = $request->file_link;
+                $data['link_type'] = $request->link_type ?? null;
+                
+                // Hapus file jika ada link baru
+                if ($tugas->file_tugas && Storage::disk('public')->exists($tugas->file_tugas)) {
+                    Storage::disk('public')->delete($tugas->file_tugas);
+                }
+                $data['file_tugas'] = null;
             }
 
             $tugas->update($data);
@@ -433,10 +465,12 @@ class TugasController extends Controller
             // Hapus semua pengumpulan tugas terkait
             PengumpulanTugas::where('id_tugas', $id)->delete();
 
+            // Hapus file jika ada
             if ($tugas->file_tugas && Storage::disk('public')->exists($tugas->file_tugas)) {
                 Storage::disk('public')->delete($tugas->file_tugas);
             }
 
+            // Hapus tugas
             $tugas->delete();
 
             return response()->json([
@@ -445,6 +479,7 @@ class TugasController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Tugas Destroy Error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal menghapus tugas: ' . $e->getMessage()
@@ -454,7 +489,10 @@ class TugasController extends Controller
 
     /**
      * Send reminder for tugas
+        /**
+     * Send reminder for tugas
      * POST /api/mentor/tugas/reminder
+     * POST /api/mentor/tugas/{id}/reminder
      */
     public function sendReminder(Request $request, $tugasId = null)
     {
@@ -477,12 +515,82 @@ class TugasController extends Controller
                 ], 404);
             }
 
+            // Ambil daftar tugas
+            $query = Tugas::where('id_mentor', $mentor->id_mentor);
+            
+            // Jika ada tugasId spesifik, filter berdasarkan id
+            if ($tugasId) {
+                $query->where('id_tugas', $tugasId);
+            }
+            
+            $tugasList = $query->get();
+            
+            if ($tugasList->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tidak ada tugas yang ditemukan'
+                ], 404);
+            }
+            
+            $reminderDetails = [];
+            $totalPeserta = 0;
+            
+            foreach ($tugasList as $tugas) {
+                // Ambil peserta yang BELUM mengumpulkan tugas
+                $belumKumpul = PengumpulanTugas::where('id_tugas', $tugas->id_tugas)
+                    ->whereNull('tanggal_kumpul')
+                    ->with(['peserta.user'])
+                    ->get();
+                
+                foreach ($belumKumpul as $pengumpulan) {
+                    $peserta = $pengumpulan->peserta;
+                    $userPeserta = $peserta->user ?? null;
+                    
+                    $reminderDetails[] = [
+                        'tugas_id' => $tugas->id_tugas,
+                        'tugas_judul' => $tugas->judul_tugas,
+                        'peserta_id' => $peserta->id_peserta,
+                        'peserta_nama' => $peserta->nama ?? ($userPeserta->nama ?? 'Unknown'),
+                        'peserta_email' => $userPeserta->email ?? '-',
+                        'deadline' => $tugas->deadline->format('Y-m-d H:i:s'),
+                    ];
+                    
+                    $totalPeserta++;
+                }
+            }
+
+            // Log pengiriman reminder
+            Log::info('Reminder sent by mentor', [
+                'mentor_id' => $mentor->id_mentor,
+                'mentor_name' => $user->nama ?? $user->name,
+                'total_reminders' => $totalPeserta,
+                'tugas_count' => $tugasList->count(),
+                'details' => $reminderDetails
+            ]);
+
+            if ($totalPeserta === 0) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Semua peserta sudah mengumpulkan tugas. Tidak ada yang perlu diingatkan.',
+                    'data' => [
+                        'total_reminders' => 0,
+                        'reminders' => []
+                    ]
+                ]);
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Pengingat berhasil dikirim'
+                'message' => "Pengingat berhasil dikirim untuk {$totalPeserta} peserta yang belum mengumpulkan tugas",
+                'data' => [
+                    'total_reminders' => $totalPeserta,
+                    'tugas_count' => $tugasList->count(),
+                    'reminders' => $reminderDetails
+                ]
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Send Reminder Error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal mengirim pengingat: ' . $e->getMessage()
@@ -550,9 +658,44 @@ class TugasController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Get Submissions Error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get peserta by mentor
+     * GET /api/mentor/peserta
+     */
+    public function getPesertaByMentor()
+    {
+        try {
+            $user = Auth::user();
+            $mentor = Mentor::where('id_user', $user->id_user)->first();
+            
+            if (!$mentor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Mentor not found'
+                ], 404);
+            }
+            
+            $peserta = Peserta::with('user')
+                ->where('id_mentor', $mentor->id_mentor)
+                ->get();
+            
+            return response()->json([
+                'success' => true,
+                'data' => $peserta
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Get Peserta By Mentor Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengambil data peserta: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -596,14 +739,18 @@ class TugasController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Nilai berhasil disimpan'
+                'message' => 'Nilai berhasil disimpan',
+                'data' => $submission
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Update Submission Error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal menyimpan nilai: ' . $e->getMessage()
             ], 500);
         }
     }
+    
+    
 }

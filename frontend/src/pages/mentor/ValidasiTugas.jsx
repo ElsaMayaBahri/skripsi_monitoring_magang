@@ -25,23 +25,28 @@ import {
   Sparkles,
   Zap,
   Target,
-  Activity
+  Activity,
+  Filter,
+  SortAsc,
+  SortDesc,
+  CheckCheck
 } from "lucide-react";
 
 function ValidasiTugas() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [tugas, setTugas] = useState(null);
   const [submissions, setSubmissions] = useState([]);
   const [filteredSubmissions, setFilteredSubmissions] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [sortOrder, setSortOrder] = useState("newest");
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [hoveredRow, setHoveredRow] = useState(null);
   const [reviewForm, setReviewForm] = useState({
-    nilai: "",
     catatan: "",
     status: "selesai"
   });
@@ -56,27 +61,16 @@ function ValidasiTugas() {
   const loadDummyData = () => {
     setLoading(true);
     setTimeout(() => {
-      const dummyTugas = {
-        id: 1,
-        judul: "Frontend Development - Week 3",
-        deskripsi: "Buat halaman dashboard dengan React JS yang menampilkan data user secara real-time",
-        deadline: "2024-12-20",
-        bobot: 30,
-        total_peserta: 8,
-        terkumpul: 4
-      };
-      setTugas(dummyTugas);
-      
       const dummySubmissions = [
         { 
           id: 1, 
           peserta_id: 1, 
           peserta_nama: "Ahmad Firmansyah", 
           peserta_divisi: "Frontend Development",
+          tugas_judul: "Membuat Landing Page",
           status: "pending",
           submitted_at: "2024-12-19 14:30:00",
           file_url: "/uploads/tugas-ahmad.pdf",
-          nilai: null,
           catatan: null,
           progress: 85
         },
@@ -85,10 +79,10 @@ function ValidasiTugas() {
           peserta_id: 2, 
           peserta_nama: "Siti Nurhaliza", 
           peserta_divisi: "Backend Development",
+          tugas_judul: "Membuat REST API",
           status: "selesai",
           submitted_at: "2024-12-18 10:15:00",
           file_url: "/uploads/tugas-siti.pdf",
-          nilai: 85,
           catatan: "Bagus, pertahankan struktur kodenya",
           progress: 92
         },
@@ -97,10 +91,10 @@ function ValidasiTugas() {
           peserta_id: 3, 
           peserta_nama: "Budi Santoso", 
           peserta_divisi: "UI/UX Design",
+          tugas_judul: "Desain Mobile App",
           status: "revisi",
           submitted_at: "2024-12-17 09:45:00",
           file_url: "/uploads/tugas-budi.pdf",
-          nilai: 65,
           catatan: "Perbaiki komponen yang crash",
           progress: 68
         },
@@ -109,10 +103,10 @@ function ValidasiTugas() {
           peserta_id: 4, 
           peserta_nama: "Dewi Lestari", 
           peserta_divisi: "Mobile Development",
+          tugas_judul: "Integrasi Firebase",
           status: "pending",
           submitted_at: "2024-12-19 16:20:00",
           file_url: "/uploads/tugas-dewi.pdf",
-          nilai: null,
           catatan: null,
           progress: 78
         },
@@ -121,12 +115,24 @@ function ValidasiTugas() {
           peserta_id: 5, 
           peserta_nama: "Eko Prasetyo", 
           peserta_divisi: "Quality Assurance",
+          tugas_judul: "Testing Automation",
           status: "pending",
           submitted_at: null,
           file_url: null,
-          nilai: null,
           catatan: null,
           progress: 71
+        },
+        { 
+          id: 6, 
+          peserta_id: 6, 
+          peserta_nama: "Rina Anggraini", 
+          peserta_divisi: "Frontend Development",
+          tugas_judul: "Membuat Dashboard",
+          status: "selesai",
+          submitted_at: "2024-12-16 11:00:00",
+          file_url: "/uploads/tugas-rina.pdf",
+          catatan: "Kode rapi dan terstruktur",
+          progress: 95
         }
       ];
       setSubmissions(dummySubmissions);
@@ -138,24 +144,42 @@ function ValidasiTugas() {
   useEffect(() => {
     let filtered = [...submissions];
     
+    // Filter search
     if (searchTerm) {
       filtered = filtered.filter(s => 
-        s.peserta_nama.toLowerCase().includes(searchTerm.toLowerCase())
+        s.peserta_nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.tugas_judul.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     
+    // Filter status
     if (filterStatus !== "all") {
       filtered = filtered.filter(s => s.status === filterStatus);
     }
     
+    // Hanya tampilkan yang sudah submit (submitted_at tidak null)
+    filtered = filtered.filter(s => s.submitted_at !== null);
+    
+    // Sorting berdasarkan tanggal submit
+    filtered.sort((a, b) => {
+      if (!a.submitted_at) return 1;
+      if (!b.submitted_at) return -1;
+      const dateA = new Date(a.submitted_at);
+      const dateB = new Date(b.submitted_at);
+      if (sortOrder === "newest") {
+        return dateB - dateA;
+      } else {
+        return dateA - dateB;
+      }
+    });
+    
     setFilteredSubmissions(filtered);
     setCurrentPage(1);
-  }, [searchTerm, filterStatus, submissions]);
+  }, [searchTerm, filterStatus, sortOrder, submissions]);
 
   const handleOpenModal = (submission) => {
     setSelectedSubmission(submission);
     setReviewForm({
-      nilai: submission.nilai || "",
       catatan: submission.catatan || "",
       status: submission.status === "pending" ? "selesai" : submission.status
     });
@@ -173,7 +197,16 @@ function ValidasiTugas() {
       setSubmissions(updatedSubmissions);
       setSubmitting(false);
       setShowModal(false);
-      alert("Validasi berhasil disimpan");
+      
+      // Show success popup
+      const statusText = reviewForm.status === "selesai" ? "diselesaikan" : "direvisi";
+      setSuccessMessage(`Tugas ${selectedSubmission.peserta_nama} - "${selectedSubmission.tugas_judul}" berhasil ${statusText}!`);
+      setShowSuccessPopup(true);
+      
+      // Auto hide popup after 3 seconds
+      setTimeout(() => {
+        setShowSuccessPopup(false);
+      }, 3000);
     }, 1000);
   };
 
@@ -188,10 +221,30 @@ function ValidasiTugas() {
     }
   };
 
+  const formatDateTime = (dateTime) => {
+    if (!dateTime) return null;
+    return new Date(dateTime).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  };
+
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredSubmissions.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredSubmissions.length / itemsPerPage);
+
+  // Hitung statistik untuk badge count
+  const submittedSubmissions = submissions.filter(s => s.submitted_at !== null);
+  const statsCount = {
+    all: submittedSubmissions.length,
+    pending: submittedSubmissions.filter(s => s.status === "pending").length,
+    revisi: submittedSubmissions.filter(s => s.status === "revisi").length,
+    selesai: submittedSubmissions.filter(s => s.status === "selesai").length
+  };
 
   const stats = {
     total: submissions.length,
@@ -220,19 +273,30 @@ function ValidasiTugas() {
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500 rounded-full blur-3xl"></div>
       </div>
       
+      {/* Success Popup */}
+      {showSuccessPopup && (
+        <div className="fixed top-24 right-6 z-50 animate-in slide-in-from-right duration-300">
+          <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl shadow-2xl p-4 flex items-center gap-3 min-w-[320px]">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <CheckCheck className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="text-white font-semibold text-sm">Validasi Berhasil!</p>
+              <p className="text-white/80 text-xs">{successMessage}</p>
+            </div>
+            <button onClick={() => setShowSuccessPopup(false)} className="text-white/70 hover:text-white">
+              <X size="16" />
+            </button>
+          </div>
+        </div>
+      )}
+      
       <div className="relative p-6 lg:p-8 max-w-[1400px] mx-auto">
         
-        {/* Header Premium */}
+        {/* Header */}
         <div className="relative mb-10 rounded-2xl overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-teal-500/15 via-blue-500/10 to-teal-500/15 rounded-2xl"></div>
           <div className="relative px-6 py-5">
-            <Link to="/mentor/tugas" className="group inline-flex items-center gap-2 text-slate-500 hover:text-teal-600 transition-all duration-300 mb-4">
-              <div className="p-1 rounded-lg bg-white/80 backdrop-blur-sm shadow-sm group-hover:bg-teal-50 transition-colors">
-                <ArrowLeft size="14" />
-              </div>
-              <span className="text-sm font-medium">Kembali ke Daftar Tugas</span>
-            </Link>
-            
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="relative">
@@ -245,23 +309,7 @@ function ValidasiTugas() {
                   <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 via-teal-800 to-blue-800 bg-clip-text text-transparent">
                     Validasi Tugas
                   </h1>
-                  <p className="text-sm text-slate-500 mt-1">{tugas?.judul}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 px-5 py-2.5 bg-white/80 backdrop-blur-sm rounded-xl border border-slate-100 shadow-sm">
-                <div>
-                  <p className="text-xs text-slate-400">Deadline</p>
-                  <p className="text-sm font-bold text-slate-700">{tugas?.deadline}</p>
-                </div>
-                <div className="w-px h-8 bg-slate-200"></div>
-                <div>
-                  <p className="text-xs text-slate-400">Bobot</p>
-                  <p className="text-sm font-bold text-teal-600">{tugas?.bobot}%</p>
-                </div>
-                <div className="w-px h-8 bg-slate-200"></div>
-                <div>
-                  <p className="text-xs text-slate-400">Pengumpulan</p>
-                  <p className="text-sm font-bold text-emerald-600">{stats.submitted}/{stats.total}</p>
+                  <p className="text-sm text-slate-500 mt-1">Review dan validasi tugas yang telah dikumpulkan peserta</p>
                 </div>
               </div>
             </div>
@@ -312,18 +360,48 @@ function ValidasiTugas() {
               </div>
               <input
                 type="text"
-                placeholder="Cari peserta..."
+                placeholder="Cari peserta atau judul tugas..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="block w-full pl-11 pr-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200"
               />
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
-                <button onClick={() => setFilterStatus("all")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${filterStatus === "all" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>Semua</button>
-                <button onClick={() => setFilterStatus("pending")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${filterStatus === "pending" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>Menunggu</button>
-                <button onClick={() => setFilterStatus("revisi")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${filterStatus === "revisi" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>Revisi</button>
-                <button onClick={() => setFilterStatus("selesai")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${filterStatus === "selesai" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>Selesai</button>
+                <button onClick={() => setSortOrder("newest")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 ${sortOrder === "newest" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>
+                  <SortDesc size="12" />
+                  Terbaru
+                </button>
+                <button onClick={() => setSortOrder("oldest")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 ${sortOrder === "oldest" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>
+                  <SortAsc size="12" />
+                  Terlama
+                </button>
+              </div>
+              <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
+                <button onClick={() => setFilterStatus("all")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 ${filterStatus === "all" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>
+                  Semua
+                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${filterStatus === "all" ? "bg-teal-100 text-teal-600" : "bg-slate-200 text-slate-500"}`}>
+                    {statsCount.all}
+                  </span>
+                </button>
+                <button onClick={() => setFilterStatus("pending")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 ${filterStatus === "pending" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>
+                  Menunggu
+                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${filterStatus === "pending" ? "bg-teal-100 text-teal-600" : "bg-slate-200 text-slate-500"}`}>
+                    {statsCount.pending}
+                  </span>
+                </button>
+                <button onClick={() => setFilterStatus("revisi")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 ${filterStatus === "revisi" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>
+                  Revisi
+                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${filterStatus === "revisi" ? "bg-teal-100 text-teal-600" : "bg-slate-200 text-slate-500"}`}>
+                    {statsCount.revisi}
+                  </span>
+                </button>
+                <button onClick={() => setFilterStatus("selesai")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 ${filterStatus === "selesai" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>
+                  Selesai
+                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${filterStatus === "selesai" ? "bg-teal-100 text-teal-600" : "bg-slate-200 text-slate-500"}`}>
+                    {statsCount.selesai}
+                  </span>
+                </button>
               </div>
             </div>
           </div>
@@ -345,10 +423,9 @@ function ValidasiTugas() {
               <thead>
                 <tr className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
                   <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Peserta</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Divisi</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tugas</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tgl Kumpul</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nilai</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
                 </tr>
               </thead>
@@ -384,7 +461,9 @@ function ValidasiTugas() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-xs font-medium text-slate-600">{sub.peserta_divisi}</span>
+                        <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">
+                          {sub.tugas_judul}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         {sub.submitted_at ? (
@@ -393,12 +472,7 @@ function ValidasiTugas() {
                               <Calendar size="12" className="text-teal-500" />
                             </div>
                             <span className="text-xs font-medium text-slate-600">
-                              {new Date(sub.submitted_at).toLocaleDateString("id-ID", {
-                                day: "numeric",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit"
-                              })}
+                              {formatDateTime(sub.submitted_at)}
                             </span>
                           </div>
                         ) : (
@@ -415,19 +489,6 @@ function ValidasiTugas() {
                           <StatusIcon size="10" />
                           <span className="text-[10px] font-semibold">{status.label}</span>
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {sub.nilai ? (
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center">
-                              <Star size="12" className="text-teal-500" />
-                            </div>
-                            <span className="text-sm font-bold text-teal-600">{sub.nilai}</span>
-                            <span className="text-[10px] text-slate-400">/100</span>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-slate-400">-</span>
-                        )}
                       </td>
                       <td className="px-6 py-4">
                         <button 
@@ -509,8 +570,7 @@ function ValidasiTugas() {
             <div>
               <p className="text-sm font-bold text-teal-800">Informasi Validasi</p>
               <p className="text-xs text-teal-700 mt-1 leading-relaxed">
-                Berikan nilai dan catatan yang konstruktif untuk setiap tugas. Nilai <span className="font-bold text-teal-800">≥ 85</span> termasuk kategori "Sangat Baik".
-                Peserta akan menerima notifikasi setelah Anda melakukan validasi.
+                Berikan catatan yang konstruktif untuk setiap tugas. Peserta akan menerima notifikasi setelah Anda melakukan validasi.
               </p>
             </div>
           </div>
@@ -529,7 +589,7 @@ function ValidasiTugas() {
                   </div>
                   <h3 className="text-lg font-bold text-slate-800">Review Tugas</h3>
                 </div>
-                <p className="text-sm text-slate-500 mt-1">{selectedSubmission.peserta_nama}</p>
+                <p className="text-sm text-slate-500 mt-1">{selectedSubmission.peserta_nama} - {selectedSubmission.tugas_judul}</p>
               </div>
               <button onClick={() => setShowModal(false)} className="p-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors">
                 <X size="18" />
@@ -548,7 +608,10 @@ function ValidasiTugas() {
                       <p className="text-sm font-semibold text-slate-700">File Tugas</p>
                       <p className="text-xs text-slate-400">Lihat file yang diupload peserta</p>
                     </div>
-                    <button className="ml-auto px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-semibold hover:shadow-md transition-all duration-200 flex items-center gap-1.5">
+                    <button 
+                      onClick={() => window.open(selectedSubmission.file_url, '_blank')}
+                      className="ml-auto px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-semibold hover:shadow-md transition-all duration-200 flex items-center gap-1.5"
+                    >
                       <Download size="12" />
                       Download
                     </button>
@@ -556,31 +619,20 @@ function ValidasiTugas() {
                 </div>
               )}
 
-              {/* Nilai */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                  <div className="p-1 rounded-lg bg-teal-50">
-                    <Star size="12" className="text-teal-500" />
-                  </div>
-                  Nilai <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    value={reviewForm.nilai}
-                    onChange={(e) => setReviewForm(prev => ({ ...prev, nilai: e.target.value }))}
-                    placeholder="0 - 100"
-                    className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200"
-                  />
-                  {reviewForm.nilai && (
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                      <span className={`text-xs font-bold ${reviewForm.nilai >= 85 ? 'text-emerald-500' : reviewForm.nilai >= 70 ? 'text-teal-500' : 'text-rose-500'}`}>
-                        / 100
-                      </span>
+              {/* Informasi Pengumpulan */}
+              {selectedSubmission.submitted_at && (
+                <div className="bg-gradient-to-r from-teal-50 to-white rounded-xl p-4 border border-teal-100">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-teal-100">
+                      <Calendar size="16" className="text-teal-600" />
                     </div>
-                  )}
+                    <div>
+                      <p className="text-xs text-slate-500">Tanggal Pengumpulan</p>
+                      <p className="text-sm font-semibold text-slate-700">{formatDateTime(selectedSubmission.submitted_at)}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Status */}
               <div>
@@ -588,7 +640,7 @@ function ValidasiTugas() {
                   <div className="p-1 rounded-lg bg-teal-50">
                     <Activity size="12" className="text-teal-500" />
                   </div>
-                  Status <span className="text-red-500">*</span>
+                  Status Validasi <span className="text-red-500">*</span>
                 </label>
                 <div className="flex gap-3">
                   <button
@@ -603,8 +655,7 @@ function ValidasiTugas() {
                     <CheckCircle size="16" />
                     Selesai
                   </button>
-                  <button
-                    type="button"
+                  <button                    type="button"
                     onClick={() => setReviewForm(prev => ({ ...prev, status: "revisi" }))}
                     className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
                       reviewForm.status === "revisi"
@@ -624,7 +675,7 @@ function ValidasiTugas() {
                   <div className="p-1 rounded-lg bg-blue-50">
                     <MessageSquare size="12" className="text-blue-500" />
                   </div>
-                  Catatan
+                  Catatan / Feedback
                 </label>
                 <textarea
                   value={reviewForm.catatan}
@@ -643,7 +694,7 @@ function ValidasiTugas() {
                   {submitting ? <Loader2 size="16" className="animate-spin" /> : <Send size="16" />}
                   {submitting ? "Menyimpan..." : "Simpan Review"}
                 </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover/btn:translate-y-0 transition-transform duration-300"></div>
               </button>
             </div>
           </div>
@@ -659,6 +710,10 @@ function ValidasiTugas() {
           from { opacity: 0; transform: scale(0.95); }
           to { opacity: 1; transform: scale(1); }
         }
+        @keyframes slide-in-from-right {
+          from { opacity: 0; transform: translateX(100%); }
+          to { opacity: 1; transform: translateX(0); }
+        }
         .animate-in {
           animation-duration: 0.2s;
           animation-fill-mode: both;
@@ -668,6 +723,9 @@ function ValidasiTugas() {
         }
         .zoom-in-95 {
           animation-name: zoom-in-95;
+        }
+        .slide-in-from-right {
+          animation-name: slide-in-from-right;
         }
       `}</style>
     </div>

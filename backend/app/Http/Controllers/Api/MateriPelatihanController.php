@@ -34,7 +34,7 @@ class MateriPelatihanController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal mengambil data materi',
-                'error' => $e->getMessage()
+                'data' => []
             ], 500);
         }
     }
@@ -47,9 +47,11 @@ class MateriPelatihanController extends Controller
         if ($materi->file_materi) {
             // Get filename from path
             $filename = basename($materi->file_materi);
+            $materi->file_materi_url = url('/api/materi-file/' . $filename);
             $materi->file_url = url('/api/materi-file/' . $filename);
             $materi->file_preview_url = url('/api/materi-file/' . $filename);
         } else {
+            $materi->file_materi_url = null;
             $materi->file_url = null;
             $materi->file_preview_url = null;
         }
@@ -331,46 +333,6 @@ class MateriPelatihanController extends Controller
                 'success' => false,
                 'message' => 'Gagal mendownload file: ' . $e->getMessage()
             ], 500);
-        }
-    }
-
-    /**
-     * Serve file for preview (public access)
-     * 🔥 INI METHOD PENTING UNTUK PREVIEW FILE
-     */
-    public function serveFile($filename)
-    {
-        try {
-            // Cari file di storage/public/materi/
-            $path = storage_path('app/public/materi/' . $filename);
-            
-            if (!file_exists($path)) {
-                Log::error('File not found: ' . $path);
-                return response()->json(['error' => 'File not found'], 404);
-            }
-            
-            $mime = mime_content_type($path);
-            $fileSize = filesize($path);
-            
-            // Set header untuk cache dan CORS
-            $headers = [
-                'Content-Type' => $mime,
-                'Content-Length' => $fileSize,
-                'Access-Control-Allow-Origin' => '*',
-                'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
-                'Access-Control-Allow-Headers' => '*',
-                'Cache-Control' => 'public, max-age=86400',
-            ];
-            
-            // Untuk PDF, tambahkan header agar bisa ditampilkan di iframe
-            if ($mime === 'application/pdf') {
-                $headers['Content-Disposition'] = 'inline; filename="' . $filename . '"';
-            }
-            
-            return response()->file($path, $headers);
-        } catch (\Exception $e) {
-            Log::error('Error serve file: ' . $e->getMessage());
-            return response()->json(['error' => 'Internal server error'], 500);
         }
     }
 }

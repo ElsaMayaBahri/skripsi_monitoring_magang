@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../utils/api";
+import { createMentor } from "../../api/admin/mentorService";
+import { getDivisi } from "../../api/admin/divisiService";
 import { logActivity } from "../../utils/activityLogger";
 import {
   ArrowLeft,
@@ -68,7 +69,7 @@ function AddMentor() {
   const loadDivisiList = async () => {
     setDivisiLoading(true);
     try {
-      const response = await api.getDivisi();
+      const response = await getDivisi();
       let divisiData = [];
       
       if (response && response.success && Array.isArray(response.data)) {
@@ -237,7 +238,7 @@ function AddMentor() {
         status: true
       };
       
-      const response = await api.addMentor(mentorData);
+      const response = await createMentor(mentorData);
       
       if (response && response.success) {
         logActivity("create", "mentor", form.name);
@@ -391,7 +392,7 @@ function AddMentor() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                     >
-                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                     {showPassword ? <Eye size={14} /> : <EyeOff size={14} />}
                     </button>
                     {form.password && isPasswordValid() && !getFieldError('password') && (
                       <CheckCircle size={14} className="absolute right-9 top-1/2 -translate-y-1/2 text-emerald-500" />
@@ -451,7 +452,7 @@ function AddMentor() {
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                     >
-                      {showConfirmPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                      {showConfirmPassword ? <Eye size={14} /> : <EyeOff size={14} />}
                     </button>
                     {form.password_confirmation && isPasswordMatch() && !getFieldError('password_confirmation') && (
                       <CheckCircle size={14} className="absolute right-9 top-1/2 -translate-y-1/2 text-emerald-500" />

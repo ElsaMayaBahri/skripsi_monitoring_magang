@@ -22,7 +22,11 @@ import {
   Download,
   Calendar,
   Clock,
-  Shield
+  Shield,
+  Layers,
+  Users,
+  BarChart3,
+  AlertCircle
 } from "lucide-react"
 
 function CooLayout() {
@@ -37,6 +41,7 @@ function CooLayout() {
   const [pengaturanOpen, setPengaturanOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
 
   const [materiCount, setMateriCount] = useState(0)
   const [quizCount, setQuizCount] = useState(0)
@@ -46,8 +51,8 @@ function CooLayout() {
   const userInitial = currentUser.nama
     ? currentUser.nama.charAt(0).toUpperCase()
     : "C"
-  const userFullName = currentUser.nama || "User"
-  const userEmail = currentUser.email || "user@kuantaacademy.com"
+  const userFullName = currentUser.nama || "COO Perusahaan"
+  const userEmail = currentUser.email || "coo@kuanta.id"
 
   useEffect(() => {
     const storedMateri = JSON.parse(localStorage.getItem("materi")) || []
@@ -71,46 +76,85 @@ function CooLayout() {
   }
 
   const formatDate = (date) => {
-    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
     const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
-    const dayName = days[date.getDay()]
     const day = date.getDate()
     const month = months[date.getMonth()]
     const year = date.getFullYear()
-    return `${dayName}, ${day} ${month} ${year}`
+    return `${day} ${month} ${year}`
   }
 
   const isActive = (path) => {
     if (path === "/coo/dashboard") return location.pathname === "/coo/dashboard"
     if (path === "/coo/materi") return location.pathname.includes("/coo/materi")
-    if (path === "/coo/quiz") return location.pathname.includes("/coo/quiz")
+    if (path === "/coo/quiz") return location.pathname === "/coo/quiz" || location.pathname === "/coo/add-quiz" || location.pathname.includes("/coo/edit-quiz")
+    if (path === "/coo/daftar-hasil-kuis") return location.pathname === "/coo/daftar-hasil-kuis"
     if (path === "/coo/presensi") return location.pathname === "/coo/presensi"
     if (path === "/coo/laporan-presensi") return location.pathname === "/coo/laporan-presensi"
     if (path === "/coo/settings-attendance") return location.pathname === "/coo/settings-attendance"
+    if (path === "/coo/data-management") return location.pathname === "/coo/data-management"
+    if (path === "/coo/profile") return location.pathname === "/coo/profile"
+    if (path === "/coo/settings") return location.pathname === "/coo/settings"
     return location.pathname.includes(path)
   }
 
+  // ✅ PERBAIKI: Fungsi untuk mendapatkan judul halaman tanpa ID
   const getPageTitle = () => {
-    const path = location.pathname.replace("/coo/", "")
-    const titles = {
-      "dashboard": "Dashboard",
-      "materi": "Materi Kompetensi",
-      "add-materi": "Tambah Materi",
-      "edit-materi": "Edit Materi",
-      "quiz": "Kuis",
-      "add-quiz": "Buat Kuis Baru",
-      "quiz-detail": "Detail Kuis",
-      "add-question": "Tambah Pertanyaan",
-      "presensi": "Data Presensi Peserta",
-      "laporan-presensi": "Laporan Rekap Presensi",
-      "settings-attendance": "Pengaturan Hari Libur & Jam Kerja"
+    const pathname = location.pathname
+    
+    // Dashboard
+    if (pathname === "/coo/dashboard") return "Dashboard"
+    
+    // Manajemen Data
+    if (pathname === "/coo/data-management") return "Manajemen Data"
+    
+    // Materi
+    if (pathname === "/coo/materi") return "Materi Kompetensi"
+    if (pathname === "/coo/add-materi") return "Tambah Materi"
+    if (pathname.includes("/coo/edit-materi")) return "Edit Materi"
+    
+    // Kuis
+    if (pathname === "/coo/quiz") return "Kuis"
+    if (pathname === "/coo/add-quiz") return "Buat Kuis Baru"
+    if (pathname === "/coo/daftar-hasil-kuis") return "Hasil Kuis Peserta"
+    if (pathname.includes("/coo/edit-quiz")) return "Edit Kuis"
+    if (pathname.includes("/coo/quiz/") && pathname.includes("/hasil")) return "Detail Hasil Kuis"
+    if (pathname.includes("/coo/quiz/") && !pathname.includes("/hasil") && !pathname.includes("/add") && !pathname.includes("/edit")) {
+      return "Detail Kuis"
     }
-    return titles[path] || path.charAt(0).toUpperCase() + path.slice(1)
+    
+    // Presensi
+    if (pathname === "/coo/presensi") return "Data Presensi Peserta"
+    if (pathname === "/coo/laporan-presensi") return "Laporan Rekap Presensi"
+    
+    // Pengaturan
+    if (pathname === "/coo/settings-attendance") return "Pengaturan Hari Libur & Jam Kerja"
+    
+    // Profile
+    if (pathname === "/coo/profile") return "Profil Saya"
+    if (pathname === "/coo/settings") return "Pengaturan Akun"
+    
+    // Default: ambil dari path terakhir tanpa parameter ID
+    const lastPath = pathname.split('/').filter(p => p && !/^\d+$/.test(p)).pop()
+    if (lastPath) {
+      return lastPath.charAt(0).toUpperCase() + lastPath.slice(1).replace(/-/g, ' ')
+    }
+    
+    return "COO Panel"
   }
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true)
+    setProfileOpen(false)
+  }
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false)
     localStorage.clear()
     navigate("/login")
+  }
+
+  const handleCancelLogout = () => {
+    setShowLogoutModal(false)
   }
 
   const unreadCount = notifications.filter(n => !n.is_read).length
@@ -125,11 +169,6 @@ function CooLayout() {
     navigate("/coo/settings")
   }
 
-  const handleHelp = () => {
-    setProfileOpen(false)
-    navigate("/coo/help")
-  }
-
   const isMateriActive = () => {
     return location.pathname === "/coo/materi" || 
            location.pathname === "/coo/add-materi" || 
@@ -139,13 +178,58 @@ function CooLayout() {
   const isQuizActive = () => {
     return location.pathname === "/coo/quiz" || 
            location.pathname === "/coo/add-quiz" || 
-           location.pathname.includes("/coo/quiz-detail") ||
-           location.pathname.includes("/coo/add-question")
+           location.pathname.includes("/coo/edit-quiz")
+  }
+
+  const isDaftarHasilKuisActive = () => {
+    return location.pathname === "/coo/daftar-hasil-kuis"
+  }
+
+  const isQuizResultActive = () => {
+    return location.pathname.includes("/quiz/") && location.pathname.includes("/hasil")
   }
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden relative">
       
+      {/* LOGOUT CONFIRMATION MODAL */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-zoomIn">
+            <div className="relative">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-500 to-rose-500 rounded-t-2xl"></div>
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-red-100 rounded-xl">
+                    <LogOut className="w-6 h-6 text-red-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-slate-800">Konfirmasi Keluar</h3>
+                </div>
+                <p className="text-slate-600 mb-6">
+                  Apakah Anda yakin ingin mengakhiri sesi ini?
+                  <br />
+                  <span className="text-sm text-slate-400">Anda akan keluar dari dashboard COO dan perlu login kembali untuk mengaksesnya.</span>
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCancelLogout}
+                    className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={handleConfirmLogout}
+                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-xl text-white font-medium hover:shadow-lg transition-all"
+                  >
+                    Ya, Keluar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* DECORATIVE GRADIENT LINE */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-400 via-blue-500 to-teal-400 z-50"></div>
 
@@ -174,9 +258,9 @@ function CooLayout() {
           {/* MENU NAVIGATION */}
           <div className="px-3 py-6 flex-1 overflow-y-auto">
             <div className="mb-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-3">Navigasi Utama</p>
               <ul className="space-y-1 text-sm">
                 
+                {/* DASHBOARD */}
                 <Link to="/coo/dashboard">
                   <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
                     isActive("/coo/dashboard")
@@ -186,6 +270,21 @@ function CooLayout() {
                     <LayoutDashboard size={18} />
                     {!collapsed && <span className="font-medium">Dashboard</span>}
                     {isActive("/coo/dashboard") && !collapsed && (
+                      <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
+                    )}
+                  </li>
+                </Link>
+
+                {/* MANAJEMEN DATA - LANGSUNG TANPA DROPDOWN */}
+                <Link to="/coo/data-management">
+                  <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                    isActive("/coo/data-management")
+                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}>
+                    <Layers size={18} />
+                    {!collapsed && <span className="font-medium">Manajemen Data</span>}
+                    {isActive("/coo/data-management") && !collapsed && (
                       <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
                     )}
                   </li>
@@ -246,7 +345,7 @@ function CooLayout() {
                   <div 
                     onClick={() => !collapsed && setQuizOpen(!quizOpen)}
                     className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                      isQuizActive()
+                      isQuizActive() || isDaftarHasilKuisActive()
                         ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
                         : "text-gray-600 hover:bg-gray-100"
                     }`}
@@ -285,6 +384,17 @@ function CooLayout() {
                         }`}>
                           <PlusCircle size={14} />
                           <span>Buat Kuis</span>
+                        </div>
+                      </Link>
+                      {/* Menu Hasil Kuis */}
+                      <Link to="/coo/daftar-hasil-kuis">
+                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                          isDaftarHasilKuisActive()
+                            ? "bg-teal-50 text-teal-600 font-medium"
+                            : "text-gray-500 hover:bg-gray-100"
+                        }`}>
+                          <BarChart3 size={14} />
+                          <span>Hasil Kuis</span>
                         </div>
                       </Link>
                     </div>
@@ -388,7 +498,7 @@ function CooLayout() {
           {/* LOGOUT BUTTON */}
           <div className="p-4 border-t border-gray-200">
             <button
-              onClick={handleLogout}
+              onClick={handleLogoutClick}
               className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white py-2.5 rounded-xl transition-all duration-200 shadow-md shadow-red-500/20 group"
             >
               <LogOut size={18} className="transition-transform group-hover:scale-110" />
@@ -406,7 +516,7 @@ function CooLayout() {
 
         </div>
 
-        {/* RIGHT SIDE - LANGSUNG MENYATU TANPA JARAK */}
+        {/* RIGHT SIDE */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white">
           
           {/* TOPBAR */}
@@ -424,6 +534,7 @@ function CooLayout() {
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-500">COO</span>
                   <ChevronRight size={12} className="text-gray-400" />
+                  {/* ✅ PERBAIKI: Sekarang hanya menampilkan nama halaman tanpa ID */}
                   <span className="font-semibold text-gray-800 bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
                     {getPageTitle()}
                   </span>
@@ -435,25 +546,15 @@ function CooLayout() {
             <div className="flex items-center gap-4">
               
               {/* DATE TIME */}
-              <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-white rounded-xl border border-gray-200 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-gradient-to-br from-teal-400 to-blue-500 rounded-lg flex items-center justify-center shadow-sm">
-                    <Calendar size={16} className="text-white" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wide">Hari Ini</p>
-                    <p className="text-sm font-semibold text-gray-800">{formatDate(time)}</p>
-                  </div>
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-gray-50/80 rounded-xl border border-gray-200/80 shadow-sm">
+                <div className="flex items-center gap-1.5">
+                  <Calendar size={14} className="text-teal-500" />
+                  <span className="text-sm font-medium text-gray-700">{formatDate(time)}</span>
                 </div>
-                <div className="w-px h-8 bg-gray-200"></div>
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <Clock size={16} className="text-teal-500" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wide">Waktu</p>
-                    <p className="text-sm font-mono font-semibold text-gray-800">{formatTime(time)}</p>
-                  </div>
+                <div className="w-px h-4 bg-gray-200"></div>
+                <div className="flex items-center gap-1.5">
+                  <Clock size={14} className="text-blue-500" />
+                  <span className="text-sm font-mono font-semibold text-gray-800">{formatTime(time)}</span>
                 </div>
               </div>
 
@@ -565,26 +666,13 @@ function CooLayout() {
                           <p className="text-xs text-gray-400">Atur preferensi aplikasi</p>
                         </div>
                       </button>
-                      
-                      <button 
-                        onClick={handleHelp}
-                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition group"
-                      >
-                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-teal-50 transition">
-                          <HelpCircle size={14} className="text-gray-500 group-hover:text-teal-500" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <p className="font-medium">Pusat Bantuan</p>
-                          <p className="text-xs text-gray-400">Dokumentasi & support</p>
-                        </div>
-                      </button>
                     </div>
 
                     <div className="border-t border-gray-200 my-1"></div>
 
                     <div className="py-2 pb-3">
                       <button 
-                        onClick={handleLogout}
+                        onClick={handleLogoutClick}
                         className="w-full flex items-center gap-3 px-5 py-3 text-sm text-red-600 hover:bg-red-50 transition group"
                       >
                         <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center group-hover:bg-red-100 transition">
@@ -602,7 +690,7 @@ function CooLayout() {
             </div>
           </div>
 
-          {/* PAGE CONTENT - LANGSUNG MENYATU TANPA PADDING */}
+          {/* PAGE CONTENT */}
           <div className="flex-1 overflow-y-auto">
             <Outlet />
           </div>
@@ -611,6 +699,15 @@ function CooLayout() {
 
       </div>
 
+      <style>{`
+        @keyframes zoomIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-zoomIn {
+          animation: zoomIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   )
 }

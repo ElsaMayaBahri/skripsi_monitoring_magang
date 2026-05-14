@@ -33,9 +33,12 @@ import {
   ExternalLink,
   File,
   Image,
-  FileArchive
+  FileArchive,
+  Link as LinkIcon,
+  Globe,
+  Copy
 } from "lucide-react";
-import api from "../../utils/api";
+import * as api from "../../api/mentor/tugasService";
 
 function DaftarTugas() {
   const [loading, setLoading] = useState(false);
@@ -54,9 +57,10 @@ function DaftarTugas() {
   const [selectedFilter, setSelectedFilter] = useState("all");
   const [deleting, setDeleting] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [previewFile, setPreviewFile] = useState(null);
   const [previewFileUrl, setPreviewFileUrl] = useState("");
   const [previewFileName, setPreviewFileName] = useState("");
+  const [previewFileType, setPreviewFileType] = useState("");
+  const [copySuccess, setCopySuccess] = useState(null);
 
   // Helper function untuk mendapatkan URL file yang benar
   const getFileUrl = (filePath) => {
@@ -64,6 +68,7 @@ function DaftarTugas() {
     if (filePath.startsWith('http')) return filePath;
     if (filePath.startsWith('/storage')) return `http://localhost:8000${filePath}`;
     if (filePath.startsWith('tugas/')) return `http://localhost:8000/storage/${filePath}`;
+    if (filePath.startsWith('storage/')) return `http://localhost:8000/${filePath}`;
     return `http://localhost:8000/storage/${filePath}`;
   };
 
@@ -72,6 +77,7 @@ function DaftarTugas() {
     setLoading(true);
     try {
       const response = await api.getMentorTugas();
+      console.log("Tugas response:", response);
       
       if (response.success && response.data) {
         const transformedTugas = response.data.map(item => ({
@@ -79,7 +85,7 @@ function DaftarTugas() {
           judul: item.judul,
           deskripsi: item.deskripsi || "-",
           deadline: item.deadline,
-          bobot: item.bobot,
+          bobot: item.bobot || 0,
           status: item.status || (new Date(item.deadline) < new Date() ? "closed" : "active"),
           created_at: item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
           submissions: item.submissions || [],
@@ -87,12 +93,14 @@ function DaftarTugas() {
           submitted_count: item.submitted_count || 0,
           pending_review: item.pending_review || 0,
           file_tugas: item.file_tugas,
-          file_url: getFileUrl(item.file_tugas)
+          file_url: getFileUrl(item.file_tugas),
+          file_link: item.file_link,
+          link_type: item.link_type
         }));
         setTugas(transformedTugas);
         setFilteredTugas(transformedTugas);
       } else {
-        console.error("Failed to fetch tugas:", response.message);
+        console.error("Failed to fetch tugas:", response?.message);
         setTugas([]);
         setFilteredTugas([]);
       }
@@ -186,9 +194,38 @@ function DaftarTugas() {
     }
   };
 
+  const copyToClipboard = async (text, tugasId) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopySuccess(tugasId);
+      setTimeout(() => setCopySuccess(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+      alert("Gagal menyalin link");
+    }
+  };
+
   const openPreview = (fileUrl, fileName) => {
+    const ext = fileName?.split('.').pop()?.toLowerCase() || '';
+    let fileType = '';
+    
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) {
+      fileType = 'image';
+    } else if (ext === 'pdf') {
+      fileType = 'pdf';
+    } else if (['doc', 'docx'].includes(ext)) {
+      fileType = 'word';
+    } else if (['xls', 'xlsx'].includes(ext)) {
+      fileType = 'excel';
+    } else if (['ppt', 'pptx'].includes(ext)) {
+      fileType = 'powerpoint';
+    } else {
+      fileType = 'other';
+    }
+    
     setPreviewFileUrl(fileUrl);
-    setPreviewFileName(fileName);
+    setPreviewFileName(fileName || 'File');
+    setPreviewFileType(fileType);
     setShowPreviewModal(true);
   };
 
@@ -204,10 +241,20 @@ function DaftarTugas() {
     return <File size={40} className="text-slate-400" />;
   };
 
+  const getLinkIcon = (link) => {
+    if (!link) return <LinkIcon size={20} className="text-indigo-500" />;
+    if (link.includes('docs.google.com/document')) return <FileText size={20} className="text-blue-500" />;
+    if (link.includes('docs.google.com/spreadsheets')) return <FileText size={20} className="text-green-500" />;
+    if (link.includes('drive.google.com')) return <LinkIcon size={20} className="text-amber-500" />;
+    if (link.includes('figma.com')) return <LinkIcon size={20} className="text-purple-500" />;
+    if (link.includes('github.com')) return <LinkIcon size={20} className="text-gray-700" />;
+    return <Globe size={20} className="text-teal-500" />;
+  };
+
   const isPreviewable = (fileName) => {
     if (!fileName) return false;
     const ext = fileName.split('.').pop()?.toLowerCase();
-    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'].includes(ext);
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'pdf'].includes(ext);
   };
 
   const getStatusBadge = (status) => {
@@ -380,6 +427,8 @@ function DaftarTugas() {
             const submittedCount = item.submitted_count || 0;
             const pendingReview = item.pending_review || 0;
             const isHovered = hoveredCard === item.id;
+            const hasFile = item.file_url && item.file_tugas;
+            const hasLink = item.file_link;
             
             return (
               <div key={item.id} className="group relative bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100 overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1" onMouseEnter={() => setHoveredCard(item.id)} onMouseLeave={() => setHoveredCard(null)} style={{ borderLeftColor: isHovered ? '#14b8a6' : '#e2e8f0', borderLeftWidth: '4px' }}>
@@ -394,44 +443,83 @@ function DaftarTugas() {
                       </div>
                       <p className="text-sm text-slate-500 mb-4 leading-relaxed line-clamp-2">{item.deskripsi}</p>
                       
-                      {/* File Tugas dengan Preview */}
-                      {item.file_url && (
-                        <div className="mb-4 p-3 bg-gradient-to-r from-slate-50 to-white rounded-xl border border-slate-200 inline-flex flex-wrap items-center gap-3">
-                          {getFileIcon(item.file_tugas)}
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-slate-700 truncate max-w-[200px] md:max-w-[300px]">
-                              {item.file_tugas?.split('/').pop() || 'File Tugas'}
-                            </p>
-                            <p className="text-[10px] text-slate-400">File tugas tersedia</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {isPreviewable(item.file_tugas) && (
-                              <button
-                                onClick={() => openPreview(item.file_url, item.file_tugas?.split('/').pop() || 'File Tugas')}
-                                className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white transition-all duration-200"
-                                title="Preview"
-                              >
-                                <Eye size="16" />
-                              </button>
-                            )}
-                            <a 
-                              href={item.file_url} 
-                              download
-                              className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-500 hover:text-white transition-all duration-200"
-                              title="Download"
-                            >
-                              <Download size="16" />
-                            </a>
-                            <a 
-                              href={item.file_url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-all duration-200"
-                              title="Buka di tab baru"
-                            >
-                              <ExternalLink size="16" />
-                            </a>
-                          </div>
+                      {/* Materi Tugas: File Upload atau Link */}
+                      {(hasFile || hasLink) && (
+                        <div className="mb-4 p-3 bg-gradient-to-r from-slate-50 to-white rounded-xl border border-slate-200">
+                          {hasFile && (
+                            <div className="flex flex-wrap items-center gap-3">
+                              {getFileIcon(item.file_tugas)}
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-slate-700 truncate max-w-[200px] md:max-w-[300px]">
+                                  {item.file_tugas?.split('/').pop() || 'File Tugas'}
+                                </p>
+                                <p className="text-[10px] text-slate-400">File tugas tersedia</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {isPreviewable(item.file_tugas) && (
+                                  <button
+                                    onClick={() => openPreview(item.file_url, item.file_tugas?.split('/').pop() || 'File Tugas')}
+                                    className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white transition-all duration-200"
+                                    title="Preview"
+                                  >
+                                    <Eye size="16" />
+                                  </button>
+                                )}
+                                <a 
+                                  href={item.file_url} 
+                                  download
+                                  className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-500 hover:text-white transition-all duration-200"
+                                  title="Download"
+                                >
+                                  <Download size="16" />
+                                </a>
+                                <a 
+                                  href={item.file_url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-all duration-200"
+                                  title="Buka di tab baru"
+                                >
+                                  <ExternalLink size="16" />
+                                </a>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {hasLink && (
+                            <div className="flex flex-wrap items-center gap-3">
+                              {getLinkIcon(item.file_link)}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-700 truncate max-w-[250px] md:max-w-[450px]">
+                                  {item.file_link}
+                                </p>
+                                <p className="text-[10px] text-indigo-500">Link tugas eksternal - Klik tombol di samping untuk membuka</p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <a 
+                                  href={item.file_link} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-500 hover:text-white transition-all duration-200"
+                                  title="Buka link"
+                                >
+                                  <ExternalLink size="16" />
+                                </a>
+                                <button
+                                  onClick={() => copyToClipboard(item.file_link, item.id)}
+                                  className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white transition-all duration-200 relative"
+                                  title="Salin link"
+                                >
+                                  <Copy size="16" />
+                                  {copySuccess === item.id && (
+                                    <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                                      Tersalin!
+                                    </span>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                       
@@ -548,8 +636,8 @@ function DaftarTugas() {
 
       {/* Preview Modal */}
       {showPreviewModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={() => setShowPreviewModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-teal-100">
@@ -565,20 +653,57 @@ function DaftarTugas() {
               </button>
             </div>
             <div className="flex-1 overflow-auto p-4 bg-slate-50">
-              {previewFileUrl && (
-                previewFileUrl.endsWith('.pdf') ? (
-                  <iframe
-                    src={previewFileUrl}
-                    className="w-full h-[70vh] rounded-xl"
-                    title="PDF Preview"
-                  />
-                ) : (
-                  <img
-                    src={previewFileUrl}
-                    alt={previewFileName}
-                    className="max-w-full max-h-[70vh] mx-auto object-contain rounded-xl"
-                  />
-                )
+              {previewFileUrl && previewFileType === 'pdf' && (
+                <iframe
+                  src={`${previewFileUrl}#toolbar=1&navpanes=1&scrollbar=1`}
+                  className="w-full h-[70vh] rounded-xl"
+                  title="PDF Preview"
+                />
+              )}
+              {previewFileUrl && previewFileType === 'image' && (
+                <img
+                  src={previewFileUrl}
+                  alt={previewFileName}
+                  className="max-w-full max-h-[70vh] mx-auto object-contain rounded-xl"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = 'https://placehold.co/600x400?text=Gambar+Tidak+Dapat+Dimuat';
+                  }}
+                />
+              )}
+              {previewFileUrl && (previewFileType === 'word' || previewFileType === 'excel' || previewFileType === 'powerpoint') && (
+                <div className="text-center py-12">
+                  <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+                    {previewFileType === 'word' && <FileText size="40" className="text-blue-600" />}
+                    {previewFileType === 'excel' && <FileText size="40" className="text-green-600" />}
+                    {previewFileType === 'powerpoint' && <FileText size="40" className="text-orange-600" />}
+                  </div>
+                  <p className="text-slate-600 mb-4">File {previewFileType === 'word' ? 'Word' : previewFileType === 'excel' ? 'Excel' : 'PowerPoint'} tidak dapat dipreview langsung.</p>
+                  <a
+                    href={previewFileUrl}
+                    download
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-xl transition-all duration-200"
+                  >
+                    <Download size="18" />
+                    Download File
+                  </a>
+                </div>
+              )}
+              {previewFileUrl && previewFileType === 'other' && (
+                <div className="text-center py-12">
+                  <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
+                    <FileArchive size="40" className="text-slate-500" />
+                  </div>
+                  <p className="text-slate-600 mb-4">File ini tidak dapat dipreview.</p>
+                  <a
+                    href={previewFileUrl}
+                    download
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-xl transition-all duration-200"
+                  >
+                    <Download size="18" />
+                    Download File
+                  </a>
+                </div>
               )}
             </div>
             <div className="flex justify-end gap-3 p-4 border-t border-slate-200 bg-gradient-to-r from-slate-50 to-white">
@@ -603,8 +728,8 @@ function DaftarTugas() {
 
       {/* Delete Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50" onClick={() => setShowDeleteModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4"><div className="flex items-center gap-3"><div className="p-2.5 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg"><Trash2 size="18" className="text-white" /></div><h3 className="text-xl font-bold text-slate-800">Hapus Tugas</h3></div><button onClick={() => setShowDeleteModal(false)} className="p-1.5 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200"><X size="18" /></button></div>
             <p className="text-slate-600 mb-6">Apakah Anda yakin ingin menghapus tugas <span className="font-bold text-slate-800">"{selectedTugas?.judul}"</span>? Semua data pengumpulan akan hilang secara <span className="font-semibold text-red-500">permanen</span>.</p>
             <div className="flex gap-3"><button onClick={() => setShowDeleteModal(false)} className="flex-1 px-4 py-2.5 border-2 border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50">Batal</button><button onClick={handleDelete} disabled={deleting} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl font-semibold hover:shadow-lg disabled:opacity-50">{deleting ? "Menghapus..." : "Hapus"}</button></div>
@@ -614,8 +739,8 @@ function DaftarTugas() {
 
       {/* Reminder Modal */}
       {showReminderModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50" onClick={() => setShowReminderModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4"><div className="flex items-center gap-3"><div className="p-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-blue-600 shadow-lg"><Bell size="18" className="text-white" /></div><h3 className="text-xl font-bold text-slate-800">Kirim Pengingat</h3></div><button onClick={() => setShowReminderModal(false)} className="p-1.5 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200"><X size="18" /></button></div>
             <p className="text-slate-600 mb-4">Kirim pengingat ke semua peserta yang belum mengumpulkan tugas?</p>
             <div className="bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl p-4 mb-6 border border-teal-200"><div className="flex items-start gap-3"><div className="p-1.5 rounded-lg bg-white shadow-sm"><Send size="12" className="text-teal-500" /></div><div><p className="text-xs text-teal-800 font-medium">Pengingat akan dikirim ke peserta yang memiliki tugas belum dikumpulkan atau belum direview via email dan notifikasi dashboard.</p></div></div></div>

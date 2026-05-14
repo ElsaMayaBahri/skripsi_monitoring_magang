@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Kuis;
+use App\Models\JawabanKuis;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class QuizController extends Controller
 {
@@ -35,7 +38,7 @@ class QuizController extends Controller
                     'tanggal_selesai' => $quiz->tanggal_selesai,
                     'created_at' => $quiz->created_at,
                     'updated_at' => $quiz->updated_at,
-                    'status' => $quiz->status,
+                    'status' => $quiz->status ?? 'nonaktif',
                     'is_aktif' => $quiz->is_aktif,
                     'is_selesai' => $quiz->is_selesai,
                     'is_belum_mulai' => $quiz->is_belum_mulai,
@@ -51,6 +54,165 @@ class QuizController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal mengambil data kuis: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * Get all quiz results for dashboard - FIXED with correct column names
+     */
+    public function getAllResults()
+    {
+        try {
+            // Cek apakah tabel jawaban_kuis ada
+            if (!Schema::hasTable('jawaban_kuis')) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'message' => 'Tabel jawaban_kuis belum ada'
+                ]);
+            }
+            
+            // Cek apakah ada data di jawaban_kuis
+            $checkData = DB::table('jawaban_kuis')->count();
+            Log::info('Jumlah data jawaban_kuis: ' . $checkData);
+            
+            if ($checkData == 0) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'message' => 'Belum ada data jawaban kuis'
+                ]);
+            }
+            
+            // FIXED: Gunakan 'id' bukan 'id_user', dan 'name' bukan 'nama'
+            $results = DB::table('jawaban_kuis as jk')
+                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id')  // FIX: u.id (bukan id_user)
+                ->leftJoin('kuis as k', 'jk.id_kuis', '=', 'k.id_kuis')
+                ->select(
+                    'jk.id_jawaban',
+                    'jk.id_user',
+                    'u.name as user_name',  // FIX: u.name (bukan u.nama)
+                    'u.divisi as user_divisi',
+                    'jk.id_kuis',
+                    'k.judul_kuis as quiz_title',
+                    'k.divisi as quiz_divisi',
+                    'jk.skor',
+                    'jk.jawaban',
+                    'jk.created_at'
+                )
+                ->orderBy('jk.created_at', 'desc')
+                ->get();
+            
+            Log::info('Hasil query jawaban_kuis: ' . $results->count() . ' records');
+            
+            // Jika ada data, format hasilnya
+            if ($results->isNotEmpty()) {
+                // Kelompokkan berdasarkan user dan quiz untuk menghitung rata-rata
+                $groupedResults = [];
+                
+                foreach ($results as $item) {
+                    $key = $item->id_user . '_' . $item->id_kuis;
+                    
+                    if (!isset($groupedResults[$key])) {
+                        $groupedResults[$key] = [
+                            'user_id' => $item->id_user,
+                            'user_name' => $item->user_name ?? 'Pengguna',
+                            'quiz_id' => $item->id_kuis,
+                            'quiz_title' => $item->quiz_title ?? 'Kuis',
+                            'divisi' => $item->user_divisi ?? $item->quiz_divisi ?? 'Umum',
+                            'total_score' => 0,
+                            'count' => 0,
+                            'answers' => []
+                        ];
+                    }
+                    
+                    $groupedResults[$key]['total_score'] += $item->skor;
+                    $groupedResults[$key]['count']++;
+                    $groupedResults[$key]['answers'][] = [
+                        'jawaban' => $item->jawaban,
+                        'skor' => $item->skor
+                    ];
+                }
+                
+                // Format hasil akhir
+                $formattedResults = [];
+                foreach ($groupedResults as $group) {
+                    $formattedResults[] = [
+                        'user_id' => $group['user_id'],
+                        'user_name' => $group['user_name'],
+                        'quiz_id' => $group['quiz_id'],
+                        'quiz_title' => $group['quiz_title'],
+                        'divisi' => $group['divisi'],
+                        'score' => $group['count'] > 0 ? round($group['total_score'] / $group['count'], 2) : 0,
+                        'total_answers' => $group['count'],
+                        'created_at' => now()
+                    ];
+                }
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => $formattedResults,
+                    'total' => count($formattedResults),
+                    'raw_count' => $results->count()
+                ]);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'data' => [],
+                'message' => 'Tidak ada data jawaban kuis ditemukan'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error getAllResults: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            
+            return response()->json([
+                'success' => true,
+                'data' => [],
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
+        }
+    }
+    
+    /**
+     * Get quiz results by quiz ID
+     */
+    public function getResultsByQuiz($quizId)
+    {
+        try {
+            if (!Schema::hasTable('jawaban_kuis')) {
+                return response()->json([
+                    'success' => true,
+                    'data' => []
+                ]);
+            }
+            
+            // FIX: Gunakan 'id' bukan 'id_user', dan 'name' bukan 'nama'
+            $results = DB::table('jawaban_kuis as jk')
+                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id')  // FIX: u.id
+                ->select(
+                    'jk.id_user',
+                    'u.name as user_name',  // FIX: u.name
+                    'u.divisi',
+                    'jk.skor as score',
+                    'jk.created_at'
+                )
+                ->where('jk.id_kuis', $quizId)
+                ->orderBy('jk.skor', 'desc')
+                ->get();
+            
+            return response()->json([
+                'success' => true,
+                'data' => $results
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error getResultsByQuiz: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
             ], 500);
         }
     }
@@ -87,6 +249,7 @@ class QuizController extends Controller
                 'divisi' => $request->divisi,
                 'durasi' => $request->durasi ?? 30,
                 'passing' => $request->passing ?? 75,
+                'status' => 'aktif',
                 'total_soal' => count($request->questions ?? []),
                 'questions' => $request->questions,
                 'peserta' => 0,
@@ -134,7 +297,7 @@ class QuizController extends Controller
                     'tanggal_selesai' => $quiz->tanggal_selesai,
                     'created_at' => $quiz->created_at,
                     'updated_at' => $quiz->updated_at,
-                    'status' => $quiz->status,
+                    'status' => $quiz->status ?? 'nonaktif',
                     'is_aktif' => $quiz->is_aktif,
                     'is_selesai' => $quiz->is_selesai,
                     'is_belum_mulai' => $quiz->is_belum_mulai,
@@ -160,6 +323,7 @@ class QuizController extends Controller
                 'divisi' => 'nullable|string|max:100',
                 'durasi' => 'nullable|integer|min:1|max:180',
                 'passing' => 'nullable|integer|min:0|max:100',
+                'status' => 'sometimes|in:aktif,nonaktif',
                 'questions' => 'nullable|array',
                 'tanggal_mulai' => 'nullable|date',
                 'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
@@ -180,6 +344,7 @@ class QuizController extends Controller
             if ($request->has('divisi')) $quiz->divisi = $request->divisi;
             if ($request->has('durasi')) $quiz->durasi = $request->durasi;
             if ($request->has('passing')) $quiz->passing = $request->passing;
+            if ($request->has('status')) $quiz->status = $request->status;
             if ($request->has('questions')) {
                 $quiz->questions = $request->questions;
                 $quiz->total_soal = count($request->questions);
@@ -241,7 +406,7 @@ class QuizController extends Controller
                     'tanggal_mulai' => $quiz->tanggal_mulai,
                     'tanggal_selesai' => $quiz->tanggal_selesai,
                     'created_at' => $quiz->created_at,
-                    'status' => $quiz->status,
+                    'status' => $quiz->status ?? 'nonaktif',
                 ];
             });
             
@@ -258,13 +423,13 @@ class QuizController extends Controller
     }
     
     /**
-     * Import quiz from CSV file (tanpa library tambahan)
+     * Import quiz from CSV file
      */
     public function import(Request $request)
     {
         try {
             $validator = Validator::make($request->all(), [
-                'file' => 'required|file|mimes:csv,txt|max:10240'
+                'file' => 'required|file|mimes:csv,txt,xlsx,xls|max:10240'
             ]);
             
             if ($validator->fails()) {
@@ -276,9 +441,26 @@ class QuizController extends Controller
             }
             
             $file = $request->file('file');
+            $extension = $file->getClientOriginalExtension();
+            
+            if (in_array($extension, ['xlsx', 'xls'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Untuk file Excel, silakan konversi ke format CSV terlebih dahulu'
+                ], 400);
+            }
+            
             $content = file_get_contents($file->getPathname());
             
-            // Parse CSV
+            $encoding = mb_detect_encoding($content, ['UTF-8', 'ISO-8859-1', 'Windows-1252'], true);
+            if ($encoding !== 'UTF-8') {
+                $content = mb_convert_encoding($content, 'UTF-8', $encoding);
+            }
+            
+            if (substr($content, 0, 3) === "\xEF\xBB\xBF") {
+                $content = substr($content, 3);
+            }
+            
             $lines = explode("\n", trim($content));
             if (count($lines) < 2) {
                 return response()->json([
@@ -287,7 +469,6 @@ class QuizController extends Controller
                 ], 400);
             }
             
-            // Ambil header dari baris pertama
             $headers = str_getcsv(array_shift($lines));
             $headers = array_map(function($header) {
                 return strtolower(trim(str_replace(' ', '_', $header)));
@@ -296,6 +477,16 @@ class QuizController extends Controller
             $imported = 0;
             $failed = 0;
             $errors = [];
+            
+            $expectedHeaders = ['judul_kuis', 'deskripsi', 'divisi', 'durasi', 'passing', 'questions', 'tanggal_mulai', 'tanggal_selesai'];
+            $missingHeaders = array_diff($expectedHeaders, $headers);
+            if (!empty($missingHeaders)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Header file tidak lengkap. Header yang diperlukan: ' . implode(', ', $expectedHeaders),
+                    'missing' => $missingHeaders
+                ], 400);
+            }
             
             foreach ($lines as $rowIndex => $line) {
                 if (empty(trim($line))) continue;
@@ -311,19 +502,17 @@ class QuizController extends Controller
                         }
                     }
                     
-                    $judul = $data['judul_kuis'] ?? $data['judul'] ?? null;
+                    $judul = $data['judul_kuis'] ?? null;
                     if (!$judul) {
                         $failed++;
                         $errors[] = "Baris " . ($rowIndex + 2) . ": Judul kuis wajib diisi";
                         continue;
                     }
                     
-                    // Parse questions dari JSON
                     $questions = null;
                     if (!empty($data['questions'])) {
                         $questions = json_decode($data['questions'], true);
                         if (json_last_error() !== JSON_ERROR_NONE) {
-                            // Coba format pipe: text|opt0|opt1|opt2|opt3|correct
                             $parts = explode('|', $data['questions']);
                             if (count($parts) >= 6) {
                                 $questions = [[
@@ -331,8 +520,19 @@ class QuizController extends Controller
                                     'options' => array_slice($parts, 1, 4),
                                     'correct' => intval($parts[5])
                                 ]];
+                            } else {
+                                $failed++;
+                                $errors[] = "Baris " . ($rowIndex + 2) . ": Format questions tidak valid";
+                                continue;
                             }
                         }
+                    }
+                    
+                    $existingQuiz = Kuis::where('judul_kuis', $judul)->first();
+                    if ($existingQuiz) {
+                        $failed++;
+                        $errors[] = "Baris " . ($rowIndex + 2) . ": Kuis dengan judul '{$judul}' sudah ada";
+                        continue;
                     }
                     
                     $quiz = Kuis::create([
@@ -341,6 +541,7 @@ class QuizController extends Controller
                         'divisi' => $data['divisi'] ?? null,
                         'durasi' => intval($data['durasi'] ?? 30),
                         'passing' => intval($data['passing'] ?? 75),
+                        'status' => 'aktif',
                         'total_soal' => $questions ? count($questions) : 0,
                         'questions' => $questions,
                         'peserta' => 0,
@@ -382,30 +583,73 @@ class QuizController extends Controller
     {
         try {
             $headers = ['judul_kuis', 'deskripsi', 'divisi', 'durasi', 'passing', 'questions', 'tanggal_mulai', 'tanggal_selesai'];
-            $example = [
-                'Quiz Contoh 1',
-                'Deskripsi quiz contoh',
+            
+            $exampleQuestion = json_encode([
+                [
+                    'text' => 'Apa ibu kota Indonesia?',
+                    'options' => ['Jakarta', 'Surabaya', 'Bandung', 'Medan'],
+                    'correct' => 0
+                ]
+            ]);
+            
+            $exampleData = [
+                'Quiz Programming Dasar',
+                'Quiz untuk menguji dasar pemrograman',
                 'ENGINEERING',
                 '30',
                 '75',
-                '[{"text":"Soal contoh?","options":["Jawaban A","Jawaban B","Jawaban C","Jawaban D"],"correct":0}]',
+                $exampleQuestion,
                 date('Y-m-d'),
                 date('Y-m-d', strtotime('+30 days'))
             ];
             
-            $callback = function() use ($headers, $example) {
+            $callback = function() use ($headers, $exampleData) {
                 $handle = fopen('php://output', 'w');
+                
+                fputs($handle, "\xEF\xBB\xBF");
+                
                 fputcsv($handle, $headers);
-                fputcsv($handle, $example);
+                
+                fputcsv($handle, $exampleData);
+                
+                $multipleQuestions = json_encode([
+                    [
+                        'text' => 'Apa kepanjangan dari HTML?',
+                        'options' => ['Hyper Text Markup Language', 'High Text Markup Language', 'Hyper Transfer Markup Language', 'Home Tool Markup Language'],
+                        'correct' => 0
+                    ],
+                    [
+                        'text' => 'Apa fungsi CSS?',
+                        'options' => ['Styling halaman web', 'Database connection', 'Server side scripting', 'Backend logic'],
+                        'correct' => 0
+                    ]
+                ]);
+                
+                $secondExample = [
+                    'Quiz Web Development',
+                    'Quiz untuk menguji pengetahuan web development',
+                    'ENGINEERING',
+                    '45',
+                    '70',
+                    $multipleQuestions,
+                    date('Y-m-d'),
+                    date('Y-m-d', strtotime('+30 days'))
+                ];
+                
+                fputcsv($handle, $secondExample);
+                
                 fclose($handle);
             };
             
             return response()->stream($callback, 200, [
                 'Content-Type' => 'text/csv',
                 'Content-Disposition' => 'attachment; filename="template_kuis.csv"',
+                'Cache-Control' => 'private, max-age=0, must-revalidate',
+                'Pragma' => 'public',
             ]);
             
         } catch (\Exception $e) {
+            Log::error('Error download template: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal membuat template: ' . $e->getMessage()

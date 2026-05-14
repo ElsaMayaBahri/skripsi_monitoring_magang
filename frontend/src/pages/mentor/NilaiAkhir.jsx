@@ -27,9 +27,11 @@ import {
   MessageSquare,
   Lightbulb,
   Users2,
-  Heart
+  Heart,
+  Bug
 } from "lucide-react";
-import api from "../../utils/api";
+import { getMentorPesertaList } from "../../api/mentor/pesertaService";
+import { getMentorNilai, finalizeMentorNilai, exportMentorNilai } from "../../api/mentor/nilaiService";
 
 function NilaiAkhir() {
   const [loading, setLoading] = useState(false);
@@ -44,6 +46,8 @@ function NilaiAkhir() {
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [selectedPeserta, setSelectedPeserta] = useState(null);
   const [hoveredRow, setHoveredRow] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [debugInfo, setDebugInfo] = useState(null);
   
   const weights = {
     kehadiran: 20,
@@ -55,21 +59,23 @@ function NilaiAkhir() {
   // Fetch peserta and nilai from backend
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setErrorMessage("");
+    setDebugInfo(null);
     try {
       console.log("Fetching data...");
       
-      const pesertaResponse = await api.getMentorPesertaList({});
+      const pesertaResponse = await getMentorPesertaList({});
       console.log("Peserta Response:", pesertaResponse);
       
       if (pesertaResponse.success && pesertaResponse.data) {
-        const nilaiResponse = await api.getMentorNilai({});
+        const nilaiResponse = await getMentorNilai({});
         console.log("Nilai Response:", nilaiResponse);
         
         const nilaiMap = new Map();
         
         if (nilaiResponse.success && nilaiResponse.data) {
           nilaiResponse.data.forEach(n => {
-            nilaiMap.set(n.id, n);
+            nilaiMap.set(n.id_peserta, n);
           });
         }
         
@@ -116,6 +122,42 @@ function NilaiAkhir() {
       }
     } catch (error) {
       console.error("Error fetching data:", error);
+      
+      let errorMsg = "Gagal memuat data nilai akhir";
+      let debugData = null;
+      
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        if (status === 500) {
+          errorMsg = "Server error (500): Gagal memuat data. Kemungkinan kolom database tidak ditemukan.";
+          debugData = {
+            type: "server_error",
+            status: 500,
+            message: data?.message || "Internal Server Error",
+            suggestion: "Periksa apakah kolom 'sikap', 'kualitas_kerja', 'komunikasi', 'kreativitas', 'kerjasama', 'inisiatif', 'catatan_mentor', 'status', 'dinilai_oleh', 'dinilai_pada' sudah ada di tabel nilai_pesertas."
+          };
+        } else if (status === 403) {
+          errorMsg = "Akses ditolak: Anda tidak memiliki izin";
+          debugData = { type: "unauthorized", status: 403, message: data?.message };
+        } else if (status === 404) {
+          errorMsg = "Endpoint tidak ditemukan: " + (data?.message || "");
+          debugData = { type: "not_found", status: 404, message: data?.message };
+        } else {
+          errorMsg = data?.message || `Error ${status}: Gagal memuat data`;
+          debugData = { type: "api_error", status: status, message: data?.message };
+        }
+      } else if (error.request) {
+        errorMsg = "Tidak ada respons dari server. Periksa koneksi atau server sedang bermasalah.";
+        debugData = { type: "no_response", suggestion: "Pastikan server Laravel berjalan (php artisan serve)" };
+      } else {
+        errorMsg = error.message || "Terjadi kesalahan";
+        debugData = { type: "request_error", message: error.message };
+      }
+      
+      setErrorMessage(errorMsg);
+      setDebugInfo(debugData);
     } finally {
       setLoading(false);
     }
@@ -171,9 +213,11 @@ function NilaiAkhir() {
     if (!selectedPeserta) return;
     
     setFinalizing(true);
+    setErrorMessage("");
+    setDebugInfo(null);
     try {
       console.log("Finalizing peserta ID:", selectedPeserta.id);
-      const response = await api.finalizeMentorNilai(selectedPeserta.id);
+      const response = await finalizeMentorNilai(selectedPeserta.id);
       console.log("Finalize Response:", response);
       
       if (response.success) {
@@ -182,13 +226,97 @@ function NilaiAkhir() {
         setSelectedPeserta(null);
         await fetchData();
       } else {
-        alert(response.message || "Gagal finalisasi nilai");
+        setErrorMessage(response.message || "Gagal finalisasi nilai");
       }
     } catch (error) {
       console.error("Error finalizing:", error);
-      alert("Terjadi kesalahan saat finalisasi");
+      
+      let errorMsg = "Terjadi kesalahan saat finalisasi";
+      let debugData = null;
+      
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        if (status === 500) {
+          errorMsg = "Server error (500): Gagal finalisasi nilai. Kemungkinan kolom database tidak ditemukan.";
+          debugData = {
+            type: "server_error",
+            status: 500,
+            message: data?.message || "Internal Server Error",
+            suggestion: "Periksa apakah kolom 'nilai_kehadiran', 'nilai_tugas', 'nilai_kuis', 'nilai_akhir', 'status' sudah ada di tabel nilai_pesertas."
+          };
+        } else if (status === 422) {
+          errorMsg = "Validasi gagal: " + (data?.message || "Lengkapi nilai manual terlebih dahulu");
+          debugData = { type: "validation_error", status: 422, errors: data?.errors };
+        } else {
+          errorMsg = data?.message || `Error ${status}: Gagal finalisasi`;
+          debugData = { type: "api_error", status: status, message: data?.message };
+        }
+      } else if (error.request) {
+        errorMsg = "Tidak ada respons dari server. Periksa koneksi.";
+        debugData = { type: "no_response" };
+      } else {
+        errorMsg = error.message || "Terjadi kesalahan";
+      }
+      
+      setErrorMessage(errorMsg);
+      setDebugInfo(debugData);
     } finally {
       setFinalizing(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setLoading(true);
+    setErrorMessage("");
+    setDebugInfo(null);
+    try {
+      const response = await exportMentorNilai({});
+      if (response) {
+        let blob;
+        if (response instanceof Blob) {
+          blob = response;
+        } else if (response.data instanceof Blob) {
+          blob = response.data;
+        } else {
+          blob = new Blob([JSON.stringify(response, null, 2)], { type: 'application/json' });
+        }
+        
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `nilai_akhir_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        alert("Export berhasil");
+      }
+    } catch (error) {
+      console.error("Error exporting:", error);
+      
+      let errorMsg = "Gagal mengekspor data";
+      let debugData = null;
+      
+      if (error.response) {
+        const status = error.response.status;
+        if (status === 500) {
+          errorMsg = "Server error (500): Gagal export data.";
+          debugData = { type: "server_error", status: 500, message: error.response.data?.message };
+        } else {
+          errorMsg = error.response.data?.message || `Error ${status}: Gagal export`;
+        }
+      } else if (error.request) {
+        errorMsg = "Tidak ada respons dari server. Periksa koneksi.";
+      }
+      
+      setErrorMessage(errorMsg);
+      setDebugInfo(debugData);
+      setTimeout(() => {
+        setErrorMessage("");
+        setDebugInfo(null);
+      }, 5000);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -255,18 +383,7 @@ function NilaiAkhir() {
                 <button onClick={fetchData} className="relative group overflow-hidden px-5 py-2 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm flex items-center gap-2">
                   <Sparkles size="14" /> Refresh
                 </button>
-                <button onClick={async () => {
-                  const response = await api.exportMentorNilai();
-                  if (response.success && response.data) {
-                    const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'nilai_akhir_export.json';
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }
-                }} className="relative group overflow-hidden px-5 py-2 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm">
+                <button onClick={handleExport} className="relative group overflow-hidden px-5 py-2 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm">
                   <span className="relative z-10 flex items-center gap-2"><Download size="14" />Export Excel</span>
                 </button>
                 <button className="relative group overflow-hidden px-5 py-2 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm">
@@ -277,8 +394,37 @@ function NilaiAkhir() {
           </div>
         </div>
 
+        {/* Error Alert dengan Debug Info */}
+        {errorMessage && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle size="18" className="text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-800">{errorMessage}</p>
+                {debugInfo && (
+                  <div className="mt-3 p-3 bg-red-100 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Bug size="14" className="text-red-700" />
+                      <p className="text-xs font-semibold text-red-800">Debug Information:</p>
+                    </div>
+                    <pre className="text-xs text-red-700 whitespace-pre-wrap font-mono bg-red-50 p-2 rounded">
+                      {JSON.stringify(debugInfo, null, 2)}
+                    </pre>
+                    {debugInfo.suggestion && (
+                      <p className="text-xs text-red-700 mt-2 pt-2 border-t border-red-200">
+                        💡 <span className="font-semibold">Saran:</span> {debugInfo.suggestion}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
+          {/* Stats cards tetap sama */}
           <div className="group relative overflow-hidden bg-gradient-to-br from-white to-slate-50 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
             <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-br from-teal-400/10 to-blue-500/10 rounded-full -mr-14 -mt-14 group-hover:scale-150 transition-transform duration-500"></div>
             <div className="relative p-4">
@@ -361,7 +507,7 @@ function NilaiAkhir() {
         {/* Results Count */}
         <div className="mb-4 flex justify-between items-center"><p className="text-sm text-slate-500 flex items-center gap-2"><Sparkles size="14" className="text-teal-500" />Menampilkan <span className="font-bold text-slate-700">{currentItems.length}</span> dari <span className="font-bold text-slate-700">{filteredPeserta.length}</span> peserta</p></div>
 
-        {/* Table */}
+        {/* Table - same as before */}
         <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-md border border-slate-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -392,27 +538,9 @@ function NilaiAkhir() {
                           <div><p className="text-sm font-semibold text-slate-800 group-hover:text-teal-600 transition-colors">{p.nama}</p><p className="text-[10px] text-slate-400">{p.divisi}</p></div>
                         </div>
                       </td>
-                      <td className="px-5 py-3.5">
-                        {p.kehadiran !== null ? (
-                          <span className="text-sm font-semibold text-slate-700">{p.kehadiran}%</span>
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">-</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        {p.tugas !== null ? (
-                          <span className="text-sm font-semibold text-slate-700">{p.tugas}%</span>
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">-</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        {p.kuis !== null ? (
-                          <span className="text-sm font-semibold text-slate-700">{p.kuis}%</span>
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">-</span>
-                        )}
-                      </td>
+                      <td className="px-5 py-3.5">{p.kehadiran !== null ? (<span className="text-sm font-semibold text-slate-700">{p.kehadiran}%</span>) : (<span className="text-xs text-slate-400 italic">-</span>)}</td>
+                      <td className="px-5 py-3.5">{p.tugas !== null ? (<span className="text-sm font-semibold text-slate-700">{p.tugas}%</span>) : (<span className="text-xs text-slate-400 italic">-</span>)}</td>
+                      <td className="px-5 py-3.5">{p.kuis !== null ? (<span className="text-sm font-semibold text-slate-700">{p.kuis}%</span>) : (<span className="text-xs text-slate-400 italic">-</span>)}</td>
                       <td className="px-5 py-3.5">
                         {nilaiManual !== null ? (
                           <div className="flex items-center gap-1">
@@ -420,9 +548,7 @@ function NilaiAkhir() {
                             <span className="text-[9px] text-slate-400">/100</span>
                             {!isComplete && <span className="text-[9px] text-amber-500 ml-1">(belum lengkap)</span>}
                           </div>
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">Belum diisi</span>
-                        )}
+                        ) : (<span className="text-xs text-slate-400 italic">Belum diisi</span>)}
                       </td>
                       <td className="px-5 py-3.5">
                         {nilaiAkhir !== null ? (
@@ -430,9 +556,7 @@ function NilaiAkhir() {
                             <span className="text-base font-bold text-teal-600">{nilaiAkhir}</span>
                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${grade.bg} ${grade.color}`}>{grade?.label}</span>
                           </div>
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">Belum final</span>
-                        )}
+                        ) : (<span className="text-xs text-slate-400 italic">Belum final</span>)}
                       </td>
                       <td className="px-5 py-3.5">
                         {p.status === "sudah_final" ? (
@@ -524,14 +648,6 @@ function NilaiAkhir() {
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes zoom-in-95 { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        .animate-in { animation-duration: 0.2s; animation-fill-mode: both; }
-        .fade-in { animation-name: fade-in; }
-        .zoom-in-95 { animation-name: zoom-in-95; }
-      `}</style>
     </div>
   );
 }

@@ -20,7 +20,9 @@ import {
   ChevronLeft,
   ChevronDown,
   Shield,
-  Power
+  Power,
+  Clock,
+  AlertTriangle
 } from "lucide-react"
 
 function AdminLayout() {
@@ -31,6 +33,7 @@ function AdminLayout() {
   const [usersSubmenuOpen, setUsersSubmenuOpen] = useState(true)
   const [notifOpen, setNotifOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   const [currentDateTime, setCurrentDateTime] = useState(new Date())
 
   const [notifications, setNotifications] = useState([])
@@ -117,13 +120,22 @@ function AdminLayout() {
 
   const unreadCount = notifications.filter(n => !n.is_read).length
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
+    setLogoutConfirmOpen(true)
+    setProfileOpen(false)
+  }
+
+  const handleLogoutConfirm = () => {
     localStorage.removeItem("token")
     localStorage.removeItem("user")
     localStorage.removeItem("role")
     localStorage.removeItem("rememberedEmail")
-    
+    setLogoutConfirmOpen(false)
     navigate("/login")
+  }
+
+  const handleLogoutCancel = () => {
+    setLogoutConfirmOpen(false)
   }
 
   const toggleUsersSubmenu = (e) => {
@@ -169,7 +181,6 @@ function AdminLayout() {
           {/* MENU */}
           <div className="px-3 py-6 flex-1 overflow-y-auto">
             <div className="mb-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-3">Navigasi Utama</p>
               <ul className="space-y-1 text-sm">
                 
                 <Link to="/admin/dashboard">
@@ -257,7 +268,7 @@ function AdminLayout() {
           {/* LOGOUT BUTTON - SIDEBAR - PREMIUM */}
           <div className="p-4 border-t border-gray-200">
             <button
-              onClick={handleLogout}
+              onClick={handleLogoutClick}
               className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-md shadow-red-500/20 hover:shadow-lg hover:shadow-red-500/30"
             >
               <div className="absolute inset-0 bg-white/20 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-300"></div>
@@ -306,20 +317,15 @@ function AdminLayout() {
             {/* RIGHT SIDE */}
             <div className="flex items-center gap-4">
               
-              {/* Date Time Card - Bahasa Indonesia */}
-              <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200 shadow-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-gradient-to-br from-teal-400 to-blue-500 rounded-lg flex items-center justify-center">
-                    <Calendar size={14} className="text-white" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs text-gray-400">Hari Ini</span>
-                    <span className="text-sm font-medium text-gray-700">{formatDate(currentDateTime)}</span>
-                  </div>
+              {/* Date Time Card - Compact & Premium */}
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white/70 backdrop-blur-sm rounded-xl border border-gray-200/80 shadow-sm">
+                <div className="flex items-center gap-1.5">
+                  <Calendar size={14} className="text-teal-500" />
+                  <span className="text-sm font-medium text-gray-700">{formatDate(currentDateTime)}</span>
                 </div>
-                <div className="w-px h-8 bg-gray-200"></div>
-                <div className="flex flex-col items-end">
-                  <span className="text-xs text-gray-400">Waktu</span>
+                <div className="w-px h-4 bg-gray-200"></div>
+                <div className="flex items-center gap-1.5">
+                  <Clock size={14} className="text-blue-500" />
                   <span className="text-sm font-mono font-semibold text-gray-800">{formatTime(currentDateTime)}</span>
                 </div>
               </div>
@@ -407,7 +413,7 @@ function AdminLayout() {
                     {/* LOGOUT BUTTON - PROFILE DROPDOWN - PREMIUM & RATA */}
                     <div className="py-2">
                       <button 
-                        onClick={handleLogout}
+                        onClick={handleLogoutClick}
                         className="w-full flex items-center gap-3 px-5 py-3 text-sm text-red-600 hover:bg-red-50 transition group"
                       >
                         <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center group-hover:bg-red-100 transition">
@@ -434,6 +440,60 @@ function AdminLayout() {
 
       </div>
 
+      {/* LOGOUT CONFIRMATION MODAL */}
+      {logoutConfirmOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header Modal */}
+            <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-red-50 to-orange-50">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <AlertTriangle size={24} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800">Konfirmasi Logout</h3>
+                  <p className="text-sm text-gray-500 mt-0.5">Apakah Anda yakin ingin keluar?</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Body Modal */}
+            <div className="px-6 py-5">
+              <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-blue-600 rounded-lg flex items-center justify-center">
+                    <User size={16} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-800">{userFullName}</p>
+                    <p className="text-xs text-gray-500">{userEmail}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <div className="w-1.5 h-1.5 rounded-full bg-teal-500"></div>
+                  <span>Sesi Anda akan berakhir jika melanjutkan</span>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={handleLogoutCancel}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-all duration-200"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleLogoutConfirm}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-medium hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-md shadow-red-500/20 flex items-center justify-center gap-2 group"
+                >
+                  <LogOut size={16} className="group-hover:scale-110 transition-transform" />
+                  Keluar Sekarang
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

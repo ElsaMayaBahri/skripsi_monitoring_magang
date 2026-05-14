@@ -1,31 +1,43 @@
 // src/pages/peserta/DaftarTugas.jsx
 import React, { useState, useEffect } from "react"
-import { Link } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import {
   ClipboardList,
   Search,
-  Filter,
   Calendar,
   Clock,
   CheckCircle,
   AlertCircle,
   FileText,
-  Eye,
   ChevronLeft,
   ChevronRight,
-  Download,
   Star,
-  Award
+  Award,
+  Server,
+  Lock,
+  Eye,
+  Upload,
+  Link as LinkIcon,
+  X,
+  Paperclip,
+  FolderOpen,
+  Download,
+  ExternalLink
 } from "lucide-react"
 
 function DaftarTugas() {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [tugasList, setTugasList] = useState([])
   const [filteredTugas, setFilteredTugas] = useState([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [currentPage, setCurrentPage] = useState(1)
+  const [selectedTugas, setSelectedTugas] = useState(null)
+  const [showDetailModal, setShowDetailModal] = useState(false)
   const itemsPerPage = 6
+
+  const USE_REAL_API = false
 
   useEffect(() => {
     loadTugasData()
@@ -33,58 +45,103 @@ function DaftarTugas() {
 
   const loadTugasData = () => {
     setLoading(true)
-    setTimeout(() => {
-      const storedTugas = JSON.parse(localStorage.getItem("tugas_peserta")) || []
-      const dummyTugas = [
-        {
-          id: 1,
-          judul: "Frontend Development - Week 3",
-          deskripsi: "Buat halaman dashboard dengan React JS yang menampilkan data user",
-          deadline: "2024-12-20",
-          bobot: 30,
-          status: "pending",
-          submitted_at: null,
-          nilai: null,
-          catatan: null
-        },
-        {
-          id: 2,
-          judul: "Backend API Integration",
-          deskripsi: "Buat API endpoint untuk CRUD user dengan Laravel",
-          deadline: "2024-12-25",
-          bobot: 35,
-          status: "pending",
-          submitted_at: null,
-          nilai: null,
-          catatan: null
-        },
-        {
-          id: 3,
-          judul: "Database Design",
-          deskripsi: "Buat ERD dan implementasi database untuk sistem magang",
-          deadline: "2024-12-30",
-          bobot: 20,
-          status: "revisi",
-          submitted_at: "2024-12-28",
-          nilai: 70,
-          catatan: "Perbaiki relasi tabel dan tambahkan indeks"
-        },
-        {
-          id: 4,
-          judul: "UI/UX Design Prototype",
-          deskripsi: "Buat prototype aplikasi mobile dengan Figma",
-          deadline: "2024-12-18",
-          bobot: 25,
-          status: "selesai",
-          submitted_at: "2024-12-17",
-          nilai: 88,
-          catatan: "Bagus, pertahankan!"
-        }
-      ]
-      setTugasList(storedTugas.length > 0 ? storedTugas : dummyTugas)
-      setFilteredTugas(storedTugas.length > 0 ? storedTugas : dummyTugas)
-      setLoading(false)
-    }, 500)
+    
+    if (USE_REAL_API) {
+      setTimeout(() => {
+        setTugasList([])
+        setFilteredTugas([])
+        setLoading(false)
+      }, 500)
+    } else {
+      setTimeout(() => {
+        const dummyTugas = [
+          {
+            id: 1,
+            judul: "Frontend Development - Week 3",
+            deskripsi_singkat: "Buat halaman dashboard dengan React JS yang menampilkan data user.",
+            deskripsi_lengkap: "Buat halaman dashboard dengan React JS yang menampilkan data user secara real-time menggunakan API. Gunakan Tailwind CSS untuk styling. Implementasikan loading state dan error handling. Buat responsive untuk mobile dan desktop.",
+            cara_pengerjaan: "1. Buat komponen Dashboard\n2. Integrasikan dengan API endpoint /api/users\n3. Tampilkan data dalam bentuk tabel dan kartu\n4. Implementasikan loading state dan error handling\n5. Buat responsive untuk mobile dan desktop",
+            deadline: "2025-01-20",
+            deadline_raw: "2025-01-20",
+            status: "pending",
+            submitted_at: null,
+            nilai: null,
+            catatan: null,
+            attachments: [
+              { type: "pdf", name: "Soal_Tugas_Week3.pdf", url: "#", size: "2.4 MB" },
+              { type: "link", name: "Dokumentasi React", url: "https://react.dev", external: true }
+            ]
+          },
+          {
+            id: 2,
+            judul: "Backend API Integration",
+            deskripsi_singkat: "Buat API endpoint untuk CRUD user dengan Laravel.",
+            deskripsi_lengkap: "Buat API endpoint untuk CRUD user dengan Laravel. Sertakan validasi, middleware auth, dan dokumentasi API menggunakan Postman.",
+            cara_pengerjaan: "1. Buat model User dan migration\n2. Buat controller UserController\n3. Implementasikan method index, store, show, update, destroy\n4. Tambahkan validasi request\n5. Buat dokumentasi API dengan Postman",
+            deadline: "2025-01-25",
+            deadline_raw: "2025-01-25",
+            status: "pending",
+            submitted_at: null,
+            nilai: null,
+            catatan: null,
+            attachments: [
+              { type: "pdf", name: "API_Specification.pdf", url: "#", size: "3.2 MB" }
+            ]
+          },
+          {
+            id: 3,
+            judul: "Database Design",
+            deskripsi_singkat: "Buat ERD dan implementasi database untuk sistem magang.",
+            deskripsi_lengkap: "Buat ERD dan implementasi database untuk sistem magang. Sertakan relasi antar tabel, indexing yang optimal, dan contoh query kompleks.",
+            cara_pengerjaan: "1. Analisis kebutuhan database\n2. Buat ERD (Entity Relationship Diagram)\n3. Implementasi dalam bentuk SQL\n4. Buat relasi antar tabel\n5. Tambahkan indexing",
+            deadline: "2024-12-30",
+            deadline_raw: "2024-12-30",
+            status: "revisi",
+            submitted_at: "2024-12-28",
+            nilai: 70,
+            catatan: "Perbaiki relasi tabel dan tambahkan indeks pada foreign key.",
+            attachments: [
+              { type: "pdf", name: "ERD_Diagram.pdf", url: "#", size: "1.5 MB" }
+            ]
+          },
+          {
+            id: 4,
+            judul: "UI/UX Design Prototype",
+            deskripsi_singkat: "Buat prototype aplikasi mobile dengan Figma.",
+            deskripsi_lengkap: "Buat prototype aplikasi mobile dengan Figma. Sertakan wireframe, mockup, dan prototype interaktif untuk 5 halaman utama.",
+            cara_pengerjaan: "1. Buat wireframe untuk 5 halaman utama\n2. Buat mockup dengan warna dan typography\n3. Buat prototype interaktif\n4. Share link Figma",
+            deadline: "2024-12-18",
+            deadline_raw: "2024-12-18",
+            status: "selesai",
+            submitted_at: "2024-12-17",
+            nilai: 88,
+            catatan: "Desainnya user friendly dan modern. Pertahankan!",
+            attachments: [
+              { type: "link", name: "Figma Prototype", url: "https://figma.com", external: true }
+            ]
+          },
+          {
+            id: 5,
+            judul: "Testing & Debugging",
+            deskripsi_singkat: "Buat unit test untuk aplikasi menggunakan Jest.",
+            deskripsi_lengkap: "Buat unit test untuk aplikasi menggunakan Jest dan React Testing Library. Minimal 10 test case dengan coverage 80%.",
+            cara_pengerjaan: "1. Setup Jest dan Testing Library\n2. Buat test case untuk komponen utama\n3. Test API calls\n4. Test user interactions\n5. Pastikan coverage mencapai 80%",
+            deadline: "2025-01-05",
+            deadline_raw: "2025-01-05",
+            status: "pending",
+            submitted_at: null,
+            nilai: null,
+            catatan: null,
+            attachments: [
+              { type: "video", name: "Tutorial Jest", url: "https://www.youtube.com/embed/2G_mWfG0DZE", embed: true }
+            ]
+          }
+        ]
+        setTugasList(dummyTugas)
+        setFilteredTugas(dummyTugas)
+        setLoading(false)
+      }, 500)
+    }
   }
 
   useEffect(() => {
@@ -93,7 +150,7 @@ function DaftarTugas() {
     if (searchTerm) {
       filtered = filtered.filter(t => 
         t.judul.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.deskripsi.toLowerCase().includes(searchTerm.toLowerCase())
+        t.deskripsi_singkat.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
     
@@ -117,13 +174,26 @@ function DaftarTugas() {
   }
 
   const getDeadlineStatus = (deadline) => {
+    if (!deadline || deadline === "-") return { text: "text-gray-500", label: "No deadline" }
+    
     const today = new Date()
     const deadlineDate = new Date(deadline)
     const diffDays = Math.ceil((deadlineDate - today) / (1000 * 60 * 60 * 24))
     
     if (diffDays < 0) return { text: "text-red-600", label: "Terlewat" }
+    if (diffDays === 0) return { text: "text-red-500", label: "Hari ini!" }
     if (diffDays <= 3) return { text: "text-amber-600", label: `${diffDays} hari lagi` }
     return { text: "text-gray-500", label: `${diffDays} hari` }
+  }
+
+  const openDetailModal = (tugas) => {
+    setSelectedTugas(tugas)
+    setShowDetailModal(true)
+  }
+
+  const closeDetailModal = () => {
+    setShowDetailModal(false)
+    setSelectedTugas(null)
   }
 
   const indexOfLastItem = currentPage * itemsPerPage
@@ -131,146 +201,190 @@ function DaftarTugas() {
   const currentItems = filteredTugas.slice(indexOfFirstItem, indexOfLastItem)
   const totalPages = Math.ceil(filteredTugas.length / itemsPerPage)
 
+  const getPageNumbers = () => {
+    const pages = []
+    const maxVisible = 5
+    
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i)
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i)
+        pages.push('...')
+        pages.push(totalPages)
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1)
+        pages.push('...')
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i)
+      } else {
+        pages.push(1)
+        pages.push('...')
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i)
+        pages.push('...')
+        pages.push(totalPages)
+      }
+    }
+    return pages
+  }
+
+  const stats = {
+    total: tugasList.length,
+    pending: tugasList.filter(t => t.status === "pending").length,
+    revisi: tugasList.filter(t => t.status === "revisi").length,
+    selesai: tugasList.filter(t => t.status === "selesai").length
+  }
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-full blur-xl opacity-30 animate-pulse"></div>
-          <div className="relative w-10 h-10 border-2 border-teal-400/30 border-t-teal-500 rounded-full animate-spin"></div>
+      <div className="max-w-7xl mx-auto px-5 md:px-6 py-5 space-y-5 pb-10 min-h-screen">
+        <div className="flex items-center justify-center h-96">
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-full blur-xl opacity-30 animate-pulse"></div>
+            <div className="relative w-10 h-10 border-2 border-teal-400/30 border-t-teal-500 rounded-full animate-spin"></div>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto px-5 md:px-6 py-5 space-y-5 pb-10 min-h-screen">
+      {/* NOTE UNTUK BACKEND DEVELOPER */}
+      {!USE_REAL_API && (
+        <div className="bg-amber-50/90 border-l-4 border-amber-500 rounded-xl p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                <Server size="16" className="text-amber-600" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-amber-800 text-sm">Catatan untuk Backend Developer</h3>
+              <div className="mt-2 text-xs text-amber-700 space-y-1">
+                <p>Halaman ini menggunakan DATA DUMMY. Backend perlu membuat endpoint:</p>
+                <div className="bg-amber-100 rounded-md p-2 mt-1 font-mono text-xs">
+                  <p>1. GET    /api/peserta/tugas</p>
+                  <p>2. GET    /api/peserta/tugas/{`{id}`}</p>
+                  <p>3. POST   /api/peserta/tugas/{`{id}`}/submit</p>
+                </div>
+              </div>
+            </div>
+            <button className="px-2 py-1 bg-amber-100 rounded-lg text-xs" onClick={() => navigator.clipboard.writeText("API: GET /api/peserta/tugas, GET /api/peserta/tugas/{id}, POST /api/peserta/tugas/{id}/submit")}>Salin</button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-500/10 via-blue-500/5 to-transparent p-6">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl blur-md opacity-50"></div>
-            <div className="relative w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <ClipboardList className="w-6 h-6 text-white" />
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl blur-md opacity-50"></div>
+              <div className="relative w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                <ClipboardList className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-800 via-teal-800 to-blue-800 bg-clip-text text-transparent">Daftar Tugas</h1>
+              <p className="text-sm text-gray-500 mt-1">Tugas dari mentor yang perlu dikerjakan</p>
             </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-800 via-teal-800 to-blue-800 bg-clip-text text-transparent">
-              Daftar Tugas
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">Kelola dan kumpulkan tugas dari mentor</p>
+          <div className="flex gap-3">
+            <div className="bg-white/60 rounded-xl px-3 py-1.5 text-center"><p className="text-xs text-gray-500">Total</p><p className="font-bold text-gray-700">{stats.total}</p></div>
+            <div className="bg-amber-50/60 rounded-xl px-3 py-1.5 text-center"><p className="text-xs text-amber-600">Belum</p><p className="font-bold text-amber-700">{stats.pending}</p></div>
+            <div className="bg-emerald-50/60 rounded-xl px-3 py-1.5 text-center"><p className="text-xs text-emerald-600">Selesai</p><p className="font-bold text-emerald-700">{stats.selesai}</p></div>
           </div>
         </div>
       </div>
 
       {/* Filter */}
-      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 p-4">
+      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100 p-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Cari tugas..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
-            />
+            <input type="text" placeholder="Cari tugas..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-teal-400" />
           </div>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-teal-400"
-          >
-            <option value="all">Semua Status</option>
-            <option value="pending">Belum Dikumpulkan</option>
-            <option value="revisi">Perlu Revisi</option>
-            <option value="selesai">Selesai</option>
-          </select>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setFilterStatus("all")} className={`px-3 py-1.5 rounded-xl text-xs font-medium transition ${filterStatus === "all" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Semua ({stats.total})</button>
+            <button onClick={() => setFilterStatus("pending")} className={`px-3 py-1.5 rounded-xl text-xs font-medium transition ${filterStatus === "pending" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Belum ({stats.pending})</button>
+            <button onClick={() => setFilterStatus("revisi")} className={`px-3 py-1.5 rounded-xl text-xs font-medium transition ${filterStatus === "revisi" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Revisi ({stats.revisi})</button>
+            <button onClick={() => setFilterStatus("selesai")} className={`px-3 py-1.5 rounded-xl text-xs font-medium transition ${filterStatus === "selesai" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Selesai ({stats.selesai})</button>
+          </div>
         </div>
       </div>
 
       {/* Results Count */}
-      <div className="mb-2">
-        <p className="text-sm text-gray-500">
-          Menampilkan <span className="font-semibold text-gray-700">{currentItems.length}</span> dari{" "}
-          <span className="font-semibold text-gray-700">{filteredTugas.length}</span> tugas
-        </p>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">Menampilkan <span className="font-semibold text-gray-700">{currentItems.length}</span> dari <span className="font-semibold text-gray-700">{filteredTugas.length}</span> tugas</p>
+        {filteredTugas.length > 0 && <p className="text-xs text-gray-400">Halaman {currentPage} dari {totalPages}</p>}
       </div>
 
-      {/* Tugas List */}
-      <div className="space-y-4">
+      {/* Tugas Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {currentItems.map((tugas) => {
           const status = getStatusBadge(tugas.status)
           const StatusIcon = status.icon
-          const deadlineStatus = getDeadlineStatus(tugas.deadline)
+          const deadlineStatus = getDeadlineStatus(tugas.deadline_raw || tugas.deadline)
           
           return (
-            <div key={tugas.id} className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-xl">
-              <div className="relative h-1 bg-gradient-to-r from-teal-500 to-blue-600"></div>
-              <div className="p-5">
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-3 mb-2">
-                      <h3 className="font-bold text-gray-800 text-lg">{tugas.judul}</h3>
-                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${status.bg} ${status.text}`}>
-                        <StatusIcon size="12" />
-                        <span className="text-xs font-medium">{status.label}</span>
-                      </div>
-                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 ${deadlineStatus.text}`}>
-                        <Calendar size="12" />
-                        <span className="text-xs font-medium">Deadline: {deadlineStatus.label}</span>
-                      </div>
+            <div key={tugas.id} className="group relative bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
+              <div className={`absolute top-0 left-0 right-0 h-1 ${
+                tugas.status === "selesai" ? "bg-gradient-to-r from-emerald-500 to-teal-500" :
+                tugas.status === "revisi" ? "bg-gradient-to-r from-amber-500 to-orange-500" :
+                "bg-gradient-to-r from-teal-500 to-blue-600"
+              }`}></div>
+              
+              <div className="p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <FileText size="16" className="text-teal-600" />
                     </div>
-                    <p className="text-sm text-gray-500 mb-3">{tugas.deskripsi}</p>
-                    
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
-                      <div className="flex items-center gap-1">
-                        <Calendar size="12" />
-                        <span>{tugas.deadline}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Award size="12" />
-                        <span>Bobot: {tugas.bobot}%</span>
-                      </div>
-                      {tugas.nilai && (
-                        <div className="flex items-center gap-1">
-                          <Star size="12" className="text-amber-500" />
-                          <span>Nilai: {tugas.nilai}</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {tugas.catatan && tugas.status === "revisi" && (
-                      <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200">
-                        <p className="text-xs font-medium text-amber-800">Catatan Revisi:</p>
-                        <p className="text-xs text-amber-700">{tugas.catatan}</p>
-                      </div>
-                    )}
+                    <span className="text-[10px] font-medium text-gray-500 uppercase">Tugas</span>
                   </div>
-                  
-                  <Link to={`/peserta/tugas/${tugas.id}`}>
-                    <button className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+                  <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full ${status.bg} ${status.text}`}>
+                    <StatusIcon size="8" />
+                    <span className="text-[8px] font-medium">{status.label}</span>
+                  </div>
+                </div>
+                
+                <h3 className="font-bold text-gray-800 text-base mb-1 line-clamp-1">{tugas.judul}</h3>
+                <p className="text-xs text-gray-500 mb-3 line-clamp-2">{tugas.deskripsi_singkat}</p>
+                
+                <div className="space-y-1 mb-3">
+                  <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                    <Calendar size="10" />
+                    <span>Deadline: {tugas.deadline}</span>
+                    <span className={`ml-1 ${deadlineStatus.text}`}>({deadlineStatus.label})</span>
+                  </div>
+                  {tugas.nilai && (
+                    <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                      <Star size="10" className="text-amber-500" />
+                      <span>Nilai: {tugas.nilai}</span>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => openDetailModal(tugas)}
+                    className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition flex items-center justify-center gap-1"
+                  >
+                    <Eye size="12" />
+                    Detail
+                  </button>
+                  <button
+                    onClick={() => navigate(`/peserta/tugas/${tugas.id}/kumpul`)}
+                    className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition flex items-center justify-center gap-1 ${
                       tugas.status === "selesai"
-                        ? "bg-gray-100 text-gray-500 cursor-default"
-                        : "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md hover:shadow-lg"
-                    }`} disabled={tugas.status === "selesai"}>
-                      {tugas.status === "selesai" ? (
-                        <>
-                          <CheckCircle size="14" />
-                          Sudah Dikumpulkan
-                        </>
-                      ) : tugas.status === "revisi" ? (
-                        <>
-                          <FileText size="14" />
-                          Unggah Revisi
-                        </>
-                      ) : (
-                        <>
-                          <FileText size="14" />
-                          Kumpulkan Tugas
-                        </>
-                      )}
-                    </button>
-                  </Link>
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-gradient-to-r from-teal-500 to-blue-600 text-white hover:shadow-md"
+                    }`}
+                    disabled={tugas.status === "selesai"}
+                  >
+                    <Upload size="12" />
+                    {tugas.status === "selesai" ? "Sudah Dikumpul" : tugas.status === "revisi" ? "Revisi" : "Kumpulkan"}
+                  </button>
                 </div>
               </div>
             </div>
@@ -279,7 +393,7 @@ function DaftarTugas() {
       </div>
 
       {filteredTugas.length === 0 && (
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 py-12 text-center">
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100 py-12 text-center">
           <ClipboardList size="48" className="text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 font-medium">Belum ada tugas</p>
           <p className="text-sm text-gray-400 mt-1">Tugas akan muncul setelah mentor memberikannya</p>
@@ -288,50 +402,91 @@ function DaftarTugas() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-6">
-          <p className="text-sm text-gray-500">Halaman {currentPage} dari {totalPages}</p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="p-2 rounded-xl bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-            >
-              <ChevronLeft size="18" />
-            </button>
-            <div className="flex gap-1.5">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum
-                if (totalPages <= 5) {
-                  pageNum = i + 1
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i
-                } else {
-                  pageNum = currentPage - 2 + i
-                }
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`w-9 h-9 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                      currentPage === pageNum
-                        ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-lg"
-                        : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                )
-              })}
+        <div className="flex items-center justify-center gap-2 pt-4">
+          <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-2 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"><ChevronLeft size="18" /></button>
+          <div className="flex gap-1.5">
+            {getPageNumbers().map((page, idx) => (
+              page === '...' ? <span key={idx} className="w-9 h-9 flex items-center justify-center text-gray-400">...</span> :
+              <button key={idx} onClick={() => setCurrentPage(page)} className={`w-9 h-9 rounded-lg text-sm font-medium transition ${currentPage === page ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{page}</button>
+            ))}
+          </div>
+          <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="p-2 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"><ChevronRight size="18" /></button>
+        </div>
+      )}
+
+      {/* Modal Detail Tugas */}
+      {showDetailModal && selectedTugas && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={closeDetailModal}>
+          <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-teal-50/50 to-blue-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center">
+                  <FileText size="18" className="text-teal-600" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-gray-800 text-lg">{selectedTugas.judul}</h2>
+                  <p className="text-xs text-gray-500">Deadline: {selectedTugas.deadline}</p>
+                </div>
+              </div>
+              <button onClick={closeDetailModal} className="p-2 rounded-lg hover:bg-white/50"><X size="20" className="text-gray-500" /></button>
             </div>
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
-              className="p-2 rounded-xl bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-            >
-              <ChevronRight size="18" />
-            </button>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)] space-y-6">
+              {/* Deskripsi Lengkap */}
+              <div>
+                <div className="flex items-center gap-2 mb-2"><FileText size="14" className="text-teal-600" /><h3 className="font-semibold text-gray-800">Deskripsi Tugas</h3></div>
+                <p className="text-gray-600 text-sm leading-relaxed">{selectedTugas.deskripsi_lengkap}</p>
+              </div>
+
+              {/* Cara Pengerjaan */}
+              {selectedTugas.cara_pengerjaan && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2"><FolderOpen size="14" className="text-blue-600" /><h3 className="font-semibold text-gray-800">Cara Pengerjaan</h3></div>
+                  <div className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{selectedTugas.cara_pengerjaan}</div>
+                </div>
+              )}
+
+              {/* Lampiran dari Mentor */}
+              {selectedTugas.attachments && selectedTugas.attachments.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3"><Paperclip size="14" className="text-purple-600" /><h3 className="font-semibold text-gray-800">Materi Pendukung</h3></div>
+                  <div className="space-y-2">
+                    {selectedTugas.attachments.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                            {item.type === "link" || item.type === "video" ? <LinkIcon size="14" className="text-purple-500" /> : <FileText size="14" className="text-teal-600" />}
+                          </div>
+                          <div><p className="text-sm font-medium text-gray-700">{item.name}</p>{item.size && <p className="text-xs text-gray-400">{item.size}</p>}</div>
+                        </div>
+                        {item.type === "link" || item.type === "video" ? (
+                          <a href={item.url} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg text-xs font-medium flex items-center gap-1"><ExternalLink size="12" /> Buka Link</a>
+                        ) : (
+                          <a href={item.url} download className="px-3 py-1.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-medium flex items-center gap-1"><Download size="12" /> Download</a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Catatan Revisi */}
+              {selectedTugas.status === "revisi" && selectedTugas.catatan && (
+                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+                  <div className="flex items-center gap-2 mb-2"><AlertCircle size="14" className="text-amber-600" /><h3 className="font-semibold text-amber-800">Catatan Revisi</h3></div>
+                  <p className="text-sm text-amber-700">{selectedTugas.catatan}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-100 bg-gray-50">
+              <button onClick={closeDetailModal} className="px-5 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Tutup</button>
+              {selectedTugas.status !== "selesai" && (
+                <button onClick={() => { closeDetailModal(); navigate(`/peserta/tugas/${selectedTugas.id}/kumpul`); }} className="px-5 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg hover:shadow-md transition flex items-center gap-2">
+                  <Upload size="14" /> {selectedTugas.status === "revisi" ? "Unggah Revisi" : "Kumpulkan Tugas"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

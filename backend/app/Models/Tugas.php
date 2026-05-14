@@ -20,6 +20,8 @@ class Tugas extends Model
         'deskripsi',
         'deadline',
         'file_tugas',
+        'file_link',     
+        'link_type',
     ];
 
     protected $casts = [

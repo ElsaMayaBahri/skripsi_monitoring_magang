@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 class AuthController extends Controller
 {
@@ -16,31 +17,22 @@ class AuthController extends Controller
     {
         $validated = $request->validated();
 
-        // Cari user berdasarkan email
         $user = User::where('email', $validated['email'])->first();
 
-        // Cek user exists
         if (!$user) {
             return LoginResponse::error('Email atau password salah', 401);
         }
 
-        // Cek password
         if (!Hash::check($validated['password'], $user->password)) {
             return LoginResponse::error('Email atau password salah', 401);
         }
 
-        // Cek status akun
         if ($user->status_akun === 'non_aktif') {
             return LoginResponse::error('Akun Anda tidak aktif. Silakan hubungi administrator.', 403);
         }
 
-        // Hapus token lama
         $user->tokens()->delete();
-
-        // Buat token baru
         $token = $user->createToken('auth_token', [$user->role])->plainTextToken;
-
-        // Login menggunakan guard
         Auth::login($user);
 
         return LoginResponse::success($user, $token);
@@ -69,6 +61,8 @@ class AuthController extends Controller
                 'role' => $user->role,
                 'status_akun' => $user->status_akun,
                 'foto_profil' => $user->foto_profil,
+                'no_telepon' => $user->no_telepon,
+                'alamat' => $user->alamat,
             ],
             'role' => $user->role,
         ]);
@@ -79,7 +73,9 @@ class AuthController extends Controller
         $user = $request->user();
         
         $request->validate([
-            'nama' => 'sometimes|string|max:100',
+            'nama' => 'nullable|string|max:100',
+            'no_telepon' => 'nullable|string|max:15',
+            'alamat' => 'nullable|string',
             'foto_profil' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
@@ -87,7 +83,20 @@ class AuthController extends Controller
             $user->nama = $request->nama;
         }
 
+        if ($request->has('no_telepon')) {
+            $user->no_telepon = $request->no_telepon;
+        }
+
+        if ($request->has('alamat')) {
+            $user->alamat = $request->alamat;
+        }
+
         if ($request->hasFile('foto_profil')) {
+            // Hapus foto lama jika ada
+            if ($user->foto_profil && Storage::disk('public')->exists($user->foto_profil)) {
+                Storage::disk('public')->delete($user->foto_profil);
+            }
+            
             $path = $request->file('foto_profil')->store('profile-photos', 'public');
             $user->foto_profil = $path;
         }
@@ -97,11 +106,19 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Profile berhasil diupdate',
-            'user' => $user
+            'user' => [
+                'id' => $user->id_user,
+                'nama' => $user->nama,
+                'email' => $user->email,
+                'role' => $user->role,
+                'status_akun' => $user->status_akun,
+                'foto_profil' => $user->foto_profil,
+                'no_telepon' => $user->no_telepon,
+                'alamat' => $user->alamat,
+            ]
         ]);
     }
 
-    // TAMBAHKAN METHOD INI UNTUK CHANGE PASSWORD
     public function changePassword(Request $request)
     {
         $request->validate([

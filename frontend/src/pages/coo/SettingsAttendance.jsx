@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { api } from '../../utils/api';
+// SettingsAttendance.jsx - VERSION FIXED
+import { useState, useEffect } from "react";
 import { 
   Calendar, 
   Clock, 
@@ -20,12 +20,23 @@ import {
   Loader2
 } from 'lucide-react';
 
+// Import service functions
+import {
+  getJamKerja,
+  createJamKerja,
+  updateJamKerja,
+  getHariLibur,
+  createHariLibur,
+  updateHariLibur,
+  deleteHariLibur
+} from "../../api/coo/settingsAttendanceService";
+
 const SettingsAttendance = () => {
   const [activeTab, setActiveTab] = useState('jam-kerja');
   const [jamKerja, setJamKerja] = useState({
     jam_masuk: '08:00',
     jam_pulang: '17:00',
-    batas_terlambat: 15
+    batas_terlambat: 15 // Default value 15 menit
   });
   const [hariLibur, setHariLibur] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -43,15 +54,33 @@ const SettingsAttendance = () => {
   const [successDetail, setSuccessDetail] = useState("");
   const [successType, setSuccessType] = useState("");
 
+  // Fungsi timeToMinutes dengan pengecekan tipe data yang lebih baik
   const timeToMinutes = (timeStr) => {
-    if (!timeStr) return 15;
-    const parts = timeStr.split(':');
-    if (parts.length >= 2) {
-      const jam = parseInt(parts[0]) || 0;
-      const menit = parseInt(parts[1]) || 0;
-      return (jam * 60) + menit;
+    // Jika sudah dalam bentuk number (menit)
+    if (typeof timeStr === 'number' && !isNaN(timeStr)) {
+      return timeStr;
     }
-    return 15;
+    
+    // Jika null atau undefined
+    if (!timeStr) return 15;
+    
+    // Jika string, parse dengan split
+    if (typeof timeStr === 'string') {
+      // Cek apakah sudah dalam format HH:MM
+      if (timeStr.includes(':')) {
+        const parts = timeStr.split(':');
+        if (parts.length >= 2) {
+          const jam = parseInt(parts[0]) || 0;
+          const menit = parseInt(parts[1]) || 0;
+          return (jam * 60) + menit;
+        }
+      }
+      // Jika berupa angka dalam string
+      const num = parseInt(timeStr);
+      if (!isNaN(num)) return num;
+    }
+    
+    return 15; // Default 15 menit
   };
 
   const showPremiumPopup = (message, detail, type = "success") => {
@@ -82,9 +111,10 @@ const SettingsAttendance = () => {
     }
   };
 
+  // 🟢 PERBAIKAN: fetchJamKerja dengan nilai default yang aman
   const fetchJamKerja = async () => {
     try {
-      const response = await api.getJamKerja();
+      const response = await getJamKerja();
       console.log('Jam kerja response:', response);
       
       if (response && response.success && response.data) {
@@ -92,9 +122,21 @@ const SettingsAttendance = () => {
         const jamMasuk = data.jam_masuk ? data.jam_masuk.substring(0, 5) : '08:00';
         const jamPulang = data.jam_pulang ? data.jam_pulang.substring(0, 5) : '17:00';
         
-        let batasTerlambatMenit = 15;
-        if (data.batas_terlambat) {
-          batasTerlambatMenit = timeToMinutes(data.batas_terlambat);
+        // 🔥 PERBAIKAN UTAMA: Pastikan batas_terlambat tidak menjadi 0 atau null
+        let batasTerlambatMenit = 15; // Default value
+        
+        if (data.batas_terlambat !== null && data.batas_terlambat !== undefined) {
+          if (typeof data.batas_terlambat === 'number') {
+            batasTerlambatMenit = data.batas_terlambat;
+          } else if (typeof data.batas_terlambat === 'string') {
+            const parsed = timeToMinutes(data.batas_terlambat);
+            batasTerlambatMenit = parsed > 0 ? parsed : 15;
+          }
+        }
+        
+        // 🔥 JANGAN BIARKAN NILAI 0
+        if (batasTerlambatMenit === 0 || batasTerlambatMenit === null || isNaN(batasTerlambatMenit)) {
+          batasTerlambatMenit = 15;
         }
         
         setJamKerja({
@@ -102,16 +144,29 @@ const SettingsAttendance = () => {
           jam_pulang: jamPulang,
           batas_terlambat: batasTerlambatMenit
         });
-        setIdJamKerja(data.id_jam_kerja);
+        setIdJamKerja(data.id_jam_kerja || data.id);
+      } else {
+        // Jika response gagal, tetap gunakan default
+        setJamKerja({
+          jam_masuk: '08:00',
+          jam_pulang: '17:00',
+          batas_terlambat: 15
+        });
       }
     } catch (error) {
       console.error('Error fetching working hours:', error);
+      // Jika error, tetap set ke default
+      setJamKerja({
+        jam_masuk: '08:00',
+        jam_pulang: '17:00',
+        batas_terlambat: 15
+      });
     }
   };
 
   const fetchHariLibur = async () => {
     try {
-      const response = await api.getHariLibur();
+      const response = await getHariLibur();
       console.log('Hari libur response:', response);
       
       let dataLibur = [];
@@ -126,8 +181,11 @@ const SettingsAttendance = () => {
       const formattedLibur = dataLibur.map(item => ({
         id: item.id_libur || item.id,
         tanggal: item.tanggal,
-        keterangan: item.keterangan || item.name
+        keterangan: item.keterangan || item.name || item.nama
       }));
+      
+      // Urutkan berdasarkan tanggal
+      formattedLibur.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
       
       setHariLibur(formattedLibur);
     } catch (error) {
@@ -141,8 +199,8 @@ const SettingsAttendance = () => {
       showPremiumPopup('Validasi Gagal', 'Jam masuk dan jam pulang harus diisi', 'error');
       return;
     }
-    if (jamKerja.batas_terlambat === null || jamKerja.batas_terlambat === undefined) {
-      showPremiumPopup('Validasi Gagal', 'Batas toleransi keterlambatan harus diisi', 'error');
+    if (jamKerja.batas_terlambat === null || jamKerja.batas_terlambat === undefined || jamKerja.batas_terlambat === 0) {
+      showPremiumPopup('Validasi Gagal', 'Batas toleransi keterlambatan harus diisi (minimal 1 menit)', 'error');
       return;
     }
 
@@ -156,9 +214,9 @@ const SettingsAttendance = () => {
       };
       
       if (idJamKerja) {
-        response = await api.updateJamKerja(idJamKerja, dataToSend);
+        response = await updateJamKerja(idJamKerja, dataToSend);
       } else {
-        response = await api.createJamKerja(dataToSend);
+        response = await createJamKerja(dataToSend);
       }
       
       if (response && response.success) {
@@ -188,9 +246,9 @@ const SettingsAttendance = () => {
     try {
       let response;
       if (editingLibur) {
-        response = await api.updateHariLibur(editingLibur.id, formLibur);
+        response = await updateHariLibur(editingLibur.id, formLibur);
       } else {
-        response = await api.createHariLibur(formLibur);
+        response = await createHariLibur(formLibur);
       }
       
       if (response && response.success) {
@@ -223,12 +281,12 @@ const SettingsAttendance = () => {
     setShowDeleteConfirm(true);
   };
 
-  const deleteHariLibur = async () => {
+  const deleteHariLiburItem = async () => {
     if (!deleteTarget) return;
     
     setLoading(true);
     try {
-      const response = await api.deleteHariLibur(deleteTarget.id);
+      const response = await deleteHariLibur(deleteTarget.id);
       if (response && response.success) {
         showPremiumPopup('Hari Libur Dihapus', `${deleteTarget.keterangan} berhasil dihapus dari daftar`, 'success');
         await fetchHariLibur();
@@ -282,6 +340,29 @@ const SettingsAttendance = () => {
     if (!time) return '-';
     return time.substring(0, 5);
   };
+
+  // Handling input batas_terlambat agar tidak bisa 0
+  const handleBatasTerlambatChange = (value) => {
+    let newValue = parseInt(value) || 0;
+    if (newValue < 1) {
+      newValue = 1;
+    }
+    if (newValue > 120) {
+      newValue = 120;
+    }
+    setJamKerja({ ...jamKerja, batas_terlambat: newValue });
+  };
+
+  if (loading && hariLibur.length === 0 && !jamKerja.jam_masuk) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50/30 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
+          <p className="text-slate-500">Memuat pengaturan...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50/30">
@@ -369,7 +450,7 @@ const SettingsAttendance = () => {
                     Batal
                   </button>
                   <button
-                    onClick={deleteHariLibur}
+                    onClick={deleteHariLiburItem}
                     disabled={loading}
                     className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-xl text-white font-medium hover:shadow-lg transition-all disabled:opacity-50"
                   >
@@ -384,7 +465,7 @@ const SettingsAttendance = () => {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        {/* HEADER - DIPERBAIKI JARAKNYA */}
+        {/* HEADER */}
         <div className="mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
@@ -478,7 +559,6 @@ const SettingsAttendance = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-2xl border border-blue-100 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
                 <div className="flex items-center gap-3 mb-6">
-                  {/* ICON WAKTU OPERASIONAL - WARNA ABU */}
                   <div className="p-2.5 bg-slate-100 rounded-xl shadow-sm">
                     <Clock className="w-5 h-5 text-slate-500" />
                   </div>
@@ -511,7 +591,6 @@ const SettingsAttendance = () => {
 
               <div className="bg-white rounded-2xl border border-blue-100 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
                 <div className="flex items-center gap-3 mb-6">
-                  {/* ICON BATAS & TOLERANSI - WARNA ABU */}
                   <div className="p-2.5 bg-slate-100 rounded-xl shadow-sm">
                     <AlertCircle className="w-5 h-5 text-slate-500" />
                   </div>
@@ -526,10 +605,10 @@ const SettingsAttendance = () => {
                     <div className="flex items-center gap-3">
                       <input
                         type="number"
-                        min="0"
+                        min="1"
                         max="120"
                         value={jamKerja.batas_terlambat}
-                        onChange={(e) => setJamKerja({ ...jamKerja, batas_terlambat: parseInt(e.target.value) || 0 })}
+                        onChange={(e) => handleBatasTerlambatChange(e.target.value)}
                         className="flex-1 border border-blue-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                         placeholder="Masukkan jumlah menit"
                       />
@@ -541,6 +620,9 @@ const SettingsAttendance = () => {
                     </p>
                     <p className="text-xs text-slate-400 mt-1">
                       Contoh: Jika jam masuk 08:00 dan batas terlambat 15 menit, maka peserta masih dianggap hadir jika check-in sebelum pukul 08:15
+                    </p>
+                    <p className="text-xs text-amber-600 mt-2 font-medium">
+                      ⚡ Minimal 1 menit, maksimal 120 menit
                     </p>
                   </div>
                 </div>
@@ -574,7 +656,7 @@ const SettingsAttendance = () => {
         {/* HOLIDAYS TAB */}
         {activeTab === 'hari-libur' && (
           <div className="space-y-6">
-            {/* UPCOMING HOLIDAYS BANNER - WARNA MERAH */}
+            {/* UPCOMING HOLIDAYS BANNER */}
             {upcomingHariLibur.length > 0 && (
               <div className="mb-6 bg-gradient-to-r from-red-50 to-rose-50 rounded-2xl p-4 border border-red-200">
                 <div className="flex items-center gap-3">
@@ -636,15 +718,15 @@ const SettingsAttendance = () => {
                               </div>
                               <span className="text-slate-700 font-medium">{tanggalFormatted}</span>
                             </div>
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-medium rounded-full">
                               {getNamaHari(libur.tanggal)}
                             </span>
-                          </td>
+                            </td>
                           <td className="px-6 py-4">
                             <span className="text-slate-800 font-medium">{libur.keterangan}</span>
-                          </td>
+                            </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-center gap-2">
                               <button
@@ -660,7 +742,7 @@ const SettingsAttendance = () => {
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
-                          </td>
+                            </td>
                         </tr>
                       );
                     })}
@@ -714,7 +796,7 @@ const SettingsAttendance = () => {
               )}
             </div>
 
-            {/* CATATAN - WARNA BIRU */}
+            {/* CATATAN */}
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 border border-blue-100">
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5" />
@@ -788,6 +870,23 @@ const SettingsAttendance = () => {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes zoomIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .animate-zoomIn {
+          animation: zoomIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };
