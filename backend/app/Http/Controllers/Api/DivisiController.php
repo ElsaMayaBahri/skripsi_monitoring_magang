@@ -92,7 +92,7 @@ class DivisiController extends Controller
                 'id_mentor' => $request->id_mentor
             ];
             
-            // 🔥 TAMBAHKAN status jika ada dalam request
+            // TAMBAHKAN status jika ada dalam request
             if ($request->has('status')) {
                 $updateData['status'] = $request->status;
             }
