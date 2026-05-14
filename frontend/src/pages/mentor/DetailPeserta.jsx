@@ -132,6 +132,11 @@ function DetailPeserta() {
     }
   };
 
+  const handleInputNilai = () => {
+    // Navigasi ke halaman Input Nilai Manual (tanpa ID, karena di halaman tersebut ada dropdown pilih peserta)
+    navigate("/mentor/input-nilai-manual");
+  };
+
   const mentorName = currentMentor?.nama || currentMentor?.name || currentMentor?.nama_lengkap || "Mentor";
 
   if (loading) {
@@ -325,7 +330,7 @@ function DetailPeserta() {
             Kembali
           </button>
           <button
-            onClick={() => navigate(`/mentor/input-nilai/${peserta.id}`)}
+            onClick={handleInputNilai}
             className="px-5 py-2 bg-gradient-to-r from-teal-500 to-blue-600 rounded-lg text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all"
           >
             Input Nilai

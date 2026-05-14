@@ -1,6 +1,12 @@
-import { useState, useEffect } from "react"
+// src/pages/mentor/ProfileMentor.jsx
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { User, Mail, Phone, MapPin, Calendar, Shield, Edit2, Save, X, Briefcase, Clock, CheckCircle, AlertCircle, Users, BookOpen, Star } from "lucide-react"
+import { 
+  User, Mail, Phone, MapPin, Calendar, Shield, Edit2, Save, X, 
+  Briefcase, Clock, CheckCircle, AlertCircle, Users, BookOpen, Star,
+  Camera, Upload, Trash2, Loader2 
+} from "lucide-react"
+import axiosInstance from "../../api/axios"
 
 function ProfileMentor() {
   const navigate = useNavigate()
@@ -9,8 +15,11 @@ function ProfileMentor() {
   const [formData, setFormData] = useState({})
   const [originalData, setOriginalData] = useState({})
   const [loading, setLoading] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   const [errorMessage, setErrorMessage] = useState("")
+  const [photoPreview, setPhotoPreview] = useState(null)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user")
@@ -19,6 +28,10 @@ function ProfileMentor() {
       setUser(parsedUser)
       setFormData(parsedUser)
       setOriginalData(parsedUser)
+      // Set photo preview jika ada foto
+      if (parsedUser.foto_profil) {
+        setPhotoPreview(parsedUser.foto_profil)
+      }
     }
   }, [])
 
@@ -27,18 +40,123 @@ function ProfileMentor() {
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
+  // Fungsi upload foto profil
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    // Validasi tipe file
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      setErrorMessage("Format file tidak didukung. Gunakan JPG, PNG, GIF, atau WEBP")
+      setTimeout(() => setErrorMessage(""), 3000)
+      return
+    }
+
+    // Validasi ukuran file (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setErrorMessage("Ukuran file maksimal 2MB")
+      setTimeout(() => setErrorMessage(""), 3000)
+      return
+    }
+
+    setUploadingPhoto(true)
+    setErrorMessage("")
+    setSuccessMessage("")
+
+    try {
+      const formDataPhoto = new FormData()
+      formDataPhoto.append('foto_profil', file)
+      formDataPhoto.append('_method', 'PUT')
+
+      const response = await axiosInstance.post(`/mentor/profile/photo`, formDataPhoto, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+
+      if (response.data.success) {
+        // Update user data di localStorage
+        const updatedUser = { ...user, foto_profil: response.data.foto_url }
+        localStorage.setItem("user", JSON.stringify(updatedUser))
+        setUser(updatedUser)
+        setFormData(updatedUser)
+        setPhotoPreview(response.data.foto_url)
+        setSuccessMessage("Foto profil berhasil diperbarui!")
+        setTimeout(() => setSuccessMessage(""), 3000)
+      } else {
+        setErrorMessage(response.data.message || "Gagal upload foto")
+        setTimeout(() => setErrorMessage(""), 3000)
+      }
+    } catch (error) {
+      console.error("Error uploading photo:", error)
+      setErrorMessage(error.response?.data?.message || "Gagal upload foto")
+      setTimeout(() => setErrorMessage(""), 3000)
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
+
+  // Fungsi hapus foto profil
+  const handleRemovePhoto = async () => {
+    if (!window.confirm("Apakah Anda yakin ingin menghapus foto profil?")) return
+
+    setUploadingPhoto(true)
+    setErrorMessage("")
+    setSuccessMessage("")
+
+    try {
+      const response = await axiosInstance.delete('/mentor/profile/photo')
+
+      if (response.data.success) {
+        const updatedUser = { ...user, foto_profil: null }
+        localStorage.setItem("user", JSON.stringify(updatedUser))
+        setUser(updatedUser)
+        setFormData(updatedUser)
+        setPhotoPreview(null)
+        setSuccessMessage("Foto profil berhasil dihapus!")
+        setTimeout(() => setSuccessMessage(""), 3000)
+      } else {
+        setErrorMessage(response.data.message || "Gagal menghapus foto")
+        setTimeout(() => setErrorMessage(""), 3000)
+      }
+    } catch (error) {
+      console.error("Error removing photo:", error)
+      setErrorMessage(error.response?.data?.message || "Gagal menghapus foto")
+      setTimeout(() => setErrorMessage(""), 3000)
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
+
   const handleSave = async () => {
     setLoading(true)
+    setErrorMessage("")
+    setSuccessMessage("")
+    
     try {
-      await new Promise(resolve => setTimeout(resolve, 500))
-      localStorage.setItem("user", JSON.stringify(formData))
-      setUser(formData)
-      setOriginalData(formData)
-      setIsEditing(false)
-      setSuccessMessage("Profil berhasil diperbarui!")
-      setTimeout(() => setSuccessMessage(""), 3000)
+      const response = await axiosInstance.put("/mentor/profile", {
+        nama: formData.nama,
+        email: formData.email,
+        no_telepon: formData.no_hp,
+        alamat: formData.alamat,
+        keahlian: formData.keahlian,
+        pengalaman: formData.pengalaman
+      })
+      
+      if (response.data.success) {
+        const updatedUser = { ...user, ...formData }
+        localStorage.setItem("user", JSON.stringify(updatedUser))
+        setUser(updatedUser)
+        setOriginalData(formData)
+        setIsEditing(false)
+        setSuccessMessage("Profil berhasil diperbarui!")
+        setTimeout(() => setSuccessMessage(""), 3000)
+      } else {
+        setErrorMessage(response.data.message || "Gagal memperbarui profil")
+        setTimeout(() => setErrorMessage(""), 3000)
+      }
     } catch (error) {
-      setErrorMessage("Gagal memperbarui profil")
+      console.error("Error saving profile:", error)
+      setErrorMessage(error.response?.data?.message || "Gagal memperbarui profil")
       setTimeout(() => setErrorMessage(""), 3000)
     } finally {
       setLoading(false)
@@ -63,12 +181,14 @@ function ProfileMentor() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {successMessage && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex items-center gap-2">
+          <CheckCircle size={16} />
           {successMessage}
         </div>
       )}
       {errorMessage && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
+          <AlertCircle size={16} />
           {errorMessage}
         </div>
       )}
@@ -77,10 +197,51 @@ function ProfileMentor() {
         <div className="h-24 bg-gradient-to-r from-teal-500 to-blue-600"></div>
         
         <div className="relative px-6 pb-6">
-          <div className="relative -mt-12 mb-4">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center shadow-lg ring-4 ring-white mx-auto md:mx-0">
-              <span className="text-white text-3xl font-bold">{userInitial}</span>
+          {/* Avatar dengan upload foto */}
+          <div className="relative -mt-12 mb-4 group">
+            <div className="relative inline-block">
+              {photoPreview ? (
+                <img 
+                  src={photoPreview} 
+                  alt={user.nama || "Profile"} 
+                  className="w-24 h-24 rounded-full object-cover ring-4 ring-white shadow-lg"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center shadow-lg ring-4 ring-white">
+                  <span className="text-white text-3xl font-bold">{userInitial}</span>
+                </div>
+              )}
+              
+              {/* Overlay dan tombol upload */}
+              <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 bg-white rounded-full text-teal-600 hover:bg-teal-50 transition"
+                  disabled={uploadingPhoto}
+                >
+                  {uploadingPhoto ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} />}
+                </button>
+              </div>
+              
+              {/* Tombol hapus foto */}
+              {photoPreview && (
+                <button
+                  onClick={handleRemovePhoto}
+                  className="absolute -bottom-1 -right-1 p-1 bg-red-500 rounded-full text-white hover:bg-red-600 transition shadow-md"
+                  disabled={uploadingPhoto}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
             </div>
+            
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+              onChange={handlePhotoUpload}
+              className="hidden"
+            />
           </div>
 
           <div className="flex flex-wrap justify-between items-start gap-4">

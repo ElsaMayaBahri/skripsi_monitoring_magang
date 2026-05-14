@@ -14,6 +14,12 @@ export const getMentorTugasById = async (id) => {
   return response.data;
 };
 
+// Get task detail for edit (alias untuk getMentorTugasById)
+export const getMentorTugasDetail = async (id) => {
+  const response = await axiosInstance.get(`/mentor/tugas/${id}`);
+  return response.data;
+};
+
 // Create task
 export const createMentorTugas = async (formData) => {
   const response = await axiosInstance.post("/mentor/tugas", formData, {
@@ -76,6 +82,7 @@ export const updateTugasSubmission = async (submissionId, data) => {
 export default {
   getMentorTugas,
   getMentorTugasById,
+  getMentorTugasDetail,
   createMentorTugas,
   updateMentorTugas,
   deleteMentorTugas,

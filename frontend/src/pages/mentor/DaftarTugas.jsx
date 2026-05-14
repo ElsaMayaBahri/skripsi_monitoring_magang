@@ -39,9 +39,50 @@ import {
   Copy
 } from "lucide-react";
 import * as api from "../../api/mentor/tugasService";
+import axiosInstance from "../../api/axios";
+
+// Skeleton Loading Components
+const SkeletonCard = () => (
+  <div className="group relative bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100 overflow-hidden animate-pulse">
+    <div className="relative p-6">
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
+        <div className="flex-1">
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            <div className="h-6 w-48 bg-slate-200 rounded"></div>
+            <div className="h-5 w-16 bg-slate-200 rounded-full"></div>
+            <div className="h-5 w-20 bg-slate-200 rounded-full"></div>
+          </div>
+          <div className="h-4 w-full bg-slate-200 rounded mb-2"></div>
+          <div className="h-4 w-3/4 bg-slate-200 rounded mb-4"></div>
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="h-8 w-24 bg-slate-200 rounded"></div>
+            <div className="h-8 w-24 bg-slate-200 rounded"></div>
+            <div className="h-8 w-24 bg-slate-200 rounded"></div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-20 bg-slate-200 rounded-xl"></div>
+          <div className="h-9 w-9 bg-slate-200 rounded-xl"></div>
+          <div className="h-9 w-9 bg-slate-200 rounded-xl"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const SkeletonSummaryCard = () => (
+  <div className="relative overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 p-5 animate-pulse">
+    <div className="flex items-center justify-between mb-3">
+      <div className="h-3 w-20 bg-slate-200 rounded"></div>
+      <div className="w-12 h-12 bg-slate-200 rounded-xl"></div>
+    </div>
+    <div className="h-8 w-16 bg-slate-200 rounded mb-1"></div>
+    <div className="h-3 w-24 bg-slate-200 rounded"></div>
+  </div>
+);
 
 function DaftarTugas() {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [tugas, setTugas] = useState([]);
   const [filteredTugas, setFilteredTugas] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -61,6 +102,7 @@ function DaftarTugas() {
   const [previewFileName, setPreviewFileName] = useState("");
   const [previewFileType, setPreviewFileType] = useState("");
   const [copySuccess, setCopySuccess] = useState(null);
+  const [downloading, setDownloading] = useState(null);
 
   // Helper function untuk mendapatkan URL file yang benar
   const getFileUrl = (filePath) => {
@@ -70,6 +112,31 @@ function DaftarTugas() {
     if (filePath.startsWith('tugas/')) return `http://localhost:8000/storage/${filePath}`;
     if (filePath.startsWith('storage/')) return `http://localhost:8000/${filePath}`;
     return `http://localhost:8000/storage/${filePath}`;
+  };
+
+  // Fungsi download file langsung menggunakan axios
+  const handleDownloadFile = async (fileUrl, fileName, tugasId) => {
+    setDownloading(tugasId);
+    try {
+      const response = await axiosInstance.get(fileUrl, {
+        responseType: 'blob'
+      });
+      
+      const blob = new Blob([response.data]);
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName || 'file';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download error:", error);
+      window.open(fileUrl, '_blank');
+    } finally {
+      setDownloadting(null);
+    }
   };
 
   // Fetch tugas from backend
@@ -85,8 +152,7 @@ function DaftarTugas() {
           judul: item.judul,
           deskripsi: item.deskripsi || "-",
           deadline: item.deadline,
-          bobot: item.bobot || 0,
-          status: item.status || (new Date(item.deadline) < new Date() ? "closed" : "active"),
+          status: item.status || "active",
           created_at: item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
           submissions: item.submissions || [],
           total_submissions: item.total_submissions || 0,
@@ -120,6 +186,15 @@ function DaftarTugas() {
   useEffect(() => {
     let filtered = [...tugas];
     
+    // Update status berdasarkan deadline
+    const today = new Date();
+    filtered = filtered.map(t => {
+      const deadlineDate = new Date(t.deadline);
+      const isActive = deadlineDate >= today;
+      return { ...t, status: isActive ? "active" : "closed" };
+    });
+    
+    // Filter search
     if (searchTerm) {
       filtered = filtered.filter(t => 
         t.judul.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -127,12 +202,15 @@ function DaftarTugas() {
       );
     }
     
-    if (filterStatus !== "all") {
-      filtered = filtered.filter(t => t.status === filterStatus);
+    // Filter status (active/closed)
+    if (selectedFilter === "active") {
+      filtered = filtered.filter(t => t.status === "active");
+    } else if (selectedFilter === "closed") {
+      filtered = filtered.filter(t => t.status === "closed");
     }
     
+    // Filter deadline (urgent, upcoming, passed) - tetap ada
     if (filterDeadline !== "all") {
-      const today = new Date();
       const threeDaysLater = new Date();
       threeDaysLater.setDate(today.getDate() + 3);
       
@@ -151,7 +229,7 @@ function DaftarTugas() {
     
     setFilteredTugas(filtered);
     setCurrentPage(1);
-  }, [searchTerm, filterStatus, filterDeadline, tugas]);
+  }, [searchTerm, selectedFilter, filterDeadline, tugas]);
 
   const handleDelete = async () => {
     if (!selectedTugas) return;
@@ -303,16 +381,37 @@ function DaftarTugas() {
     return acc + (t.submitted_count || 0);
   }, 0);
 
-  const totalActiveTugas = tugas.filter(t => t.status === "active").length;
+  const totalActiveTugas = tugas.filter(t => {
+    const deadlineDate = new Date(t.deadline);
+    return deadlineDate >= new Date();
+  }).length;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20 flex items-center justify-center">
-        <div className="relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-full blur-xl opacity-50 animate-pulse"></div>
-          <Loader2 className="w-12 h-12 text-teal-500 animate-spin relative" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20">
+        <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
+          <div className="mb-10">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-12 h-12 bg-slate-200 rounded-xl animate-pulse"></div>
+              <div>
+                <div className="w-48 h-8 bg-slate-200 rounded animate-pulse mb-1"></div>
+                <div className="w-64 h-4 bg-slate-200 rounded animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            {[1,2,3,4].map(i => <SkeletonSummaryCard key={i} />)}
+          </div>
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-5 mb-6">
+            <div className="flex flex-col md:flex-row gap-5">
+              <div className="h-12 bg-slate-200 rounded-xl flex-1 animate-pulse"></div>
+              <div className="h-12 w-64 bg-slate-200 rounded-xl animate-pulse"></div>
+            </div>
+          </div>
+          <div className="space-y-6">
+            {[1,2,3].map(i => <SkeletonCard key={i} />)}
+          </div>
         </div>
-        <p className="text-slate-500 mt-6 text-sm font-medium ml-3">Memuat tugas...</p>
       </div>
     );
   }
@@ -383,17 +482,50 @@ function DaftarTugas() {
           </div>
         </div>
 
-        {/* Filter Bar */}
+        {/* Filter Bar - with all filters */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-100 p-5 mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
-            <div className="relative flex-1 max-w-md group"><div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Search className="h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" /></div><input type="text" placeholder="Cari tugas..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-11 pr-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200" /></div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
-                <button onClick={() => setSelectedFilter("all")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${selectedFilter === "all" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>Semua</button>
-                <button onClick={() => setSelectedFilter("active")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${selectedFilter === "active" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>Aktif</button>
-                <button onClick={() => setSelectedFilter("closed")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${selectedFilter === "closed" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>Selesai</button>
+            <div className="relative flex-1 max-w-md group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
               </div>
-              <select value={filterDeadline} onChange={(e) => setFilterDeadline(e.target.value)} className="px-4 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-teal-400 cursor-pointer">
+              <input 
+                type="text" 
+                placeholder="Cari tugas..." 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
+                className="block w-full pl-11 pr-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200" 
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Filter Status: Semua, Aktif, Selesai */}
+              <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
+                <button 
+                  onClick={() => setSelectedFilter("all")} 
+                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${selectedFilter === "all" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Semua
+                </button>
+                <button 
+                  onClick={() => setSelectedFilter("active")} 
+                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${selectedFilter === "active" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Aktif
+                </button>
+                <button 
+                  onClick={() => setSelectedFilter("closed")} 
+                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${selectedFilter === "closed" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Selesai
+                </button>
+              </div>
+              
+              {/* Filter Deadline: Mendesak, Mendatang, Terlewat */}
+              <select 
+                value={filterDeadline} 
+                onChange={(e) => setFilterDeadline(e.target.value)} 
+                className="px-4 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-teal-400 cursor-pointer"
+              >
                 <option value="all">Semua Deadline</option>
                 <option value="urgent">Mendesak (&lt; 3 hari)</option>
                 <option value="upcoming">Mendatang</option>
@@ -429,6 +561,7 @@ function DaftarTugas() {
             const isHovered = hoveredCard === item.id;
             const hasFile = item.file_url && item.file_tugas;
             const hasLink = item.file_link;
+            const isDownloading = downloading === item.id;
             
             return (
               <div key={item.id} className="group relative bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100 overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1" onMouseEnter={() => setHoveredCard(item.id)} onMouseLeave={() => setHoveredCard(null)} style={{ borderLeftColor: isHovered ? '#14b8a6' : '#e2e8f0', borderLeftWidth: '4px' }}>
@@ -438,8 +571,14 @@ function DaftarTugas() {
                     <div className="flex-1">
                       <div className="flex flex-wrap items-center gap-3 mb-3">
                         <h3 className="font-bold text-slate-800 text-xl transition-colors duration-300">{item.judul}</h3>
-                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${status.bg} ${status.text} border ${status.border} shadow-sm`}><StatusIcon size="10" /><span className="text-[10px] font-semibold">{status.label}</span></div>
-                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${deadlineStatus.bg} ${deadlineStatus.text} border shadow-sm`}><DeadlineIcon size="10" /><span className="text-[10px] font-semibold">{deadlineStatus.label}</span></div>
+                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${status.bg} ${status.text} border ${status.border} shadow-sm`}>
+                          <StatusIcon size="10" />
+                          <span className="text-[10px] font-semibold">{status.label}</span>
+                        </div>
+                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${deadlineStatus.bg} ${deadlineStatus.text} border shadow-sm`}>
+                          <DeadlineIcon size="10" />
+                          <span className="text-[10px] font-semibold">{deadlineStatus.label}</span>
+                        </div>
                       </div>
                       <p className="text-sm text-slate-500 mb-4 leading-relaxed line-clamp-2">{item.deskripsi}</p>
                       
@@ -465,23 +604,14 @@ function DaftarTugas() {
                                     <Eye size="16" />
                                   </button>
                                 )}
-                                <a 
-                                  href={item.file_url} 
-                                  download
-                                  className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-500 hover:text-white transition-all duration-200"
+                                <button
+                                  onClick={() => handleDownloadFile(item.file_url, item.file_tugas?.split('/').pop() || 'file', item.id)}
+                                  disabled={isDownloading}
+                                  className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-500 hover:text-white transition-all duration-200 disabled:opacity-50"
                                   title="Download"
                                 >
-                                  <Download size="16" />
-                                </a>
-                                <a 
-                                  href={item.file_url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-all duration-200"
-                                  title="Buka di tab baru"
-                                >
-                                  <ExternalLink size="16" />
-                                </a>
+                                  {isDownloading ? <Loader2 size="16" className="animate-spin" /> : <Download size="16" />}
+                                </button>
                               </div>
                             </div>
                           )}
@@ -527,14 +657,6 @@ function DaftarTugas() {
                         <div className="flex items-center gap-2">
                           <div className="p-1.5 rounded-lg bg-slate-100"><Calendar size="12" className="text-slate-500" /></div>
                           <div><p className="text-[10px] text-slate-400">Deadline</p><span className="text-slate-700 font-medium text-xs">{item.deadline}</span></div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-lg bg-teal-50"><Award size="12" className="text-teal-600" /></div>
-                          <div>
-                            <p className="text-[10px] text-slate-400">Bobot</p>
-                            <span className="text-teal-600 font-semibold text-xs">{item.bobot}%</span>
-                            <p className="text-[8px] text-slate-400">(% dari nilai akhir)</p>
-                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="p-1.5 rounded-lg bg-blue-50"><Users size="12" className="text-blue-600" /></div>
@@ -674,35 +796,43 @@ function DaftarTugas() {
               {previewFileUrl && (previewFileType === 'word' || previewFileType === 'excel' || previewFileType === 'powerpoint') && (
                 <div className="text-center py-12">
                   <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
-                    {previewFileType === 'word' && <FileText size="40" className="text-blue-600" />}
-                    {previewFileType === 'excel' && <FileText size="40" className="text-green-600" />}
-                    {previewFileType === 'powerpoint' && <FileText size="40" className="text-orange-600" />}
+                    {previewFileType === 'word' && <FileText size={40} className="text-blue-600" />}
+                    {previewFileType === 'excel' && <FileText size={40} className="text-green-600" />}
+                    {previewFileType === 'powerpoint' && <FileText size={40} className="text-orange-600" />}
                   </div>
                   <p className="text-slate-600 mb-4">File {previewFileType === 'word' ? 'Word' : previewFileType === 'excel' ? 'Excel' : 'PowerPoint'} tidak dapat dipreview langsung.</p>
-                  <a
-                    href={previewFileUrl}
-                    download
+                  <button
+                    onClick={() => {
+                      setShowPreviewModal(false);
+                      if (previewFileUrl) {
+                        handleDownloadFile(previewFileUrl, previewFileName, 'preview');
+                      }
+                    }}
                     className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-xl transition-all duration-200"
                   >
                     <Download size="18" />
                     Download File
-                  </a>
+                  </button>
                 </div>
               )}
               {previewFileUrl && previewFileType === 'other' && (
                 <div className="text-center py-12">
                   <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
-                    <FileArchive size="40" className="text-slate-500" />
+                    <FileArchive size={40} className="text-slate-500" />
                   </div>
                   <p className="text-slate-600 mb-4">File ini tidak dapat dipreview.</p>
-                  <a
-                    href={previewFileUrl}
-                    download
+                  <button
+                    onClick={() => {
+                      setShowPreviewModal(false);
+                      if (previewFileUrl) {
+                        handleDownloadFile(previewFileUrl, previewFileName, 'preview');
+                      }
+                    }}
                     className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-xl transition-all duration-200"
                   >
                     <Download size="18" />
                     Download File
-                  </a>
+                  </button>
                 </div>
               )}
             </div>
@@ -713,14 +843,18 @@ function DaftarTugas() {
               >
                 Tutup
               </button>
-              <a
-                href={previewFileUrl}
-                download
-                className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-xl transition-all duration-200 flex items-center gap-2"
-              >
-                <Download size="18" />
-                Download File
-              </a>
+              {previewFileUrl && (
+                <button
+                  onClick={() => {
+                    setShowPreviewModal(false);
+                    handleDownloadFile(previewFileUrl, previewFileName, 'preview');
+                  }}
+                  className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-xl transition-all duration-200 flex items-center gap-2"
+                >
+                  <Download size="18" />
+                  Download File
+                </button>
+              )}
             </div>
           </div>
         </div>

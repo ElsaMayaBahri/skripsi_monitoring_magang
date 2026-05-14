@@ -253,52 +253,63 @@ function PresensiDailyReport() {
     return item.peserta_divisi || item.divisi || "-";
   };
 
-  const formatDateTime = (dateTime) => {
-    if (!dateTime) return "-";
-    try {
-      const date = new Date(dateTime);
-      if (isNaN(date.getTime())) return "-";
-      return date.toLocaleDateString("id-ID", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit"
-      });
-    } catch {
-      return "-";
-    }
-  };
+  // src/pages/mentor/PresensiDailyReport.jsx
 
-  const formatDateOnly = (dateTime) => {
-    if (!dateTime) return "-";
-    try {
-      const date = new Date(dateTime);
-      if (isNaN(date.getTime())) return "-";
-      return date.toLocaleDateString("id-ID", {
-        day: "numeric",
-        month: "short",
-        year: "numeric"
-      });
-    } catch {
-      return "-";
+// Ganti fungsi formatDateTime dengan ini
+const formatDateTime = (dateTime) => {
+  if (!dateTime) return "-";
+  
+  // Jika data sudah dalam format waktu saja (HH:MM atau HH:MM:SS)
+  if (typeof dateTime === 'string') {
+    // Cek format HH:MM (misal "08:30")
+    if (dateTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)) {
+      return dateTime;
     }
-  };
+    // Cek format HH:MM:SS (misal "08:30:00")
+    if (dateTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/)) {
+      // Ambil hanya jam dan menit
+      const parts = dateTime.split(':');
+      return `${parts[0]}:${parts[1]}`;
+    }
+  }
+  
+  // Coba parse sebagai Date object
+  try {
+    const date = new Date(dateTime);
+    if (isNaN(date.getTime())) return "-";
+    
+    // Format hanya jam:menit
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  } catch {
+    return "-";
+  }
+};
 
-  const formatDatePDF = (dateString) => {
-    if (!dateString) return "-";
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "-";
-      return date.toLocaleDateString("id-ID", {
-        day: "numeric",
-        month: "long",
-        year: "numeric"
-      });
-    } catch {
-      return "-";
-    }
-  };
+// Ganti fungsi formatDateOnly dengan ini
+const formatDateOnly = (dateTime) => {
+  if (!dateTime) return "-";
+  
+  // Jika data sudah dalam format tanggal (YYYY-MM-DD)
+  if (typeof dateTime === 'string' && dateTime.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = dateTime.split('-');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return `${day} ${months[parseInt(month) - 1]} ${year}`;
+  }
+  
+  try {
+    const date = new Date(dateTime);
+    if (isNaN(date.getTime())) return "-";
+    return date.toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch {
+    return "-";
+  }
+};
 
   const handleExportExcel = () => {
   const exportData = filteredReports.map((item, index) => ({

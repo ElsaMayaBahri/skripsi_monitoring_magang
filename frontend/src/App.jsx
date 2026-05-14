@@ -1,3 +1,4 @@
+// src/App.jsx
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 
@@ -32,7 +33,7 @@ import DetailPesertaCOO from "./pages/coo/DetailPeserta";
 import DetailMentorCOO from "./pages/coo/DetailMentor";
 import ProfileCOO from "./pages/coo/Profile";
 import SettingsCOO from "./pages/coo/Settings";
-import DaftarHasilKuis from "./pages/coo/DaftarHasilKuis"; // ✅ SATU IMPORT SAJA
+import DaftarHasilKuis from "./pages/coo/DaftarHasilKuis";
 
 // QUIZ COO PAGES
 import Quiz from "./pages/coo/Quiz";
@@ -68,6 +69,8 @@ import EditMateri from "./pages/mentor/EditMateri";
 import LihatMateri from "./pages/mentor/LihatMateri";
 import DetailPesertaMentor from "./pages/mentor/DetailPeserta";
 import ProfileMentor from "./pages/mentor/ProfileMentor";
+import EditTugas from "./pages/mentor/EditTugas";
+import SettingsMentor from "./pages/mentor/Settings";
 
 // ============================================
 // PESERTA PAGES - Created by: Peserta Developer
@@ -84,7 +87,7 @@ import DetailTugas from "./pages/peserta/DetailTugas";
 import NilaiAkhirPeserta from "./pages/peserta/NilaiAkhir";
 import Sertifikat from "./pages/peserta/Sertifikat";
 import ProfilePeserta from "./pages/peserta/ProfilePeserta";
-import DaftarKuisKompetensi from "./pages/peserta/DaftarKuisKompetensi"
+import DaftarKuisKompetensi from "./pages/peserta/DaftarKuisKompetensi";
 
 // ============================================
 // COMPONENTS
@@ -229,7 +232,7 @@ function App() {
           <Route path="quiz" element={<Quiz />} />
           <Route path="quiz/:id" element={<QuizDetail />} />
           <Route path="quiz/:id/hasil" element={<DaftarHasilKuis />} />
-          <Route path="daftar-hasil-kuis" element={<DaftarHasilKuis />} /> {/* ✅ ROUTE BARU UNTUK SIDEBAR */}
+          <Route path="daftar-hasil-kuis" element={<DaftarHasilKuis />} />
           <Route path="add-quiz" element={<AddQuiz />} />
           <Route path="add-question/:quizId" element={<AddQuestion />} />
           <Route path="edit-quiz/:id" element={<EditQuiz />} />
@@ -270,18 +273,21 @@ function App() {
           
           {/* Tugas Mentor Routes */}
           <Route path="tugas" element={<DaftarTugasMentor />} />
+          <Route path="daftar-tugas" element={<DaftarTugasMentor />} />
           <Route path="add-tugas" element={<AddTugas />} />
           <Route path="validasi-tugas" element={<ValidasiTugas />} />
           <Route path="validasi-tugas/:id" element={<ValidasiTugas />} />
-          
+          <Route path="edit-tugas/:id" element={<EditTugas />} />
+
           {/* Nilai & Laporan Routes */}
           <Route path="laporan-akhir" element={<LaporanAkhir />} />
           <Route path="input-nilai-manual" element={<InputNilaiManual />} />
           <Route path="penilaian-manual" element={<InputNilaiManual />} />
           <Route path="nilai-akhir" element={<NilaiAkhirMentor />} />
           
-          {/* Profile Mentor Route */}
+          {/* Profile & Settings Mentor Routes */}
           <Route path="profile" element={<ProfileMentor />} />
+          <Route path="pengaturan" element={<SettingsMentor />} />
         </Route>
 
         {/* ============================================ */}

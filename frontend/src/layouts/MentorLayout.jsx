@@ -32,7 +32,9 @@ import {
   Sun,
   Moon,
   Sunrise,
-  Sunset
+  Sunset,
+  LogOut,
+  AlertTriangle
 } from "lucide-react"
 
 function MentorLayout() {
@@ -43,6 +45,7 @@ function MentorLayout() {
   const [time, setTime] = useState(new Date())
   const [notifOpen, setNotifOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
   
   // Menu dropdown states
   const [materiOpen, setMateriOpen] = useState(false)
@@ -52,8 +55,7 @@ function MentorLayout() {
   const [user, setUser] = useState(null)
   const [notifications, setNotifications] = useState([])
   
-  // Cek apakah preview modal terbuka (ditandai dengan state global atau URL)
-  // Kita akan menggunakan state global sederhana via window
+  // Cek apakah preview modal terbuka
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
   // Listen untuk event preview dari komponen anak
@@ -148,48 +150,61 @@ function MentorLayout() {
   const greeting = getGreeting()
   const GreetingIcon = greeting.icon
 
-  const handleLogout = () => {
-    if (window.confirm("Apakah Anda yakin ingin logout?")) {
-      localStorage.removeItem("token")
-      localStorage.removeItem("role")
-      localStorage.removeItem("user")
-      localStorage.removeItem("rememberedEmail")
-      navigate("/login")
-    }
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true)
+    setProfileOpen(false)
+  }
+
+  const handleConfirmLogout = () => {
+    localStorage.removeItem("token")
+    localStorage.removeItem("role")
+    localStorage.removeItem("user")
+    localStorage.removeItem("rememberedEmail")
+    setShowLogoutModal(false)
+    navigate("/login")
+  }
+
+  const handleCancelLogout = () => {
+    setShowLogoutModal(false)
   }
 
   const isActive = (path) => {
     if (path === "/mentor/dashboard") return location.pathname === "/mentor/dashboard"
-    if (path === "/mentor/peserta") return location.pathname === "/mentor/peserta"
+    if (path === "/mentor/peserta") return location.pathname === "/mentor/daftar-peserta" || location.pathname.includes("/mentor/peserta/")
     if (path === "/mentor/presensi-daily-report") return location.pathname === "/mentor/presensi-daily-report"
-    if (path === "/mentor/materi") return location.pathname === "/mentor/materi" || location.pathname === "/mentor/add-materi" || location.pathname.includes("/mentor/edit-materi")
-    if (path === "/mentor/tugas") return location.pathname === "/mentor/tugas" || location.pathname === "/mentor/add-tugas" || location.pathname.includes("/mentor/edit-tugas")
+    if (path === "/mentor/materi") return location.pathname === "/mentor/materi" || location.pathname === "/mentor/add-materi" || location.pathname.includes("/mentor/edit-materi") || location.pathname.includes("/mentor/lihat-materi")
+    if (path === "/mentor/tugas") return location.pathname === "/mentor/daftar-tugas" || location.pathname === "/mentor/add-tugas" || location.pathname.includes("/mentor/edit-tugas")
     if (path === "/mentor/validasi-tugas") return location.pathname === "/mentor/validasi-tugas"
     if (path === "/mentor/laporan-akhir") return location.pathname === "/mentor/laporan-akhir"
-    if (path === "/mentor/penilaian-manual") return location.pathname === "/mentor/penilaian-manual"
+    if (path === "/mentor/penilaian-manual") return location.pathname === "/mentor/input-nilai-manual"
     if (path === "/mentor/nilai-akhir") return location.pathname === "/mentor/nilai-akhir"
     return location.pathname.includes(path)
   }
 
   const getPageTitle = () => {
-    const path = location.pathname.replace("/mentor/", "")
-    const titles = {
-      "dashboard": "Dashboard",
-      "peserta": "Daftar Peserta Bimbingan",
-      "daily-report": "Presensi & Daily Report",
-      "presensi-daily-report": "Presensi & Daily Report",
-      "materi": "Materi Pembelajaran",
-      "add-materi": "Tambah Materi",
-      "edit-materi": "Edit Materi",
-      "tugas": "Kelola Tugas",
-      "add-tugas": "Tambah Tugas",
-      "edit-tugas": "Edit Tugas",
-      "validasi-tugas": "Validasi Tugas",
-      "laporan-akhir": "Laporan Akhir",
-      "penilaian-manual": "Input Nilai Manual",
-      "nilai-akhir": "Hitung Nilai Akhir"
-    }
-    return titles[path] || path.charAt(0).toUpperCase() + path.slice(1)
+    const pathname = location.pathname
+    
+    if (pathname === "/mentor/dashboard") return "Dashboard"
+    if (pathname === "/mentor/daftar-peserta") return "Daftar Peserta"
+    if (pathname.match(/^\/mentor\/peserta\/\d+$/)) return "Detail Peserta"
+    if (pathname === "/mentor/presensi-daily-report") return "Presensi & Daily Report"
+    if (pathname === "/mentor/materi") return "Daftar Materi"
+    if (pathname === "/mentor/add-materi") return "Tambah Materi"
+    if (pathname.match(/^\/mentor\/edit-materi\/\d+$/)) return "Edit Materi"
+    if (pathname.match(/^\/mentor\/lihat-materi\/\d+$/)) return "Lihat Materi"
+    if (pathname === "/mentor/daftar-tugas") return "Daftar Tugas"
+    if (pathname === "/mentor/add-tugas") return "Tambah Tugas"
+    if (pathname.match(/^\/mentor\/edit-tugas\/\d+$/)) return "Edit Tugas"
+    if (pathname === "/mentor/validasi-tugas") return "Validasi Tugas"
+    if (pathname === "/mentor/laporan-akhir") return "Laporan Akhir"
+    if (pathname === "/mentor/input-nilai-manual") return "Input Nilai Manual"
+    if (pathname === "/mentor/nilai-akhir") return "Hitung Nilai Akhir"
+    if (pathname === "/mentor/profile") return "Profil Mentor"
+    if (pathname === "/mentor/pengaturan") return "Pengaturan"
+    
+    let fallback = pathname.replace("/mentor/", "").replace(/\/\d+$/, "").replace(/-/g, " ")
+    fallback = fallback.charAt(0).toUpperCase() + fallback.slice(1)
+    return fallback || "Dashboard"
   }
 
   const currentUser = user || JSON.parse(localStorage.getItem("user") || "{}")
@@ -197,7 +212,7 @@ function MentorLayout() {
   const userFullName = currentUser.nama || "Mentor"
   const userEmail = currentUser.email || "mentor@kuantaacademy.com"
 
- const unreadCount = Array.isArray(notifications) ? notifications.filter(n => !n.is_read).length : 0;
+  const unreadCount = Array.isArray(notifications) ? notifications.filter(n => !n.is_read).length : 0;
 
   const handleProfile = () => {
     setProfileOpen(false)
@@ -206,10 +221,7 @@ function MentorLayout() {
 
   const handleSettings = () => {
     setProfileOpen(false)
-  }
-
-  const handleHelp = () => {
-    setProfileOpen(false)
+    navigate("/mentor/pengaturan")
   }
 
   return (
@@ -218,12 +230,62 @@ function MentorLayout() {
       {/* DECORATIVE GRADIENT LINE - FULL WIDTH DI ATAS */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-400 via-blue-500 to-teal-400 z-50"></div>
 
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[9999] p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-zoomIn">
+            <div className="relative">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-500 to-rose-500 rounded-t-2xl"></div>
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-red-100 rounded-xl">
+                    <LogOut className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-800">Konfirmasi Keluar</h3>
+                    <p className="text-sm text-slate-500">Apakah Anda yakin ingin keluar?</p>
+                  </div>
+                </div>
+                
+                <div className="bg-gradient-to-r from-amber-50 to-red-50 rounded-xl p-4 mb-6 border border-amber-200">
+                  <div className="flex items-start gap-3">
+                    <div className="p-1.5 rounded-lg bg-white shadow-sm">
+                      <AlertTriangle size="16" className="text-amber-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">Anda akan keluar dari akun mentor</p>
+                      <p className="text-xs text-slate-500 mt-1">Anda harus login kembali untuk mengakses dashboard mentor.</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleCancelLogout}
+                    className="flex-1 px-4 py-2.5 border-2 border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-all duration-200"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={handleConfirmLogout}
+                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 rounded-xl text-white font-semibold hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
+                  >
+                    <Power size="16" />
+                    Keluar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MAIN CONTENT AREA */}
       <div className="flex flex-1 overflow-hidden pt-1">
         
         {/* SIDEBAR - HIDE WHEN PREVIEW OPEN */}
         {!isPreviewOpen && (
-          <div className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300 shadow-lg shadow-gray-200/50 shrink-0 relative z-20 ${sidebarCollapsed ? "w-20" : "w-64"}`}>
+          <div className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300 shadow-lg shadow-gray-200/50 shrink-0 relative z-10 ${sidebarCollapsed ? "w-20" : "w-64"}`}>
             
             {/* LOGO */}
             <div className={`px-4 py-5 flex items-center gap-3 border-b border-gray-200 ${sidebarCollapsed ? "justify-center" : ""}`}>
@@ -264,7 +326,7 @@ function MentorLayout() {
                   </Link>
 
                   {/* DAFTAR PESERTA */}
-                  <Link to="/mentor/peserta">
+                  <Link to="/mentor/daftar-peserta">
                     <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
                       isActive("/mentor/peserta")
                         ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
@@ -369,14 +431,14 @@ function MentorLayout() {
 
                     {!sidebarCollapsed && tugasOpen && (
                       <div className="ml-7 mt-2 space-y-1">
-                        <Link to="/mentor/tugas">
+                        <Link to="/mentor/daftar-tugas">
                           <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                            location.pathname === "/mentor/tugas"
+                            location.pathname === "/mentor/daftar-tugas"
                               ? "bg-teal-50 text-teal-600 font-medium"
                               : "text-gray-500 hover:bg-gray-100"
                           }`}>
                             <List size={14} />
-                            <span>Kelola Tugas</span>
+                            <span>Daftar Tugas</span>
                           </div>
                         </Link>
                         <Link to="/mentor/add-tugas">
@@ -387,16 +449,6 @@ function MentorLayout() {
                           }`}>
                             <PlusCircle size={14} />
                             <span>Tambah Tugas</span>
-                          </div>
-                        </Link>
-                        <Link to="/mentor/validasi-tugas">
-                          <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                            location.pathname === "/mentor/validasi-tugas"
-                              ? "bg-teal-50 text-teal-600 font-medium"
-                              : "text-gray-500 hover:bg-gray-100"
-                          }`}>
-                            <CheckCircle size={14} />
-                            <span>Validasi Tugas</span>
                           </div>
                         </Link>
                       </div>
@@ -423,7 +475,7 @@ function MentorLayout() {
                     <div 
                       onClick={() => !sidebarCollapsed && setPenilaianOpen(!penilaianOpen)}
                       className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                        isActive("/mentor/penilaian-manual") || isActive("/mentor/nilai-akhir")
+                        isActive("/mentor/penilaian-manual")
                           ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
                           : "text-gray-600 hover:bg-gray-100"
                       }`}
@@ -444,9 +496,9 @@ function MentorLayout() {
 
                     {!sidebarCollapsed && penilaianOpen && (
                       <div className="ml-7 mt-2 space-y-1">
-                        <Link to="/mentor/penilaian-manual">
+                        <Link to="/mentor/input-nilai-manual">
                           <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                            location.pathname === "/mentor/penilaian-manual"
+                            location.pathname === "/mentor/input-nilai-manual"
                               ? "bg-teal-50 text-teal-600 font-medium"
                               : "text-gray-500 hover:bg-gray-100"
                           }`}>
@@ -472,10 +524,10 @@ function MentorLayout() {
               </div>
             </div>
 
-            {/* LOGOUT BUTTON */}
+            {/* LOGOUT BUTTON - dengan modal konfirmasi */}
             <div className="p-4 border-t border-gray-200">
               <button
-                onClick={handleLogout}
+                onClick={handleLogoutClick}
                 className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-md shadow-red-500/20 hover:shadow-lg hover:shadow-red-500/30"
               >
                 <div className="absolute inset-0 bg-white/20 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-300"></div>
@@ -500,10 +552,10 @@ function MentorLayout() {
         {/* RIGHT SIDE - Topbar + Content */}
         <div className="flex-1 flex flex-col overflow-hidden relative z-10 bg-gradient-to-br from-gray-50 to-gray-100">
           
-          {/* TOPBAR - Hide when preview open? Optional, better to keep for navigation */}
-          <div className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-6 shadow-sm shrink-0 relative z-50">
+          {/* TOPBAR */}
+          <div className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-6 shadow-sm shrink-0 relative z-10">
             
-            {/* LEFT SIDE */}
+            {/* LEFT SIDE - Breadcrumb tanpa ID */}
             <div className="flex items-center gap-4">
               {!isPreviewOpen && (
                 <button 
@@ -646,26 +698,13 @@ function MentorLayout() {
                           <p className="text-xs text-gray-400">Atur preferensi aplikasi</p>
                         </div>
                       </button>
-                      
-                      <button 
-                        onClick={handleHelp}
-                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition group"
-                      >
-                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-teal-50 transition">
-                          <HelpCircle size={14} className="text-gray-500 group-hover:text-teal-500" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <p className="font-medium">Pusat Bantuan</p>
-                          <p className="text-xs text-gray-400">Dokumentasi & support</p>
-                        </div>
-                      </button>
                     </div>
 
                     <div className="border-t border-gray-200 my-1"></div>
 
                     <div className="py-2">
                       <button 
-                        onClick={handleLogout}
+                        onClick={handleLogoutClick}
                         className="w-full flex items-center gap-3 px-5 py-3 text-sm text-red-600 hover:bg-red-50 transition group"
                       >
                         <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center group-hover:bg-red-100 transition">
@@ -692,6 +731,22 @@ function MentorLayout() {
 
       </div>
 
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes zoomIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .animate-zoomIn {
+          animation: zoomIn 0.2s ease-out;
+        }
+      `}</style>
     </div>
   )
 }

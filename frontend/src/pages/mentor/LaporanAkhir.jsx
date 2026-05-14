@@ -29,6 +29,7 @@ import {
   exportLaporanAkhir,
   downloadLaporanFile
 } from "../../api/mentor/laporanAkhirService";
+import axiosInstance from "../../api/axios";
 
 function LaporanAkhir() {
   const [loading, setLoading] = useState(false);
@@ -46,6 +47,7 @@ function LaporanAkhir() {
     status: "pending"
   });
   const [submitting, setSubmitting] = useState(false);
+  const [downloading, setDownloading] = useState(null);
   const [summary, setSummary] = useState({
     total: 0,
     sudahUpload: 0,
@@ -57,6 +59,64 @@ function LaporanAkhir() {
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [exportError, setExportError] = useState(null);
   const dropdownRef = useRef(null);
+
+  // Helper untuk mendapatkan URL file
+  const getFileUrl = (filePath) => {
+    if (!filePath) return null;
+    if (filePath.startsWith('http')) return filePath;
+    if (filePath.startsWith('/storage')) return `http://localhost:8000${filePath}`;
+    if (filePath.startsWith('storage/')) return `http://localhost:8000/${filePath}`;
+    if (filePath.startsWith('laporan/')) return `http://localhost:8000/storage/${filePath}`;
+    return `http://localhost:8000/storage/${filePath}`;
+  };
+
+  // Fungsi download file langsung menggunakan axios
+  const handleDownloadFile = async (laporanItem) => {
+    if (!laporanItem.file_url && !laporanItem.id) {
+      alert("File tidak tersedia");
+      return;
+    }
+    
+    setDownloading(laporanItem.id);
+    try {
+      const fileUrl = getFileUrl(laporanItem.file_url || laporanItem.file_path);
+      const response = await axiosInstance.get(fileUrl, {
+        responseType: 'blob'
+      });
+      
+      const blob = new Blob([response.data]);
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = laporanItem.file_name || `laporan_${laporanItem.peserta_nama || 'akhir'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download error:", error);
+      // Fallback: buka di tab baru
+      const fileUrl = getFileUrl(laporanItem.file_url || laporanItem.file_path);
+      window.open(fileUrl, '_blank');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  // Fungsi preview file - buka di tab baru
+  const handlePreviewFile = (laporanItem) => {
+    if (!laporanItem.file_url && !laporanItem.id) {
+      alert("File tidak tersedia");
+      return;
+    }
+    
+    const fileUrl = getFileUrl(laporanItem.file_url || laporanItem.file_path);
+    if (fileUrl) {
+      window.open(fileUrl, '_blank');
+    } else {
+      alert("URL file tidak valid");
+    }
+  };
 
   // Handle click outside dropdown
   useEffect(() => {
@@ -90,6 +150,12 @@ function LaporanAkhir() {
       
       if (response && response.success) {
         let laporanData = response.data || [];
+        // Format data
+        const formattedData = laporanData.map(item => ({
+          ...item,
+          file_url: getFileUrl(item.file_path || item.file_url)
+        }));
+        
         let summaryData = response.summary || {
           total: 0,
           sudahUpload: 0,
@@ -99,8 +165,8 @@ function LaporanAkhir() {
           pending: 0
         };
         
-        setLaporan(laporanData);
-        setFilteredLaporan(laporanData);
+        setLaporan(formattedData);
+        setFilteredLaporan(formattedData);
         setSummary(summaryData);
       } else {
         console.error("Failed to fetch laporan:", response?.message);
@@ -179,71 +245,7 @@ function LaporanAkhir() {
     }
   };
 
-  const handleViewFile = async (laporanItem) => {
-    if (!laporanItem.file_url && !laporanItem.id) {
-      alert("File tidak tersedia");
-      return;
-    }
-    
-    try {
-      if (laporanItem.file_url) {
-        window.open(laporanItem.file_url, '_blank');
-        return;
-      }
-      
-      const response = await downloadLaporanFile(laporanItem.id);
-      if (response && response.success) {
-        const blob = new Blob([response.data], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      } else {
-        alert("Gagal membuka file");
-      }
-    } catch (error) {
-      console.error("Error viewing file:", error);
-      alert("Gagal membuka file");
-    }
-  };
-
-  const handleDownloadFile = async (laporanItem) => {
-    if (!laporanItem.file_url && !laporanItem.id) {
-      alert("File tidak tersedia");
-      return;
-    }
-    
-    try {
-      if (laporanItem.file_url) {
-        const link = document.createElement('a');
-        link.href = laporanItem.file_url;
-        link.download = laporanItem.file_name || `laporan_${laporanItem.peserta_nama || 'akhir'}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        return;
-      }
-      
-      const response = await downloadLaporanFile(laporanItem.id);
-      if (response && response.success) {
-        const blob = new Blob([response.data], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = response.filename || `laporan_${laporanItem.peserta_nama || 'akhir'}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      } else {
-        alert("Gagal mengunduh file");
-      }
-    } catch (error) {
-      console.error("Error downloading file:", error);
-      alert("Gagal mengunduh file");
-    }
-  };
-
-  // Export function dengan pesan error yang jelas
+  // Export function
   const handleExport = async (format) => {
     setShowExportDropdown(false);
     setExportError(null);
@@ -267,13 +269,11 @@ function LaporanAkhir() {
       });
       
       if (!response.ok) {
-        // Coba ambil pesan error dari response
         let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         try {
           const errorData = await response.json();
           if (errorData.message) errorMessage = errorData.message;
         } catch (e) {
-          // Jika response bukan JSON
           const text = await response.text();
           if (text) errorMessage = text;
         }
@@ -367,13 +367,9 @@ function LaporanAkhir() {
         
         {/* Header */}
         <div className="relative mb-10 rounded-2xl overflow-visible">
-          
-          {/* Background Gradient */}
           <div className="absolute inset-0 rounded-2xl overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-r from-teal-500/15 via-blue-500/10 to-teal-500/15"></div>
           </div>
-          
-          {/* Content */}
           <div className="relative px-6 py-5">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
               <div>
@@ -405,7 +401,6 @@ function LaporanAkhir() {
                   <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                 </button>
                 
-                {/* Dropdown Menu */}
                 {showExportDropdown && (
                   <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-[100]">
                     <button
@@ -535,6 +530,7 @@ function LaporanAkhir() {
                   const status = getStatusBadge(item.status);
                   const StatusIcon = status.icon;
                   const isHovered = hoveredRow === item.id;
+                  const isDownloading = downloading === item.id;
                   
                   return (
                     <tr key={item.id || item.peserta_id} className="transition-all duration-300 group cursor-pointer" onMouseEnter={() => setHoveredRow(item.id)} onMouseLeave={() => setHoveredRow(null)} style={{ backgroundColor: isHovered ? 'rgba(20, 184, 166, 0.02)' : 'transparent' }}>
@@ -581,8 +577,10 @@ function LaporanAkhir() {
                           <div className="flex items-center gap-2">
                             {item.file_url && (
                               <>
-                                <button onClick={() => handleViewFile(item)} className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100 transition-all duration-200 hover:scale-105" title="Lihat Laporan"><Eye size="14" /></button>
-                                <button onClick={() => handleDownloadFile(item)} className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all duration-200 hover:scale-105" title="Download"><Download size="14" /></button>
+                                <button onClick={() => handlePreviewFile(item)} className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100 transition-all duration-200 hover:scale-105" title="Lihat Laporan"><Eye size="14" /></button>
+                                <button onClick={() => handleDownloadFile(item)} disabled={isDownloading} className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all duration-200 hover:scale-105 disabled:opacity-50" title="Download">
+                                  {isDownloading ? <Loader2 size="14" className="animate-spin" /> : <Download size="14" />}
+                                </button>
                               </>
                             )}
                             {item.id && (
@@ -649,13 +647,34 @@ function LaporanAkhir() {
             </div>
             
             <div className="p-6 space-y-6">
-              <div className="bg-gradient-to-r from-slate-50 to-white rounded-xl p-4 border border-slate-100 shadow-sm">
-                <div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-teal-50"><FileText size="20" className="text-teal-500" /></div><div className="flex-1"><p className="text-sm font-semibold text-slate-700">{selectedLaporan.judul || "Laporan Akhir"}</p><p className="text-xs text-slate-400">Upload: {selectedLaporan.uploaded_at ? new Date(selectedLaporan.uploaded_at).toLocaleString('id-ID') : '-'} • Size: {selectedLaporan.file_size || '-'}</p></div>
-                  {selectedLaporan.file_url && (
-                    <button onClick={() => handleViewFile(selectedLaporan)} className="px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-semibold hover:shadow-md transition-all duration-200 flex items-center gap-1.5"><Eye size="12" />Lihat</button>
-                  )}
+              {/* Preview dan Download File */}
+              {selectedLaporan.file_url && (
+                <div className="bg-gradient-to-r from-slate-50 to-white rounded-xl p-4 border border-slate-100 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-teal-50"><FileText size="20" className="text-teal-500" /></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-slate-700">{selectedLaporan.judul || "Laporan Akhir"}</p>
+                      <p className="text-xs text-slate-400">Upload: {selectedLaporan.uploaded_at ? new Date(selectedLaporan.uploaded_at).toLocaleString('id-ID') : '-'}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => handlePreviewFile(selectedLaporan)} 
+                        className="px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-semibold hover:shadow-md transition-all duration-200 flex items-center gap-1.5"
+                      >
+                        <Eye size="12" />
+                        Preview
+                      </button>
+                      <button 
+                        onClick={() => handleDownloadFile(selectedLaporan)} 
+                        className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold hover:bg-teal-500 hover:text-white transition-all duration-200 flex items-center gap-1.5"
+                      >
+                        <Download size="12" />
+                        Download
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">

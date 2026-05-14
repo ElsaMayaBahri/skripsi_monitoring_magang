@@ -271,37 +271,8 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // ==================== ROUTES DASHBOARD MENTOR ====================
     
-    Route::get('/mentor/dashboard', function (Request $request) {
-        $user = $request->user();
-        
-        if ($user->role !== 'mentor') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-        
-        $mentor = \App\Models\Mentor::where('id_user', $user->id_user)->first();
-        $totalMentees = 0;
-        
-        if ($mentor) {
-            $totalMentees = \App\Models\Peserta::where('id_mentor', $mentor->id_mentor)->count();
-        }
-        
-        return response()->json([
-            'success' => true,
-            'stats' => [
-                'totalMentees' => $totalMentees,
-                'pendingValidations' => 0,
-                'completedTasks' => 0,
-                'averageScore' => 0,
-                'attendanceRate' => 0,
-                'pendingTasks' => 0
-            ],
-            'recentActivities' => [],
-            'upcomingDeadlines' => []
-        ]);
-    });
+    // PERBAIKAN: Gunakan controller method dashboard, bukan closure
+    Route::get('/mentor/dashboard', [MentorController::class, 'dashboard']);
     
     Route::get('/mentor/notifications', function (Request $request) {
         $user = $request->user();
@@ -356,6 +327,18 @@ Route::middleware('auth:sanctum')->group(function () {
             $user->no_telepon = $request->no_telepon;
         }
         
+        if ($request->has('alamat')) {
+            $user->alamat = $request->alamat;
+        }
+        
+        if ($request->has('keahlian')) {
+            $user->keahlian = $request->keahlian;
+        }
+        
+        if ($request->has('pengalaman')) {
+            $user->pengalaman = $request->pengalaman;
+        }
+        
         $user->save();
         
         return response()->json([
@@ -364,6 +347,13 @@ Route::middleware('auth:sanctum')->group(function () {
             'data' => $user
         ]);
     });
+    
+    // ==================== MENTOR PROFILE PHOTO ROUTES ====================
+    // Upload foto profil mentor
+    Route::post('/mentor/profile/photo', [MentorController::class, 'updateProfilePhoto']);
+    
+    // Hapus foto profil mentor
+    Route::delete('/mentor/profile/photo', [MentorController::class, 'deleteProfilePhoto']);
 });
 
 // ==================== FALLBACK ROUTE ====================

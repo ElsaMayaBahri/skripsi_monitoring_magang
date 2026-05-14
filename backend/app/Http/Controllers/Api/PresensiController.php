@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class PresensiController extends Controller
 {
@@ -54,6 +55,36 @@ class PresensiController extends Controller
                     $status = 'Terlambat';
                 }
 
+                // FIX: Format check_in hanya jam (H:i)
+                $checkInFormatted = null;
+                if ($item->check_in) {
+                    try {
+                        $checkInFormatted = Carbon::parse($item->check_in)->format('H:i');
+                    } catch (\Exception $e) {
+                        $checkInFormatted = $item->check_in;
+                    }
+                }
+
+                // FIX: Format check_out hanya jam (H:i)
+                $checkOutFormatted = null;
+                if ($item->check_out) {
+                    try {
+                        $checkOutFormatted = Carbon::parse($item->check_out)->format('H:i');
+                    } catch (\Exception $e) {
+                        $checkOutFormatted = $item->check_out;
+                    }
+                }
+
+                // Format tanggal
+                $tanggalFormatted = null;
+                if ($item->tanggal) {
+                    try {
+                        $tanggalFormatted = Carbon::parse($item->tanggal)->format('Y-m-d');
+                    } catch (\Exception $e) {
+                        $tanggalFormatted = $item->tanggal;
+                    }
+                }
+
                 return [
                     'id' => $item->id_presensi,
                     'peserta' => [
@@ -63,9 +94,9 @@ class PresensiController extends Controller
                     ],
                     'nama' => $user ? $user->nama : ($peserta ? $peserta->nama : '-'),
                     'divisi' => $peserta ? $peserta->divisi : '-',
-                    'tanggal' => $item->tanggal,
-                    'check_in' => $item->check_in,  // FIX: langsung ambil check_in tanpa gabung tanggal
-                    'check_out' => $item->check_out, // FIX: langsung ambil check_out tanpa gabung tanggal
+                    'tanggal' => $tanggalFormatted,
+                    'check_in' => $checkInFormatted,
+                    'check_out' => $checkOutFormatted,
                     'status' => $status,
                     'keterlambatan' => $keterlambatan,
                     'device' => $item->device ?? null,
@@ -180,11 +211,31 @@ class PresensiController extends Controller
                 ->orderBy('tanggal', 'desc')
                 ->get()
                 ->map(function($item) {
+                    // Format check_in
+                    $checkInFormatted = null;
+                    if ($item->check_in) {
+                        try {
+                            $checkInFormatted = Carbon::parse($item->check_in)->format('H:i');
+                        } catch (\Exception $e) {
+                            $checkInFormatted = $item->check_in;
+                        }
+                    }
+                    
+                    // Format check_out
+                    $checkOutFormatted = null;
+                    if ($item->check_out) {
+                        try {
+                            $checkOutFormatted = Carbon::parse($item->check_out)->format('H:i');
+                        } catch (\Exception $e) {
+                            $checkOutFormatted = $item->check_out;
+                        }
+                    }
+                    
                     return [
                         'id' => $item->id_presensi,
                         'tanggal' => $item->tanggal,
-                        'check_in' => $item->check_in,
-                        'check_out' => $item->check_out,
+                        'check_in' => $checkInFormatted,
+                        'check_out' => $checkOutFormatted,
                         'status_kehadiran' => $item->status_kehadiran,
                         'keterlambatan' => $this->calculateLateness($item->check_in),
                         'daily_report' => $item->daily_report,
@@ -233,13 +284,33 @@ class PresensiController extends Controller
                 ]);
             }
             
+            // Format check_in
+            $checkInFormatted = null;
+            if ($presensi->check_in) {
+                try {
+                    $checkInFormatted = Carbon::parse($presensi->check_in)->format('H:i');
+                } catch (\Exception $e) {
+                    $checkInFormatted = $presensi->check_in;
+                }
+            }
+            
+            // Format check_out
+            $checkOutFormatted = null;
+            if ($presensi->check_out) {
+                try {
+                    $checkOutFormatted =Carbon::parse($presensi->check_out)->format('H:i');
+                } catch (\Exception $e) {
+                    $checkOutFormatted = $presensi->check_out;
+                }
+            }
+            
             return response()->json([
                 'success' => true,
                 'data' => [
                     'id' => $presensi->id_presensi,
                     'tanggal' => $presensi->tanggal,
-                    'check_in' => $presensi->check_in,
-                    'check_out' => $presensi->check_out,
+                    'check_in' => $checkInFormatted,
+                    'check_out' => $checkOutFormatted,
                     'foto_checkin' => $presensi->foto_checkin,
                     'lokasi' => $presensi->lokasi,
                     'status_kehadiran' => $presensi->status_kehadiran,
@@ -409,13 +480,33 @@ class PresensiController extends Controller
                 $user = $peserta ? $peserta->user : null;
                 $keterlambatan = $this->calculateLateness($item->check_in);
                 
+                // Format check_in
+                $checkInFormatted = null;
+                if ($item->check_in) {
+                    try {
+                        $checkInFormatted = Carbon::parse($item->check_in)->format('H:i');
+                    } catch (\Exception $e) {
+                        $checkInFormatted = $item->check_in;
+                    }
+                }
+                
+                // Format check_out
+                $checkOutFormatted = null;
+                if ($item->check_out) {
+                    try {
+                        $checkOutFormatted = Carbon::parse($item->check_out)->format('H:i');
+                    } catch (\Exception $e) {
+                        $checkOutFormatted = $item->check_out;
+                    }
+                }
+                
                 return [
                     'No' => $index + 1,
                     'Nama Peserta' => $user ? $user->nama : ($peserta ? $peserta->nama : '-'),
                     'Divisi' => $peserta ? $peserta->divisi : '-',
                     'Tanggal' => $item->tanggal,
-                    'Check-In' => $item->check_in,
-                    'Check-Out' => $item->check_out ?? '-',
+                    'Check-In' => $checkInFormatted,
+                    'Check-Out' => $checkOutFormatted ?? '-',
                     'Status' => $item->status_kehadiran,
                     'Keterlambatan' => $keterlambatan . ' menit',
                     'Daily Report' => $item->daily_report ?? '-',
@@ -453,6 +544,26 @@ class PresensiController extends Controller
                 $status = 'Terlambat';
             }
             
+            // Format check_in
+            $checkInFormatted = null;
+            if ($presensi->check_in) {
+                try {
+                    $checkInFormatted = Carbon::parse($presensi->check_in)->format('H:i');
+                } catch (\Exception $e) {
+                    $checkInFormatted = $presensi->check_in;
+                }
+            }
+            
+            // Format check_out
+            $checkOutFormatted = null;
+            if ($presensi->check_out) {
+                try {
+                    $checkOutFormatted = Carbon::parse($presensi->check_out)->format('H:i');
+                } catch (\Exception $e) {
+                    $checkOutFormatted = $presensi->check_out;
+                }
+            }
+            
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -465,8 +576,8 @@ class PresensiController extends Controller
                     'nama' => $user ? $user->nama : ($peserta ? $peserta->nama : '-'),
                     'divisi' => $peserta ? $peserta->divisi : '-',
                     'tanggal' => $presensi->tanggal,
-                    'check_in' => $presensi->check_in,
-                    'check_out' => $presensi->check_out,
+                    'check_in' => $checkInFormatted,
+                    'check_out' => $checkOutFormatted,
                     'status' => $status,
                     'keterlambatan' => $keterlambatan,
                     'daily_report' => $presensi->daily_report,
