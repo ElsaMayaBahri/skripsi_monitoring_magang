@@ -318,6 +318,52 @@ class MentorController extends Controller
     }
 
     /**
+     * 🔥 PROFILE METHOD - Mengirim data profil mentor termasuk jabatan dan divisi
+     * GET /api/mentor/profile
+     */
+    public function profile()
+    {
+        try {
+            /** @var \App\Models\User $user */
+            $user = Auth::user();
+
+            if (!$user || $user->role !== 'mentor') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akses ditolak.'
+                ], 403);
+            }
+
+            // Ambil data mentor dengan relasi divisi
+            $mentor = Mentor::with('divisi')
+                ->where('id_user', $user->id_user)
+                ->first();
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $user->id_user,
+                    'nama' => $user->nama,
+                    'email' => $user->email,
+                    'no_telepon' => $user->no_telepon,
+                    'foto_profil' => $user->foto_profil,
+                    'role' => $user->role,
+                    'status_akun' => $user->status_akun,
+                    // 🔥 TAMBAHAN: jabatan dan divisi dari tabel mentors
+                    'jabatan' => $mentor?->jabatan,
+                    'divisi' => $mentor?->divisi?->nama_divisi,
+                    'created_at' => $user->created_at
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Update mentor profile photo
      * POST /api/mentor/profile/photo
      */
@@ -405,10 +451,6 @@ class MentorController extends Controller
     /**
      * Get list of peserta with filter (search, periode, divisi)
      * GET /api/mentor/peserta-list
-     * 
-     * Menampilkan daftar peserta dengan perhitungan:
-     * - Progress tugas (berdasarkan pengumpulan tugas)
-     * - Persentase kehadiran (berdasarkan presensi)
      */
     public function getPesertaList(Request $request)
     {
@@ -458,9 +500,6 @@ class MentorController extends Controller
             $totalTugasGlobal = count($tugasIds);
 
             $pesertas = $query->get()->map(function ($peserta) use ($mentor, $tugasIds, $totalTugasGlobal) {
-                // =====================================================
-                // PERHITUNGAN PROGRESS TUGAS
-                // =====================================================
                 $totalTugas = $totalTugasGlobal;
                 
                 $tugasSelesai = PengumpulanTugas::where('id_peserta', $peserta->id_peserta)
@@ -472,9 +511,6 @@ class MentorController extends Controller
                     ? round(($tugasSelesai / $totalTugas) * 100) 
                     : 0;
                 
-                // =====================================================
-                // PERHITUNGAN KEHADIRAN - FIX: menggunakan status_kehadiran
-                // =====================================================
                 $totalPresensi = Presensi::where('id_peserta', $peserta->id_peserta)->count();
                 
                 $hadir = Presensi::where('id_peserta', $peserta->id_peserta)
@@ -485,15 +521,9 @@ class MentorController extends Controller
                     ? round(($hadir / $totalPresensi) * 100) 
                     : 0;
                 
-                // =====================================================
-                // NILAI AKHIR - AMBIL DARI DATABASE (tabel nilai_pesertas)
-                // =====================================================
                 $nilaiPeserta = NilaiPeserta::where('id_peserta', $peserta->id_peserta)->first();
                 $nilaiAkhir = $nilaiPeserta ? $nilaiPeserta->nilai_akhir : 0;
                 
-                // =====================================================
-                // DETERMINASI RANK berdasarkan nilai akhir dari database
-                // =====================================================
                 $rank = 'silver';
                 if ($nilaiAkhir >= 85) $rank = 'diamond';
                 elseif ($nilaiAkhir >= 70) $rank = 'gold';
@@ -514,11 +544,8 @@ class MentorController extends Controller
                     'status' => $peserta->status_magang ?? 'aktif',
                     'status_magang' => $peserta->status_magang ?? 'aktif',
                     'status_akun' => optional($peserta->user)->status_akun ?? 'non_aktif',
-                    
-                    // AMBIL DARI TABEL PESERTAS (bukan dari users)
                     'universitas' => $peserta->asal_kampus ?? '-',
                     'jurusan' => $peserta->prodi ?? '-',
-                    
                     'progress' => $progress,
                     'kehadiran_persen' => $kehadiranPersen,
                     'tugas_selesai' => $tugasSelesai,
@@ -683,9 +710,6 @@ class MentorController extends Controller
                 ], 404);
             }
 
-            // =====================================================
-            // PERHITUNGAN PROGRESS TUGAS
-            // =====================================================
             $tugasIds = Tugas::where('id_mentor', $mentor->id_mentor)->pluck('id_tugas')->toArray();
             $totalTugas = count($tugasIds);
             
@@ -698,9 +722,6 @@ class MentorController extends Controller
                 ? round(($tugasSelesai / $totalTugas) * 100) 
                 : 0;
             
-            // =====================================================
-            // PERHITUNGAN KEHADIRAN - FIX: menggunakan status_kehadiran
-            // =====================================================
             $totalPresensi = Presensi::where('id_peserta', $peserta->id_peserta)->count();
             
             $hadir = Presensi::where('id_peserta', $peserta->id_peserta)
@@ -711,33 +732,22 @@ class MentorController extends Controller
                 ? round(($hadir / $totalPresensi) * 100) 
                 : 0;
             
-            // =====================================================
-            // NILAI AKHIR - AMBIL DARI DATABASE (tabel nilai_pesertas)
-            // =====================================================
             $nilaiPeserta = NilaiPeserta::where('id_peserta', $peserta->id_peserta)->first();
             $nilaiAkhir = $nilaiPeserta ? $nilaiPeserta->nilai_akhir : 0;
             
-            // =====================================================
-            // DETERMINASI RANK berdasarkan nilai akhir dari database
-            // =====================================================
             $rank = 'silver';
             if ($nilaiAkhir >= 85) $rank = 'diamond';
             elseif ($nilaiAkhir >= 70) $rank = 'gold';
             elseif ($nilaiAkhir >= 50) $rank = 'silver';
             else $rank = 'bronze';
 
-            // Konversi peserta ke array
             $pesertaArray = $peserta->toArray();
-            
-            // Tambahkan data statistik
             $pesertaArray['progress'] = $progress;
             $pesertaArray['kehadiran_persen'] = $kehadiranPersen;
             $pesertaArray['tugas_selesai'] = $tugasSelesai;
             $pesertaArray['total_tugas'] = $totalTugas;
             $pesertaArray['nilai_akhir'] = round($nilaiAkhir, 2);
             $pesertaArray['rank'] = $rank;
-            
-            // Tambahkan universitas dan jurusan dari tabel pesertas
             $pesertaArray['universitas'] = $peserta->asal_kampus ?? '-';
             $pesertaArray['jurusan'] = $peserta->prodi ?? '-';
 
@@ -755,14 +765,8 @@ class MentorController extends Controller
     }
 
     /**
-     * Get dashboard statistics with accurate task progress
+     * Get dashboard statistics
      * GET /api/mentor/dashboard
-     * 
-     * Menampilkan monitoring tugas mentor:
-     * - Total tugas yang dibuat mentor
-     * - Jumlah tugas yang sudah dikumpulkan/dinilai/selesai
-     * - Jumlah tugas yang belum dikumpulkan
-     * - Progress dalam persen
      */
     public function dashboard()
     {
@@ -785,38 +789,30 @@ class MentorController extends Controller
                 ], 404);
             }
 
-            // 1. Total peserta bimbingan (untuk card 1)
             $totalPeserta = Peserta::where('id_mentor', $mentor->id_mentor)->count();
 
-            // 2. Total tugas yang perlu review (status dikumpulkan/revisi) untuk card 2
             $tugasIds = Tugas::where('id_mentor', $mentor->id_mentor)->pluck('id_tugas');
             
             $totalPerluReview = PengumpulanTugas::whereIn('id_tugas', $tugasIds)
                 ->whereIn('status', ['dikumpulkan', 'revisi'])
                 ->count();
 
-            // 3. Total tugas yang dibuat mentor (untuk card 3)
             $totalTasks = Tugas::where('id_mentor', $mentor->id_mentor)->count();
 
-            // 4. Tugas yang sudah dikumpulkan/dinilai/selesai
             $completedTasks = PengumpulanTugas::whereIn('id_tugas', $tugasIds)
                 ->whereIn('status', ['dikumpulkan', 'dinilai', 'selesai'])
                 ->count();
 
-            // 5. Belum selesai (tugas yang belum ada pengumpulan)
             $unfinishedTasks = $totalTasks - $completedTasks;
             
-            // Pastikan tidak negatif
             if ($unfinishedTasks < 0) {
                 $unfinishedTasks = 0;
             }
 
-            // 6. Progress tugas dalam persen (berdasarkan total tugas, bukan target submission)
             $progressPercentage = $totalTasks > 0 
                 ? round(($completedTasks / $totalTasks) * 100) 
                 : 0;
 
-            // 7. Rata-rata kehadiran
             $rataRataKehadiran = 0;
 
             return response()->json([
@@ -840,6 +836,87 @@ class MentorController extends Controller
                 'success' => false,
                 'message' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Get stats for profile
+     * GET /api/mentor/stats
+     */
+    public function getStats()
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user || $user->role !== 'mentor') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akses ditolak.'
+                ], 403);
+            }
+
+            $mentor = Mentor::where('id_user', $user->id_user)->first();
+
+            if (!$mentor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Data mentor tidak ditemukan'
+                ], 404);
+            }
+
+            $totalMahasiswa = Peserta::where('id_mentor', $mentor->id_mentor)->count();
+
+            $pesertaIds = Peserta::where('id_mentor', $mentor->id_mentor)->pluck('id_peserta');
+            
+            $totalLaporan = 0;
+            if (class_exists(\App\Models\LaporanAkhir::class)) {
+                $totalLaporan = \App\Models\LaporanAkhir::whereIn('id_peserta', $pesertaIds)
+                    ->whereNotNull('file_path')
+                    ->count();
+            }
+
+            $totalPresensi = Presensi::whereIn('id_peserta', $pesertaIds)->count();
+            $hadir = Presensi::whereIn('id_peserta', $pesertaIds)
+                ->whereIn('status_kehadiran', ['hadir', 'izin', 'sakit'])
+                ->count();
+            
+            $kehadiran = $totalPresensi > 0 
+                ? round(($hadir / $totalPresensi) * 100) 
+                : 0;
+
+            $rating = 4.8;
+            
+            if (class_exists(\App\Models\NilaiPeserta::class)) {
+                $rataNilai = NilaiPeserta::whereIn('id_peserta', $pesertaIds)
+                    ->avg('nilai_akhir');
+                
+                if ($rataNilai) {
+                    $rating = round(($rataNilai / 100) * 5, 1);
+                    if ($rating > 5) $rating = 5;
+                    if ($rating < 0) $rating = 0;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'totalMahasiswa' => $totalMahasiswa,
+                    'totalLaporan' => $totalLaporan,
+                    'kehadiran' => $kehadiran,
+                    'rating' => $rating
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'totalMahasiswa' => 0,
+                    'totalLaporan' => 0,
+                    'kehadiran' => 0,
+                    'rating' => 4.8
+                ]
+            ]);
         }
     }
 

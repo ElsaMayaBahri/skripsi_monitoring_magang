@@ -1,8 +1,9 @@
+// frontend/src/pages/coo/AddQuiz.jsx
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import axiosInstance from "../../api/axios"
+import * as XLSX from "xlsx"
 import { 
-  ArrowLeft, 
   Plus, 
   Trash2, 
   Edit, 
@@ -32,15 +33,10 @@ import {
   Lightbulb,
   Star,
   Zap,
-  Crown,
-  Trophy
+  ArrowLeft
 } from "lucide-react"
 
-// Import service functions
-import {
-  createQuiz,
-  downloadQuizTemplate
-} from "../../api/coo/quizService"
+import { createQuiz } from "../../api/coo/quizService"
 
 function AddQuiz() {
   const navigate = useNavigate()
@@ -55,20 +51,15 @@ function AddQuiz() {
   const [divisiList, setDivisiList] = useState([])
   const [loadingDivisi, setLoadingDivisi] = useState(true)
   
-  // Premium success popup state
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   const [successDetail, setSuccessDetail] = useState("")
   const [successType, setSuccessType] = useState("")
   
-  // Modal error state
   const [modalError, setModalError] = useState("")
   
-  // State untuk import Excel
   const [importFile, setImportFile] = useState(null)
   const [importing, setImporting] = useState(false)
-  const [importProgress, setImportProgress] = useState(0)
-  const [showImportModal, setShowImportModal] = useState(false)
   const [downloadingTemplate, setDownloadingTemplate] = useState(false)
   const [fileError, setFileError] = useState(null)
 
@@ -79,6 +70,17 @@ function AddQuiz() {
     tanggal_selesai: false
   })
 
+  // 🔥 TANGGAL DEFAULT YANG VALID
+  const getTodayDate = () => {
+    return new Date().toISOString().split('T')[0]
+  }
+  
+  const getDefaultEndDate = () => {
+    const date = new Date()
+    date.setMonth(date.getMonth() + 3)
+    return date.toISOString().split('T')[0]
+  }
+
   const [quiz, setQuiz] = useState({
     judul: "",
     divisi: "",
@@ -86,8 +88,8 @@ function AddQuiz() {
     durasi: 60,
     passing: 75,
     level: 1,
-    tanggal_mulai: "",
-    tanggal_selesai: "",
+    tanggal_mulai: getTodayDate(),
+    tanggal_selesai: getDefaultEndDate(),
     questions: []
   })
 
@@ -111,8 +113,6 @@ function AddQuiz() {
         divisiData = response.data.data
       } else if (response.data && Array.isArray(response.data)) {
         divisiData = response.data
-      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        divisiData = response.data.data
       }
       
       const aktifDivisi = divisiData.filter(div => {
@@ -145,7 +145,7 @@ function AddQuiz() {
     setSuccessType(type)
     setShowSuccessPopup(true)
     if (type !== "quiz") {
-      setTimeout(() => setShowSuccessPopup(false), 2500)
+      setTimeout(() => setShowSuccessPopup(false), 2000)
     }
   }
 
@@ -168,7 +168,7 @@ function AddQuiz() {
     const newQ = { 
       id: Date.now(), 
       text: qForm.question,
-      options: qForm.options,
+      options: [...qForm.options],
       correct: qForm.correct,
       correctLetter: String.fromCharCode(65 + qForm.correct)
     }
@@ -178,13 +178,11 @@ function AddQuiz() {
       updatedQuestions[editingIndex] = newQ
       setQuiz({ ...quiz, questions: updatedQuestions })
       setEditingIndex(null)
-      showPremiumPopup("Soal Berhasil Diupdate", `"${qForm.question.substring(0, 50)}..." telah diperbarui`, "question")
     } else {
       setQuiz({
         ...quiz,
         questions: [...quiz.questions, newQ]
       })
-      showPremiumPopup("Soal Berhasil Ditambahkan", `${quiz.questions.length + 1} soal dalam kuis ini`, "question")
     }
 
     setQForm({
@@ -211,7 +209,6 @@ function AddQuiz() {
     if (window.confirm("Yakin ingin menghapus soal ini?")) {
       const updatedQuestions = quiz.questions.filter((_, i) => i !== index)
       setQuiz({ ...quiz, questions: updatedQuestions })
-      showPremiumPopup("Soal Berhasil Dihapus", `Sisa ${updatedQuestions.length} soal dalam kuis`, "question")
     }
   }
 
@@ -242,181 +239,167 @@ function AddQuiz() {
     
     setFileError(null)
     setImportFile(file)
+    handleImportExcel(file)
   }
 
-  const handleDownloadTemplate = async () => {
+  const handleDownloadTemplate = () => {
     setDownloadingTemplate(true)
+    
     try {
-      const blob = await downloadQuizTemplate()
-      const url = window.URL.createObjectURL(blob)
+      const sampleQuestion = [{
+        text: "Contoh Soal",
+        options: ["Pilihan A", "Pilihan B", "Pilihan C", "Pilihan D"],
+        correct: 0
+      }]
+      
+      const rowData = {
+        judul_kuis: "",
+        deskripsi: "",
+        divisi: "",
+        durasi: 60,
+        passing: 75,
+        level: 1,
+        questions: JSON.stringify(sampleQuestion),
+        tanggal_mulai: getTodayDate(),
+        tanggal_selesai: getDefaultEndDate()
+      }
+      
+      const headers = [
+        'judul_kuis',
+        'deskripsi',
+        'divisi',
+        'durasi',
+        'passing',
+        'level',
+        'questions',
+        'tanggal_mulai',
+        'tanggal_selesai'
+      ]
+      
+      const escapeCSV = (field) => {
+        if (field === null || field === undefined) return '""'
+        const stringField = String(field)
+        if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n') || stringField.includes('\r')) {
+          return '"' + stringField.replace(/"/g, '""') + '"'
+        }
+        return stringField
+      }
+      
+      const csvRows = []
+      csvRows.push(headers.map(escapeCSV).join(','))
+      
+      const values = headers.map(header => {
+        let value = rowData[header]
+        if (header === 'questions') {
+          value = JSON.stringify(sampleQuestion)
+        }
+        return escapeCSV(value)
+      })
+      csvRows.push(values.join(','))
+      
+      const csvContent = csvRows.join('\n')
+      
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' })
+      const downloadUrl = URL.createObjectURL(blob)
       const link = document.createElement('a')
-      link.href = url
-      link.download = 'template_kuis.csv'
+      link.href = downloadUrl
+      link.download = 'template_import_kuis.csv'
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
+      URL.revokeObjectURL(downloadUrl)
+      
+      const toast = document.createElement('div')
+      toast.className = 'fixed bottom-5 right-5 bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm shadow-lg z-50 animate-in fade-in'
+      toast.innerHTML = '✅ Template CSV berhasil diunduh'
+      document.body.appendChild(toast)
+      setTimeout(() => toast.remove(), 3000)
+      
     } catch (err) {
-      console.error("Error downloading template:", err)
-      setError("Gagal mendownload template")
+      console.error("Error generating template:", err)
+      setError("Gagal membuat template CSV")
       setTimeout(() => setError(null), 3000)
     } finally {
       setDownloadingTemplate(false)
     }
   }
 
-  const parseCSVLine = (line) => {
-    const result = []
-    let current = ""
-    let inQuotes = false
-    let i = 0
-    
-    while (i < line.length) {
-      const char = line[i]
-      
-      if (char === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          current += '"'
-          i += 2
-          continue
-        }
-        inQuotes = !inQuotes
-        i++
-        continue
-      }
-      
-      if (char === ',' && !inQuotes) {
-        let val = current.trim()
-        if (val.startsWith('"') && val.endsWith('"')) {
-          val = val.slice(1, -1)
-        }
-        result.push(val.replace(/""/g, '"'))
-        current = ""
-        i++
-        continue
-      }
-      
-      current += char
-      i++
-    }
-    
-    let val = current.trim()
-    if (val.startsWith('"') && val.endsWith('"')) {
-      val = val.slice(1, -1)
-    }
-    result.push(val.replace(/""/g, '"'))
-    return result
-  }
-
-  const handleImportExcel = async () => {
-    if (!importFile) {
+  const handleImportExcel = async (file) => {
+    if (!file) {
       setError("Pilih file terlebih dahulu")
-      setTimeout(() => setError(null), 3000)
       return
     }
-    
+
     setImporting(true)
-    setImportProgress(0)
     setError(null)
-    
+
     try {
-      const fileContent = await importFile.text()
-      setImportProgress(20)
-      
-      const lines = fileContent.split(/\r?\n/).filter(line => line.trim())
-      if (lines.length < 2) {
-        throw new Error("File minimal memiliki 2 baris (header + data)")
+      const extension = file.name.split('.').pop().toLowerCase()
+      let rows = []
+
+      if (extension === 'csv') {
+        const text = await file.text()
+        const workbook = XLSX.read(text, { type: "string" })
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        rows = XLSX.utils.sheet_to_json(worksheet)
+      } else {
+        const arrayBuffer = await file.arrayBuffer()
+        const workbook = XLSX.read(arrayBuffer, { type: "array" })
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        rows = XLSX.utils.sheet_to_json(worksheet)
       }
-      
-      const headers = parseCSVLine(lines[0])
-      
-      const judulIndex = headers.findIndex(h => h === 'judul_kuis' || h === 'judul')
-      const deskripsiIndex = headers.findIndex(h => h === 'deskripsi')
-      const divisiIndex = headers.findIndex(h => h === 'divisi')
-      const durasiIndex = headers.findIndex(h => h === 'durasi')
-      const passingIndex = headers.findIndex(h => h === 'passing')
-      const questionsIndex = headers.findIndex(h => h === 'questions')
-      const tglMulaiIndex = headers.findIndex(h => h === 'tanggal_mulai')
-      const tglSelesaiIndex = headers.findIndex(h => h === 'tanggal_selesai')
-      const levelIndex = headers.findIndex(h => h === 'level')
-      
-      setImportProgress(40)
-      
+
+      if (!rows.length) {
+        throw new Error("File kosong atau tidak memiliki data")
+      }
+
       const allImportedQuestions = []
       let quizInfo = null
-      
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim()
-        if (!line) continue
-        
-        try {
-          const values = parseCSVLine(line)
-          
-          const judul = judulIndex >= 0 ? values[judulIndex] : ""
-          const deskripsi = deskripsiIndex >= 0 ? values[deskripsiIndex] : ""
-          const divisi = divisiIndex >= 0 ? values[divisiIndex] : ""
-          const durasi = durasiIndex >= 0 ? parseInt(values[durasiIndex]) || 60 : 60
-          const passing = passingIndex >= 0 ? parseInt(values[passingIndex]) || 75 : 75
-          const level = levelIndex >= 0 ? parseInt(values[levelIndex]) || 1 : 1
-          const questionsStr = questionsIndex >= 0 ? values[questionsIndex] : ""
-          const tglMulai = tglMulaiIndex >= 0 ? values[tglMulaiIndex] : ""
-          const tglSelesai = tglSelesaiIndex >= 0 ? values[tglSelesaiIndex] : ""
-          
-          if (i === 1 && judul) {
-            quizInfo = {
-              judul: judul,
-              deskripsi: deskripsi,
-              divisi: divisi,
-              durasi: durasi,
-              passing: passing,
-              level: level,
-              tanggal_mulai: tglMulai,
-              tanggal_selesai: tglSelesai
-            }
+
+      rows.forEach((row, index) => {
+        const level = Math.min(parseInt(row.level || 1), 3)
+
+        if (index === 0) {
+          quizInfo = {
+            judul: row.judul_kuis || row.judul || "",
+            deskripsi: row.deskripsi || "",
+            divisi: row.divisi || "",
+            durasi: parseInt(row.durasi || 60),
+            passing: parseInt(row.passing || 75),
+            level: level,
+            tanggal_mulai: row.tanggal_mulai || getTodayDate(),
+            tanggal_selesai: row.tanggal_selesai || getDefaultEndDate(),
           }
-          
-          let questions = []
-          if (questionsStr) {
-            try {
-              questions = JSON.parse(questionsStr)
-            } catch (jsonError) {
-              let fixedStr = questionsStr
-                .replace(/""/g, '"')
-                .replace(/\\/g, '')
-                .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3')
-              
-              try {
-                questions = JSON.parse(fixedStr)
-              } catch (e) {
-                console.error(`Gagal parse JSON di baris ${i}:`, e)
-                questions = []
-              }
-            }
-          }
-          
-          if (questions.length === 0) continue
-          
-          const formattedQuestions = questions.map((q, qIdx) => ({
-            id: Date.now() + i * 1000 + qIdx,
-            text: q.text || q.question || "",
-            options: q.options || ["", "", "", ""],
-            correct: q.correct || 0,
-            correctLetter: String.fromCharCode(65 + (q.correct || 0))
-          }))
-          
-          allImportedQuestions.push(...formattedQuestions)
-          
-        } catch (rowError) {
-          console.error(`Error processing row ${i}:`, rowError)
         }
-      }
-      
-      setImportProgress(80)
-      
+
+        let questions = []
+        try {
+          if (typeof row.questions === 'string') {
+            questions = JSON.parse(row.questions || "[]")
+          } else if (Array.isArray(row.questions)) {
+            questions = row.questions
+          }
+        } catch (e) {
+          console.error("JSON Error:", e)
+        }
+
+        const formattedQuestions = questions.map((q, qIdx) => ({
+          id: Date.now() + index * 1000 + qIdx,
+          text: q.text || q.question || "",
+          options: q.options || ["", "", "", ""],
+          correct: q.correct || 0,
+          correctLetter: String.fromCharCode(65 + (q.correct || 0))
+        }))
+
+        allImportedQuestions.push(...formattedQuestions)
+      })
+
       if (allImportedQuestions.length === 0) {
-        throw new Error("Tidak ada soal yang valid ditemukan dalam file. Pastikan kolom 'questions' berisi JSON array yang valid.")
+        throw new Error("Tidak ada soal valid dalam file. Pastikan kolom 'questions' berisi JSON array yang valid.")
       }
-      
+
       setQuiz(prev => ({
         ...prev,
         judul: quizInfo?.judul || prev.judul,
@@ -429,25 +412,24 @@ function AddQuiz() {
         tanggal_selesai: quizInfo?.tanggal_selesai || prev.tanggal_selesai,
         questions: [...prev.questions, ...allImportedQuestions]
       }))
-      
-      setImportProgress(100)
-      
-      showPremiumPopup("Import Berhasil", `${allImportedQuestions.length} soal berhasil ditambahkan ke kuis`, "question")
-      
-      setShowImportModal(false)
+
+      const toast = document.createElement('div')
+      toast.className = 'fixed bottom-5 right-5 bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm shadow-lg z-50'
+      toast.innerHTML = `✅ ${allImportedQuestions.length} soal berhasil diimport`
+      document.body.appendChild(toast)
+      setTimeout(() => toast.remove(), 3000)
+
       setImportFile(null)
       setFileError(null)
-      
       const fileInput = document.querySelector('input[type="file"]')
       if (fileInput) fileInput.value = ""
-      
+
     } catch (err) {
       console.error("Error importing quiz:", err)
-      setError(err.message || "Terjadi kesalahan saat mengimport kuis")
+      setError(err.message || "Gagal import file")
       setTimeout(() => setError(null), 3000)
     } finally {
       setImporting(false)
-      setImportProgress(0)
     }
   }
 
@@ -511,6 +493,7 @@ function AddQuiz() {
     })
   }
 
+  // 🔥 HANDLE SUBMIT - LANGSUNG REDIRECT TANPA POPUP
   const handleSubmit = async () => {
     if (quiz.questions.length === 0) {
       setError("Minimal 1 soal harus ditambahkan")
@@ -525,45 +508,54 @@ function AddQuiz() {
       const formData = {
         judul: quiz.judul,
         judul_kuis: quiz.judul,
-        deskripsi: quiz.deskripsi,
+        deskripsi: quiz.deskripsi || "",
         divisi: quiz.divisi,
-        durasi: quiz.durasi,
-        passing: quiz.passing,
-        level: quiz.level,
+        durasi: Number(quiz.durasi),
+        passing: Number(quiz.passing),
+        level: Math.min(Number(quiz.level), 3),
         tanggal_mulai: quiz.tanggal_mulai,
         tanggal_selesai: quiz.tanggal_selesai,
         questions: quiz.questions.map(q => ({
           text: q.text,
           options: q.options,
-          correct: q.correct
+          correct: Number(q.correct)
         })),
         total_soal: quiz.questions.length
       }
       
+      console.log("Sending data:", formData)
+      
       const response = await createQuiz(formData)
       
       if (response.success) {
-        showPremiumPopup("Kuis Berhasil Dibuat", `${quiz.judul} · Level ${quiz.level} · ${quiz.questions.length} soal · ${quiz.durasi} menit`, "quiz")
+        // 🔥 LANGSUNG REDIRECT KE HALAMAN QUIZ
+        navigate("/coo/quiz")
       } else {
         setError(response.message || "Gagal membuat kuis")
         setTimeout(() => setError(null), 3000)
       }
     } catch (err) {
       console.error("Error creating quiz:", err)
-      setError(err.message || "Terjadi kesalahan saat membuat kuis")
-      setTimeout(() => setError(null), 3000)
+      
+      if (err.response?.data?.errors) {
+        const errorMessages = Object.values(err.response.data.errors).flat()
+        setError(errorMessages.join(", "))
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message)
+      } else {
+        setError(err.message || "Terjadi kesalahan saat membuat kuis")
+      }
+      setTimeout(() => setError(null), 5000)
     } finally {
       setLoading(false)
     }
   }
 
-  const getLevelIcon = (level, size = 14) => {
+  const getLevelIcon = (level, size = 12) => {
     switch(level) {
       case 1: return <Star size={size} />
       case 2: return <Zap size={size} />
       case 3: return <Target size={size} />
-      case 4: return <Crown size={size} />
-      case 5: return <Trophy size={size} />
       default: return <Star size={size} />
     }
   }
@@ -573,20 +565,16 @@ function AddQuiz() {
       case 1: return "from-emerald-500 to-teal-500"
       case 2: return "from-blue-500 to-cyan-500"
       case 3: return "from-purple-500 to-pink-500"
-      case 4: return "from-amber-500 to-orange-500"
-      case 5: return "from-rose-500 to-red-500"
       default: return "from-emerald-500 to-teal-500"
     }
   }
 
   const getLevelBg = (level) => {
     switch(level) {
-      case 1: return "bg-emerald-100"
-      case 2: return "bg-blue-100"
-      case 3: return "bg-purple-100"
-      case 4: return "bg-amber-100"
-      case 5: return "bg-rose-100"
-      default: return "bg-emerald-100"
+      case 1: return "bg-emerald-50"
+      case 2: return "bg-blue-50"
+      case 3: return "bg-purple-50"
+      default: return "bg-emerald-50"
     }
   }
 
@@ -594,62 +582,36 @@ function AddQuiz() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-[1400px] mx-auto">
         
-        {/* PREMIUM SUCCESS POPUP */}
-        {showSuccessPopup && (
-          <>
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-              <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300">
-                <div className="relative">
-                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 rounded-t-2xl"></div>
-                  
-                  <div className="pt-8 pb-4 text-center">
-                    <div className="relative inline-block">
-                      <div className="absolute inset-0 bg-emerald-400 rounded-full blur-xl opacity-30 animate-ping"></div>
-                      <div className="relative w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg transform transition-transform duration-300">
-                        <Check className="w-10 h-10 text-white" strokeWidth={2.5} />
-                      </div>
+        {/* PREMIUM SUCCESS POPUP - HANYA UNTUK TAMBAH/EDIT SOAL */}
+        {showSuccessPopup && successType !== "quiz" && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-300">
+              <div className="relative">
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 rounded-t-2xl"></div>
+                <div className="pt-8 pb-4 text-center">
+                  <div className="relative inline-block">
+                    <div className="absolute inset-0 bg-emerald-400 rounded-full blur-xl opacity-30 animate-ping"></div>
+                    <div className="relative w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg">
+                      <Check className="w-10 h-10 text-white" strokeWidth={2.5} />
                     </div>
                   </div>
-                  
-                  <div className="px-6 pb-2 text-center">
-                    <h3 className="text-2xl font-bold text-slate-800 mb-2">{successMessage}</h3>
-                    <div className="w-16 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-500 mx-auto mb-4"></div>
-                    <p className="text-slate-500 text-sm mb-6">{successDetail}</p>
-                  </div>
-                  
-                  <div className="px-6 pb-8 flex flex-col gap-3">
-                    {successType === "quiz" ? (
-                      <>
-                        <button
-                          onClick={() => {
-                            setShowSuccessPopup(false)
-                            navigate("/coo/quiz")
-                          }}
-                          className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center gap-2"
-                        >
-                          <Eye size={16} />
-                          Lihat Daftar Kuis
-                        </button>
-                        <button
-                          onClick={() => setShowSuccessPopup(false)}
-                          className="w-full py-3 border border-slate-200 rounded-xl text-slate-600 text-sm font-medium hover:bg-slate-50 transition-all duration-200"
-                        >
-                          Tetap di Halaman Ini
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => setShowSuccessPopup(false)}
-                        className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
-                      >
-                        Tutup
-                      </button>
-                    )}
-                  </div>
+                </div>
+                <div className="px-6 pb-2 text-center">
+                  <h3 className="text-2xl font-bold text-slate-800 mb-2">{successMessage}</h3>
+                  <div className="w-16 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-500 mx-auto mb-4"></div>
+                  <p className="text-slate-500 text-sm mb-6">{successDetail}</p>
+                </div>
+                <div className="px-6 pb-8">
+                  <button
+                    onClick={() => setShowSuccessPopup(false)}
+                    className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200"
+                  >
+                    Tutup
+                  </button>
                 </div>
               </div>
             </div>
-          </>
+          </div>
         )}
 
         {/* HEADER SECTION */}
@@ -671,29 +633,21 @@ function AddQuiz() {
                 </div>
               </div>
             </div>
-            
-            <button
-              onClick={() => navigate("/coo/quiz")}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl text-white text-sm font-medium shadow-md hover:shadow-lg transition-all duration-200 group"
-            >
-              <ArrowLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
-              Kembali
-            </button>
           </div>
         </div>
 
         {/* STEP PROGRESS */}
-        <div className="mb-6">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="mb-5">
+          <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
             <div className="flex">
-              <div className={`flex-1 flex items-center gap-3 px-5 py-4 transition-all duration-300 ${
+              <div className={`flex-1 flex items-center gap-2 px-4 py-2.5 transition-all duration-300 ${
                 currentStep === 1 
                   ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-500' 
                   : currentStep > 1 
                     ? 'border-b-2 border-emerald-500 bg-gradient-to-r from-emerald-50 to-teal-50'
                     : 'border-b-2 border-transparent'
               }`}>
-                <div className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 shadow-sm ${
+                <div className={`flex items-center justify-center w-7 h-7 rounded-lg transition-all duration-300 shadow-sm ${
                   currentStep === 1 
                     ? 'bg-gradient-to-br from-blue-500 to-indigo-500 shadow-blue-200' 
                     : currentStep > 1 
@@ -701,18 +655,18 @@ function AddQuiz() {
                       : 'bg-slate-100'
                 }`}>
                   {currentStep > 1 ? (
-                    <CheckCircle size={18} className="text-white" />
+                    <CheckCircle size={14} className="text-white" />
                   ) : (
-                    <span className={`text-sm font-bold ${currentStep === 1 ? 'text-white' : 'text-slate-400'}`}>1</span>
+                    <span className={`text-xs font-bold ${currentStep === 1 ? 'text-white' : 'text-slate-400'}`}>1</span>
                   )}
                 </div>
                 <div>
-                  <p className={`text-[10px] font-semibold tracking-wide ${currentStep === 1 ? 'text-blue-600' : currentStep > 1 ? 'text-emerald-600' : 'text-slate-400'}`}>LANGKAH 1</p>
-                  <p className={`text-sm font-semibold ${currentStep === 1 ? 'text-slate-800' : currentStep > 1 ? 'text-slate-700' : 'text-slate-400'}`}>Detail Kuis</p>
+                  <p className={`text-[9px] font-semibold tracking-wide ${currentStep === 1 ? 'text-blue-600' : currentStep > 1 ? 'text-emerald-600' : 'text-slate-400'}`}>LANGKAH 1</p>
+                  <p className={`text-xs font-semibold ${currentStep === 1 ? 'text-slate-800' : currentStep > 1 ? 'text-slate-700' : 'text-slate-400'}`}>Detail Kuis</p>
                 </div>
               </div>
 
-              <div className={`flex-1 flex items-center gap-3 px-5 py-4 transition-all duration-300 ${
+              <div className={`flex-1 flex items-center gap-2 px-4 py-2.5 transition-all duration-300 ${
                 currentStep === 2 
                   ? quiz.questions.length > 0
                     ? 'bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-500'
@@ -721,7 +675,7 @@ function AddQuiz() {
                     ? 'border-b-2 border-emerald-500 bg-gradient-to-r from-emerald-50 to-teal-50'
                     : 'border-b-2 border-transparent'
               }`}>
-                <div className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300 shadow-sm ${
+                <div className={`flex items-center justify-center w-7 h-7 rounded-lg transition-all duration-300 shadow-sm ${
                   currentStep === 2 
                     ? quiz.questions.length > 0
                       ? 'bg-gradient-to-br from-emerald-500 to-teal-500 shadow-emerald-200'
@@ -731,20 +685,20 @@ function AddQuiz() {
                       : 'bg-slate-100'
                 }`}>
                   {quiz.questions.length > 0 ? (
-                    <CheckCircle size={18} className="text-white" />
+                    <CheckCircle size={14} className="text-white" />
                   ) : (
-                    <span className={`text-sm font-bold ${
+                    <span className={`text-xs font-bold ${
                       currentStep === 2 ? 'text-white' : 'text-slate-400'
                     }`}>2</span>
                   )}
                 </div>
                 <div>
-                  <p className={`text-[10px] font-semibold tracking-wide ${
+                  <p className={`text-[9px] font-semibold tracking-wide ${
                     currentStep === 2 
                       ? quiz.questions.length > 0 ? 'text-emerald-600' : 'text-blue-600'
                       : quiz.questions.length > 0 ? 'text-emerald-600' : 'text-slate-400'
                   }`}>LANGKAH 2</p>
-                  <p className={`text-sm font-semibold ${
+                  <p className={`text-xs font-semibold ${
                     currentStep === 2 
                       ? quiz.questions.length > 0 ? 'text-emerald-700' : 'text-slate-800'
                       : quiz.questions.length > 0 ? 'text-emerald-700' : 'text-slate-400'
@@ -757,10 +711,10 @@ function AddQuiz() {
 
         {/* ERROR MESSAGE */}
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-            <div className="p-1 bg-red-100 rounded-full"><AlertCircle size={14} className="text-red-500" /></div>
-            <p className="text-sm text-red-600 flex-1">{error}</p>
-            <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700 text-sm font-medium">Tutup</button>
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+            <AlertCircle size={12} className="text-red-500" />
+            <p className="text-xs text-red-600 flex-1">{error}</p>
+            <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700 text-xs font-medium">Tutup</button>
           </div>
         )}
 
@@ -895,40 +849,6 @@ function AddQuiz() {
                   </div>
                 </div>
               </div>
-              
-              {/* TIPS SECTION */}
-              <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl shadow-md flex-shrink-0">
-                      <Lightbulb className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-sm font-bold text-slate-800">Panduan Membuat Kuis yang Efektif</span>
-                        <div className="flex items-center gap-4 flex-wrap">
-                          <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                            Judul spesifik & mudah diingat
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                            Pilih divisi sesuai materi
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                            Tentukan periode pelaksanaan
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                            Passing grade sesuai standar
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
             
             <div className="space-y-5">
@@ -973,42 +893,41 @@ function AddQuiz() {
                       />
                     </div>
 
-                    {/* LEVEL KUIS - DITAMBAHKAN DI SINI */}
+                    {/* LEVEL KUIS */}
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1.5">
                         <Star className="w-3 h-3 inline mr-1" /> Level Kuis <span className="text-red-500">*</span>
                       </label>
-                      <div className="grid grid-cols-5 gap-2">
-                        {[1, 2, 3, 4, 5].map(level => (
+                      <div className="flex gap-2">
+                        {[1, 2, 3].map(level => (
                           <button
                             key={level}
                             type="button"
                             onClick={() => setQuiz({ ...quiz, level: level })}
-                            className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all duration-200 ${
+                            className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-all duration-200 ${
                               quiz.level === level
-                                ? `${getLevelBg(level)} border-${level === 1 ? 'emerald' : level === 2 ? 'blue' : level === 3 ? 'purple' : level === 4 ? 'amber' : 'rose'}-400 shadow-md`
+                                ? `${getLevelBg(level)} border-${level === 1 ? 'emerald' : level === 2 ? 'blue' : 'purple'}-400 shadow-sm`
                                 : 'border-slate-200 bg-white hover:bg-slate-50'
                             }`}
                           >
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
                               quiz.level === level
                                 ? `bg-gradient-to-r ${getLevelColor(level)} text-white shadow-sm`
                                 : 'bg-slate-100 text-slate-500'
                             }`}>
-                              {getLevelIcon(level, 18)}
+                              {getLevelIcon(level, 12)}
                             </div>
-                            <span className={`text-[10px] font-medium ${
-                              quiz.level === level ? 'text-slate-800' : 'text-slate-500'
-                            }`}>
-                              Level {level}
-                            </span>
+                            <div className="text-left">
+                              <p className={`text-[11px] font-semibold ${quiz.level === level ? 'text-slate-800' : 'text-slate-600'}`}>
+                                Level {level}
+                              </p>
+                              <p className="text-[9px] text-slate-400">
+                                {level === 1 ? "Pemula" : level === 2 ? "Menengah" : "Lanjutan"}
+                              </p>
+                            </div>
                           </button>
                         ))}
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-                        <HelpCircle size={10} />
-                        Level 1= Pemula, Level 2= Menengah, Level 3= Lanjutan, Level 4= Expert, Level 5= Master
-                      </p>
                     </div>
 
                     <button 
@@ -1025,7 +944,7 @@ function AddQuiz() {
           </div>
         )}
 
-        {/* STEP 2: DAFTAR PERTANYAAN (SAMA SEPERTI SEBELUMNYA) */}
+        {/* STEP 2: DAFTAR PERTANYAAN - [KONTEN LENGKAP SAMA SEPERTI SEBELUMNYA] */}
         {currentStep === 2 && (
           <div className="space-y-5">
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -1084,28 +1003,15 @@ function AddQuiz() {
                 </div>
               </div>
 
+              {/* IMPORT EXCEL SECTION */}
               {mode === "excel" && (
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
-                  <div className="flex flex-col gap-4">
-                    <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
-                      <p className="text-xs font-medium text-blue-800 mb-2 flex items-center gap-1">
-                        <FileSpreadsheet size={12} /> Format CSV yang diperlukan:
-                      </p>
-                      <ul className="text-[10px] text-blue-600 space-y-0.5 ml-4 list-disc">
-                        <li>judul_kuis - Judul kuis</li>
-                        <li>deskripsi - Deskripsi kuis (opsional)</li>
-                        <li>divisi - Nama divisi</li>
-                        <li>durasi - Durasi dalam menit</li>
-                        <li>passing - Nilai passing grade</li>
-                        <li>level - Level kuis (1-5)</li>
-                        <li>questions - JSON array berisi soal</li>
-                        <li>tanggal_mulai - Tanggal mulai (YYYY-MM-DD)</li>
-                        <li>tanggal_selesai - Tanggal selesai (YYYY-MM-DD)</li>
-                      </ul>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
                       <button
                         onClick={handleDownloadTemplate}
                         disabled={downloadingTemplate}
-                        className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-medium rounded-lg transition-all duration-200 shadow-sm"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-medium rounded-lg transition-all duration-200 shadow-sm"
                       >
                         {downloadingTemplate ? (
                           <>
@@ -1119,47 +1025,68 @@ function AddQuiz() {
                           </>
                         )}
                       </button>
+                      <p className="text-[10px] text-slate-500">
+                        Template CSV dengan 1 contoh soal
+                      </p>
                     </div>
                     
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Pilih File CSV</label>
+                      <label className="block text-[10px] font-medium text-slate-700 mb-1">
+                        Pilih File CSV / Excel
+                      </label>
                       <div className="flex gap-2 items-start flex-col sm:flex-row">
                         <input
                           type="file"
                           accept=".csv,.xlsx,.xls"
                           onChange={handleFileChange}
-                          className="flex-1 text-sm text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-gradient-to-r file:from-blue-600 file:to-indigo-600 file:text-white hover:file:opacity-90 transition cursor-pointer"
+                          className="flex-1 text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[10px] file:font-medium file:bg-blue-50 file:text-blue-700 file:hover:bg-blue-100 transition cursor-pointer"
                         />
                         <button
-                          onClick={() => setShowImportModal(true)}
+                          onClick={() => {}}
                           disabled={!importFile || importing}
-                          className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-lg text-white text-xs font-medium shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-lg text-white text-[10px] font-medium shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                         >
-                          <Upload size={14} className="inline mr-1" />
-                          Import
+                          {importing ? <Loader2 size={10} className="animate-spin" /> : <Upload size={10} />}
+                          {importing ? "Memproses..." : "Import"}
                         </button>
                       </div>
                       
                       {importFile && !fileError && (
-                        <p className="text-[10px] text-emerald-600 mt-2 flex items-center gap-1">
-                          <CheckCircle size={10} />
-                          File siap: {importFile.name} ({(importFile.size / 1024).toFixed(1)} KB)
-                        </p>
+                        <div className="mt-1.5 p-1.5 bg-emerald-50 rounded-lg flex items-center gap-2">
+                          <CheckCircle size={10} className="text-emerald-600" />
+                          <span className="text-[9px] text-emerald-700">{importFile.name}</span>
+                          <span className="text-[8px] text-emerald-600 ml-auto">{(importFile.size / 1024).toFixed(1)} KB</span>
+                          <button onClick={() => {
+                            setImportFile(null)
+                            setFileError(null)
+                            const fileInput = document.querySelector('input[type="file"]')
+                            if (fileInput) fileInput.value = ""
+                          }} className="text-emerald-600 hover:text-emerald-800">
+                            <X size={10} />
+                          </button>
+                        </div>
                       )}
                       
                       {fileError && (
-                        <p className="text-[10px] text-red-500 mt-2 flex items-center gap-1">
-                          <X size={10} />
-                          {fileError}
-                        </p>
+                        <div className="mt-1.5 p-1.5 bg-red-50 rounded-lg flex items-center gap-2">
+                          <AlertCircle size={10} className="text-red-600" />
+                          <span className="text-[9px] text-red-600 flex-1">{fileError}</span>
+                          <button onClick={() => {
+                            setFileError(null)
+                            setImportFile(null)
+                          }} className="text-red-600 hover:text-red-800">
+                            <X size={10} />
+                          </button>
+                        </div>
                       )}
                     </div>
                     
-                    <div className="bg-amber-50 rounded-lg p-2.5 border border-amber-100">
-                      <p className="text-[10px] text-amber-700 flex items-center gap-1">
-                        <HelpCircle size={10} />
-                        <span className="font-medium">Tips:</span> File akan diproses langsung di browser. Pastikan format JSON di kolom questions valid.
-                      </p>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 flex items-center flex-wrap gap-x-3 gap-y-1">
+                      <Lightbulb size={10} className="text-blue-500 flex-shrink-0" />
+                      <span className="text-[9px] font-medium text-blue-800">Catatan:</span>
+                      <span className="text-[9px] text-blue-600">Kolom "questions" menggunakan format JSON</span>
+                      <span className="text-[9px] text-blue-600">• Nilai "correct" = index (0=A,1=B,2=C,3=D)</span>
+                      <span className="text-[9px] text-blue-600">• Jangan ubah nama kolom template</span>
                     </div>
                   </div>
                 </div>
@@ -1209,10 +1136,7 @@ function AddQuiz() {
                               onClick={() => toggleExpand(q.id)} 
                               className="p-1.5 hover:bg-white rounded-lg transition"
                             >
-                              {expandedQuestions[q.id] ? 
-                                <ChevronUp size={14} className="text-slate-500" /> : 
-                                <ChevronDown size={14} className="text-slate-500" />
-                              }
+                              {expandedQuestions[q.id] ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
                             </button>
                             <button 
                               onClick={() => handleEditQuestion(i)} 
@@ -1271,65 +1195,65 @@ function AddQuiz() {
               </div>
             </div>
 
-            <div className="flex justify-between gap-4">
+            {/* TOMBOL KEMBALI DAN SIMPAN */}
+            <div className="flex justify-between gap-3">
               <button 
                 onClick={handlePrevStep} 
-                className="px-5 py-2.5 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 flex items-center gap-2 text-sm font-medium group"
+                className="px-4 py-2 bg-slate-600 rounded-lg text-white text-xs font-semibold shadow-md hover:bg-slate-700 hover:shadow-lg transition-all duration-200 flex items-center gap-1.5 group"
               >
-                <ArrowLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
+                <ArrowLeft size={12} className="group-hover:-translate-x-0.5 transition-transform" />
                 Kembali
               </button>
               <button 
                 onClick={handleSubmit} 
                 disabled={loading || quiz.questions.length === 0} 
-                className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:hover:scale-100 group"
+                className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-lg text-white text-xs font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center gap-1.5 disabled:opacity-50 disabled:hover:scale-100 group"
               >
-                {loading ? 
-                  <Loader2 size={16} className="animate-spin" /> : 
-                  <Save size={16} className="group-hover:scale-110 transition-transform" />
-                }
+                {loading ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} className="group-hover:scale-110 transition-transform" />}
                 {loading ? "Menyimpan..." : "Simpan Kuis"}
               </button>
             </div>
 
             {/* SUMMARY CARD */}
-            <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl p-4 border border-slate-200 shadow-sm">
-              <div className="flex items-center justify-between gap-2 text-sm flex-wrap">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Clock size={12} className="text-blue-600" />
+            <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg p-2.5 border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between gap-2 text-xs flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 bg-blue-100 rounded-md flex items-center justify-center">
+                    <Clock size={10} className="text-blue-600" />
                   </div>
-                  <span className="font-medium text-slate-700">{quiz.durasi || 0} menit</span>
+                  <span className="font-medium text-slate-600 text-[10px]">{quiz.durasi || 0} menit</span>
                 </div>
-                <div className="w-px h-5 bg-slate-300"></div>
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center">
-                    <Target size={12} className="text-emerald-600" />
+                <div className="w-px h-4 bg-slate-300"></div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 bg-emerald-100 rounded-md flex items-center justify-center">
+                    <Target size={10} className="text-emerald-600" />
                   </div>
-                  <span className="font-medium text-slate-700">Passing: {quiz.passing || 0}%</span>
+                  <span className="font-medium text-slate-600 text-[10px]">Passing: {quiz.passing || 0}%</span>
                 </div>
-                <div className="w-px h-5 bg-slate-300"></div>
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 bg-purple-100 rounded-lg flex items-center justify-center">
-                    {getLevelIcon(quiz.level, 12)}
+                <div className="w-px h-4 bg-slate-300"></div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 bg-purple-100 rounded-md flex items-center justify-center">
+                    {getLevelIcon(quiz.level, 10)}
                   </div>
-                  <span className="font-medium text-slate-700">Level {quiz.level}</span>
+                  <span className="font-medium text-slate-600 text-[10px]">Level {quiz.level}</span>
                 </div>
-                <div className="w-px h-5 bg-slate-300"></div>
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center">
-                    <Calendar size={12} className="text-amber-600" />
+                <div className="w-px h-4 bg-slate-300"></div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 bg-amber-100 rounded-md flex items-center justify-center">
+                    <Calendar size={10} className="text-amber-600" />
                   </div>
-                  <span className="font-medium text-slate-700">
-                    {quiz.tanggal_mulai || "-"} s.d {quiz.tanggal_selesai || "-"}
+                  <span className="font-medium text-slate-600 text-[10px]">
+                    {quiz.tanggal_mulai && quiz.tanggal_selesai ? (
+                      `${new Date(quiz.tanggal_mulai).toLocaleDateString('id-ID', { day: 'numeric', month: 'numeric' })} - ${new Date(quiz.tanggal_selesai).toLocaleDateString('id-ID', { day: 'numeric', month: 'numeric' })}`
+                    ) : '-'}
                   </span>
                 </div>
-                <div className="w-px h-5 bg-slate-300"></div>
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 bg-rose-100 rounded-lg flex items-center justify-center">
-                    <ListChecks size={12} className="text-rose-600" />
+                <div className="w-px h-4 bg-slate-300"></div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 bg-rose-100 rounded-md flex items-center justify-center">
+                    <ListChecks size={10} className="text-rose-600" />
                   </div>
-                  <span className="font-bold text-slate-800">{quiz.questions.length} soal</span>
+                  <span className="font-bold text-slate-700 text-[10px]">{quiz.questions.length} soal</span>
                 </div>
               </div>
             </div>
@@ -1457,93 +1381,6 @@ function AddQuiz() {
           </div>
         )}
       </div>
-
-      {/* IMPORT CONFIRM MODAL */}
-      {showImportModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md shadow-xl">
-            <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-emerald-100 rounded-lg">
-                  <FileSpreadsheet size={16} className="text-emerald-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-slate-800">Konfirmasi Import</h3>
-                  <p className="text-[10px] text-slate-400">Import soal dari file CSV</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowImportModal(false)
-                  setImportProgress(0)
-                }}
-                className="p-1.5 hover:bg-slate-100 rounded-lg transition"
-              >
-                <X size={16} className="text-slate-400" />
-              </button>
-            </div>
-            
-            <div className="p-5">
-              <p className="text-sm text-slate-600 mb-4">
-                Apakah Anda yakin ingin mengimport soal dari file <strong className="text-blue-600">{importFile?.name}</strong>?
-              </p>
-              
-              <div className="bg-blue-50 rounded-lg p-3 mb-4">
-                <p className="text-[10px] text-blue-700">
-                  <span className="font-medium">Informasi file:</span><br />
-                  • Nama: {importFile?.name}<br />
-                  • Ukuran: {(importFile?.size / 1024).toFixed(1)} KB
-                </p>
-              </div>
-              
-              {importing && importProgress > 0 && (
-                <div className="mb-4">
-                  <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                    <span>Memproses file...</span>
-                    <span>{importProgress}%</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-300"
-                      style={{ width: `${importProgress}%` }}
-                    ></div>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setShowImportModal(false)
-                  setImportProgress(0)
-                }}
-                disabled={importing}
-                className="px-4 py-1.5 border border-slate-200 rounded-lg text-slate-600 text-xs font-medium hover:bg-white transition disabled:opacity-50"
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleImportExcel}
-                disabled={importing}
-                className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-lg text-white text-xs font-medium shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {importing ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin" />
-                    Memproses...
-                  </>
-                ) : (
-                  <>
-                    <Upload size={12} />
-                    Ya, Import
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <style>{`
         @keyframes fadeIn {

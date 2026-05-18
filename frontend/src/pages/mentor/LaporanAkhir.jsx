@@ -12,24 +12,20 @@ import {
   ChevronRight,
   X,
   Calendar,
-  MessageSquare,
-  Star,
   Sparkles,
   Shield,
   Zap,
   Users,
   Loader2,
-  Send,
-  Activity,
   ChevronDown
 } from "lucide-react";
 import { 
-  getMentorLaporanAkhir, 
-  submitLaporanReview, 
-  exportLaporanAkhir,
-  downloadLaporanFile
+  getMentorLaporanAkhir
 } from "../../api/mentor/laporanAkhirService";
 import axiosInstance from "../../api/axios";
+import * as XLSX from 'xlsx';
+import html2pdf from 'html2pdf.js';
+import logo from "../../assets/logo.png";
 
 function LaporanAkhir() {
   const [loading, setLoading] = useState(false);
@@ -39,26 +35,21 @@ function LaporanAkhir() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(8);
-  const [selectedLaporan, setSelectedLaporan] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [hoveredRow, setHoveredRow] = useState(null);
-  const [reviewForm, setReviewForm] = useState({
-    catatan: "",
-    status: "pending"
-  });
-  const [submitting, setSubmitting] = useState(false);
   const [downloading, setDownloading] = useState(null);
   const [summary, setSummary] = useState({
     total: 0,
     sudahUpload: 0,
-    belumUpload: 0,
-    disetujui: 0,
-    revisi: 0,
-    pending: 0
+    belumUpload: 0
   });
   const [showExportDropdown, setShowExportDropdown] = useState(false);
-  const [exportError, setExportError] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
   const dropdownRef = useRef(null);
+  
+  // State untuk preview modal
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewTitle, setPreviewTitle] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Helper untuk mendapatkan URL file
   const getFileUrl = (filePath) => {
@@ -70,7 +61,54 @@ function LaporanAkhir() {
     return `http://localhost:8000/storage/${filePath}`;
   };
 
-  // Fungsi download file langsung menggunakan axios
+  // Fungsi untuk mendapatkan file blob untuk preview
+  const getFileBlob = async (fileUrl) => {
+    const token = localStorage.getItem('token');
+    const response = await axiosInstance.get(fileUrl, {
+      responseType: 'blob',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  };
+
+  // Fungsi preview file - di halaman yang sama (modal)
+  const handlePreviewFile = async (laporanItem) => {
+    if (!laporanItem.file_url && !laporanItem.id) {
+      alert("File tidak tersedia");
+      return;
+    }
+    
+    setPreviewLoading(true);
+    setShowPreviewModal(true);
+    setPreviewTitle(laporanItem.peserta_nama || "Laporan Akhir");
+    
+    try {
+      const fileUrl = getFileUrl(laporanItem.file_url || laporanItem.file_path);
+      
+      // Cek ekstensi file
+      const isPdf = fileUrl.toLowerCase().endsWith('.pdf');
+      const isImage = fileUrl.toLowerCase().match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i);
+      
+      if (isPdf || isImage) {
+        // Untuk PDF dan gambar, langsung gunakan URL
+        setPreviewUrl(fileUrl);
+      } else {
+        // Untuk file lain, coba buat blob URL
+        const blob = await getFileBlob(fileUrl);
+        const blobUrl = URL.createObjectURL(blob);
+        setPreviewUrl(blobUrl);
+      }
+    } catch (error) {
+      console.error("Preview error:", error);
+      // Fallback: buka URL langsung
+      const fileUrl = getFileUrl(laporanItem.file_url || laporanItem.file_path);
+      setPreviewUrl(fileUrl);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Fungsi download file laporan langsung ke device
   const handleDownloadFile = async (laporanItem) => {
     if (!laporanItem.file_url && !laporanItem.id) {
       alert("File tidak tersedia");
@@ -79,42 +117,57 @@ function LaporanAkhir() {
     
     setDownloading(laporanItem.id);
     try {
-      const fileUrl = getFileUrl(laporanItem.file_url || laporanItem.file_path);
+      let fileUrl = laporanItem.file_url || laporanItem.file_path;
+      
+      if (!fileUrl && laporanItem.file_path) {
+        fileUrl = laporanItem.file_path;
+      }
+      
+      if (!fileUrl) {
+        alert("URL file tidak ditemukan");
+        return;
+      }
+      
+      if (!fileUrl.startsWith('http')) {
+        if (fileUrl.startsWith('/storage')) {
+          fileUrl = `http://localhost:8000${fileUrl}`;
+        } else if (fileUrl.startsWith('storage/')) {
+          fileUrl = `http://localhost:8000/${fileUrl}`;
+        } else if (fileUrl.startsWith('laporan/')) {
+          fileUrl = `http://localhost:8000/storage/${fileUrl}`;
+        } else {
+          fileUrl = `http://localhost:8000/storage/${fileUrl}`;
+        }
+      }
+      
+      const token = localStorage.getItem('token');
       const response = await axiosInstance.get(fileUrl, {
-        responseType: 'blob'
+        responseType: 'blob',
+        headers: { Authorization: `Bearer ${token}` }
       });
+      
+      let extension = 'pdf';
+      if (fileUrl.toLowerCase().includes('.pdf')) extension = 'pdf';
+      else if (fileUrl.toLowerCase().includes('.doc')) extension = 'doc';
+      else if (fileUrl.toLowerCase().includes('.docx')) extension = 'docx';
+      else if (fileUrl.toLowerCase().includes('.jpg') || fileUrl.toLowerCase().includes('.jpeg')) extension = 'jpg';
+      else if (fileUrl.toLowerCase().includes('.png')) extension = 'png';
       
       const blob = new Blob([response.data]);
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = laporanItem.file_name || `laporan_${laporanItem.peserta_nama || 'akhir'}.pdf`;
+      link.download = `laporan_${laporanItem.peserta_nama || 'akhir'}_${new Date().toISOString().split('T')[0]}.${extension}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
+      
     } catch (error) {
       console.error("Download error:", error);
-      // Fallback: buka di tab baru
-      const fileUrl = getFileUrl(laporanItem.file_url || laporanItem.file_path);
-      window.open(fileUrl, '_blank');
+      alert("Gagal mendownload file. Silakan coba lagi.");
     } finally {
       setDownloading(null);
-    }
-  };
-
-  // Fungsi preview file - buka di tab baru
-  const handlePreviewFile = (laporanItem) => {
-    if (!laporanItem.file_url && !laporanItem.id) {
-      alert("File tidak tersedia");
-      return;
-    }
-    
-    const fileUrl = getFileUrl(laporanItem.file_url || laporanItem.file_path);
-    if (fileUrl) {
-      window.open(fileUrl, '_blank');
-    } else {
-      alert("URL file tidak valid");
     }
   };
 
@@ -123,20 +176,47 @@ function LaporanAkhir() {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowExportDropdown(false);
-        setExportError(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Clear error after 5 seconds
+  // Cleanup blob URL saat modal ditutup
   useEffect(() => {
-    if (exportError) {
-      const timer = setTimeout(() => setExportError(null), 5000);
-      return () => clearTimeout(timer);
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  // Format tanggal untuk PDF
+  const formatDatePDF = (dateString) => {
+    if (!dateString) return "-";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "-";
+      return date.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      });
+    } catch {
+      return "-";
     }
-  }, [exportError]);
+  };
+
+  // Escape HTML untuk keamanan
+  const escapeHtml = (text) => {
+    if (!text) return '';
+    return String(text).replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    });
+  };
 
   // Fetch laporan dari backend
   const fetchLaporan = async () => {
@@ -150,26 +230,24 @@ function LaporanAkhir() {
       
       if (response && response.success) {
         let laporanData = response.data || [];
-        // Format data
         const formattedData = laporanData.map(item => ({
           ...item,
           file_url: getFileUrl(item.file_path || item.file_url)
         }));
         
-        let summaryData = response.summary || {
-          total: 0,
-          sudahUpload: 0,
-          belumUpload: 0,
-          disetujui: 0,
-          revisi: 0,
-          pending: 0
+        const sudahUpload = formattedData.filter(l => l.uploaded_at && l.status !== "not_uploaded").length;
+        const belumUpload = formattedData.filter(l => !l.uploaded_at || l.status === "not_uploaded").length;
+        
+        let summaryData = {
+          total: formattedData.length,
+          sudahUpload: sudahUpload,
+          belumUpload: belumUpload
         };
         
         setLaporan(formattedData);
         setFilteredLaporan(formattedData);
         setSummary(summaryData);
       } else {
-        console.error("Failed to fetch laporan:", response?.message);
         setLaporan([]);
         setFilteredLaporan([]);
       }
@@ -199,8 +277,8 @@ function LaporanAkhir() {
     if (filterStatus !== "all") {
       if (filterStatus === "uploaded") {
         filtered = filtered.filter(l => l.status !== "not_uploaded" && l.uploaded_at);
-      } else {
-        filtered = filtered.filter(l => l.status === filterStatus);
+      } else if (filterStatus === "not_uploaded") {
+        filtered = filtered.filter(l => !l.uploaded_at || l.status === "not_uploaded");
       }
     }
     
@@ -208,116 +286,193 @@ function LaporanAkhir() {
     setCurrentPage(1);
   }, [searchTerm, filterStatus, laporan]);
 
-  const handleOpenModal = (laporanItem) => {
-    setSelectedLaporan(laporanItem);
-    setReviewForm({
-      catatan: laporanItem.catatan || "",
-      status: laporanItem.status === "approved" ? "approved" : laporanItem.status === "revision" ? "revision" : "pending"
-    });
-    setShowModal(true);
-  };
-
-  const handleSubmitReview = async () => {
-    if (reviewForm.status === "pending") {
-      alert("Pilih status terlebih dahulu (Setujui atau Revisi)");
+  // Export ke Excel
+  const handleExportExcel = () => {
+    if (filteredLaporan.length === 0 && laporan.length === 0) {
+      alert("Tidak ada data untuk diekspor");
       return;
     }
     
-    setSubmitting(true);
-    try {
-      const response = await submitLaporanReview(selectedLaporan.id, {
-        status: reviewForm.status,
-        catatan: reviewForm.catatan
-      });
-      
-      if (response && response.success) {
-        await fetchLaporan();
-        setShowModal(false);
-        alert(response.message || `Laporan ${reviewForm.status === "approved" ? "disetujui" : "direvisi"}`);
-      } else {
-        alert(response?.message || "Gagal menyimpan review");
-      }
-    } catch (error) {
-      console.error("Error submitting review:", error);
-      alert(error.response?.data?.message || "Terjadi kesalahan saat menyimpan review");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Export function
-  const handleExport = async (format) => {
+    setIsExporting(true);
     setShowExportDropdown(false);
-    setExportError(null);
     
     try {
-      const params = {};
-      if (searchTerm) params.search = searchTerm;
-      if (filterStatus !== "all") params.status = filterStatus;
-      params.format = format;
+      const dataToExport = filteredLaporan.length > 0 ? filteredLaporan : laporan;
       
-      const token = localStorage.getItem('token');
-      const queryString = new URLSearchParams(params).toString();
-      const url = `http://localhost:8000/api/mentor/laporan-akhir/export?${queryString}`;
+      // 🔥 HAPUS KOLOM DIVISI DI EXCEL
+      const exportData = dataToExport.map((item, index) => ({
+        "No": index + 1,
+        "Nama Peserta": item.peserta_nama || '-',
+        "Judul Laporan": item.judul || '-',
+        "Tanggal Upload": item.uploaded_at ? new Date(item.uploaded_at).toLocaleDateString('id-ID') : 'Belum upload',
+        "Status": item.uploaded_at ? 'Sudah Upload' : 'Belum Upload',
+        "Nama File": item.file_name || '-'
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Laporan Akhir");
       
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        }
-      });
+      ws['!cols'] = [
+        {wch:5}, {wch:30}, {wch:50}, {wch:20}, {wch:15}, {wch:35}
+      ];
       
-      if (!response.ok) {
-        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        try {
-          const errorData = await response.json();
-          if (errorData.message) errorMessage = errorData.message;
-        } catch (e) {
-          const text = await response.text();
-          if (text) errorMessage = text;
-        }
-        throw new Error(errorMessage);
-      }
-      
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      
-      const contentDisposition = response.headers.get('Content-Disposition');
-      let filename = `laporan_akhir_${new Date().toISOString().split('T')[0]}.${format === 'excel' ? 'csv' : 'html'}`;
-      if (contentDisposition) {
-        const match = contentDisposition.match(/filename="?([^"]+)"?/);
-        if (match) filename = match[1];
-      }
-      
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(downloadUrl);
-      
+      const fileName = `laporan_akhir_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
     } catch (error) {
-      console.error("Error exporting laporan:", error);
-      setExportError({
-        message: error.message || "Terjadi kesalahan saat mengekspor laporan",
-        hint: "Hubungi backend developer untuk memperbaiki endpoint /mentor/laporan-akhir/export"
-      });
+      console.error("Error exporting Excel:", error);
+      alert("Gagal mengexport ke Excel: " + error.message);
+    } finally {
+      setIsExporting(false);
     }
   };
 
-  const getStatusBadge = (status) => {
-    switch(status) {
-      case "approved":
-        return { bg: "bg-gradient-to-r from-emerald-500/20 to-teal-500/20", text: "text-emerald-600", icon: CheckCircle, label: "Disetujui", border: "border-emerald-200" };
-      case "revision":
-        return { bg: "bg-gradient-to-r from-purple-500/20 to-purple-600/20", text: "text-purple-600", icon: AlertCircle, label: "Revisi", border: "border-purple-200" };
-      case "pending":
-        return { bg: "bg-gradient-to-r from-blue-500/20 to-cyan-500/20", text: "text-blue-600", icon: Clock, label: "Menunggu Review", border: "border-blue-200" };
-      default:
-        return { bg: "bg-gradient-to-r from-slate-500/10 to-slate-600/10", text: "text-slate-500", icon: X, label: "Belum Upload", border: "border-slate-200" };
+  // Export ke PDF
+  const handleExportPDF = () => {
+    if (filteredLaporan.length === 0 && laporan.length === 0) {
+      alert("Tidak ada data untuk diekspor");
+      return;
     }
+    
+    setIsExporting(true);
+    setShowExportDropdown(false);
+    
+    try {
+      const dataToExport = filteredLaporan.length > 0 ? filteredLaporan : laporan;
+      const today = new Date().toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+      
+      const element = document.createElement('div');
+      element.style.padding = '30px';
+      element.style.fontFamily = "'Times New Roman', Arial, sans-serif";
+      element.style.backgroundColor = 'white';
+      element.style.width = '100%';
+      
+      // 🔥 HAPUS KOLOM DIVISI DI PDF TABLE
+      let tableRows = '';
+      dataToExport.forEach((item, index) => {
+        const statusText = item.uploaded_at ? 'Sudah Upload' : 'Belum Upload';
+        const statusColor = item.uploaded_at ? '#16a34a' : '#d97706';
+        
+        tableRows += `
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${index + 1}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 8px;">${escapeHtml(item.peserta_nama || '-')}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 8px;">${escapeHtml(item.judul || '-')}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.uploaded_at ? formatDatePDF(item.uploaded_at) : '-'}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;"><span style="color: ${statusColor}; font-weight: bold;">${statusText}</span></td>
+          </tr>
+        `;
+      });
+      
+      if (dataToExport.length === 0) {
+        tableRows = `
+          <tr>
+            <td colspan="5" style="border: 1px solid #cbd5e1; padding: 40px; text-align: center; color: #94a3b8;">Tidak ada data laporan</td>
+          </tr>
+        `;
+      }
+      
+      element.innerHTML = `
+        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #1e3a5f; padding-bottom: 20px;">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+            <img src="${logo}" alt="Logo Perusahaan" style="height: 60px; width: auto;" />
+            <div style="text-align: left;">
+              <h1 style="color: #1e3a5f; margin: 0; font-size: 24px;">PT KUANTA PRIMA INDONESIA</h1>
+              <p style="color: #64748b; margin: 5px 0 0 0; font-size: 10px;">Jl. Gayungsari IV No. 33 Surabaya</p>
+              <p style="color: #64748b; margin: 2px 0 0 0; font-size: 10px;">+62 821-4338-0273 | partnership@kuanta.id</p>
+            </div>
+          </div>
+        </div>
+        
+        <div style="text-align: center; margin-bottom: 25px;">
+          <h2 style="color: #1e293b; margin: 0; font-size: 20px;">LAPORAN AKHIR MAGANG</h2>
+          <p style="color: #64748b; margin: 8px 0 0 0; font-size: 12px;">Kuanta Academy - Sistem Monitoring Magang</p>
+          ${searchTerm ? `<p style="color: #64748b; margin: 4px 0 0 0; font-size: 11px;">Pencarian: ${escapeHtml(searchTerm)}</p>` : ''}
+          ${filterStatus !== "all" ? `<p style="color: #64748b; margin: 4px 0 0 0; font-size: 11px;">Filter Status: ${filterStatus === "uploaded" ? "Sudah Upload" : "Belum Upload"}</p>` : ''}
+        </div>
+        
+        <div style="margin-bottom: 20px; text-align: right;">
+          <p style="color: #94a3b8; font-size: 10px; margin: 0;">Dicetak: ${today}</p>
+        </div>
+        
+        <div style="display: flex; gap: 15px; margin-bottom: 25px; padding: 15px; background: #f8fafc; border-radius: 8px;">
+          <div style="flex: 1; text-align: center;">
+            <div style="font-size: 22px; font-weight: bold; color: #2563eb;">${summary.total}</div>
+            <div style="font-size: 10px; color: #64748b;">Total Peserta</div>
+          </div>
+          <div style="flex: 1; text-align: center;">
+            <div style="font-size: 22px; font-weight: bold; color: #16a34a;">${summary.sudahUpload}</div>
+            <div style="font-size: 10px; color: #64748b;">Sudah Upload</div>
+          </div>
+          <div style="flex: 1; text-align: center;">
+            <div style="font-size: 22px; font-weight: bold; color: #d97706;">${summary.belumUpload}</div>
+            <div style="font-size: 10px; color: #64748b;">Belum Upload</div>
+          </div>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+          <thead>
+            <tr style="background-color: #1e3a5f;">
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">No</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: left;">Nama Peserta</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: left;">Judul Laporan</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Tanggal Upload</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Status</th>
+             </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+         </table>
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #cbd5e1;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div style="text-align: left;">
+              <p style="font-size: 9px; color: #94a3b8; margin: 0;">Dokumen ini dicetak secara elektronik</p>
+              <p style="font-size: 9px; color: #94a3b8; margin: 2px 0 0 0;">&copy; ${new Date().getFullYear()} PT Kuanta Prima Indonesia - All Rights Reserved</p>
+            </div>
+            <div style="text-align: right;">
+              <div style="margin-top: 30px;">
+                <p style="font-size: 10px; margin: 0;">Surabaya, ${today}</p>
+                <p style="font-size: 10px; margin: 20px 0 0 0;">Mentor</p>
+                <div style="margin-top: 30px;">
+                  <p style="font-size: 10px; margin: 0; text-decoration: underline;">(_____________________)</p>
+                  <p style="font-size: 9px; color: #64748b; margin: 2px 0 0 0;">Nama Lengkap & Tanda Tangan</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      const opt = {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        filename: `laporan_akhir_${new Date().toISOString().split('T')[0]}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+      };
+      
+      html2pdf().set(opt).from(element).save();
+    } catch (error) {
+      console.error("Export PDF error:", error);
+      alert("Gagal mengexport ke PDF: " + error.message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const getStatusBadge = (status, uploadedAt) => {
+    const hasUploaded = uploadedAt || (status !== "not_uploaded");
+    
+    if (hasUploaded) {
+      return { bg: "bg-gradient-to-r from-teal-500/20 to-emerald-500/20", text: "text-teal-600", icon: CheckCircle, label: "Sudah Upload", border: "border-teal-200" };
+    }
+    return { bg: "bg-gradient-to-r from-slate-500/10 to-slate-600/10", text: "text-slate-500", icon: Clock, label: "Belum Upload", border: "border-slate-200" };
   };
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -338,32 +493,12 @@ function LaporanAkhir() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20">
-      {/* Background Decoration */}
       <div className="fixed inset-0 opacity-[0.03] pointer-events-none">
         <div className="absolute top-0 left-0 w-96 h-96 bg-teal-500 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500 rounded-full blur-3xl"></div>
       </div>
       
       <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
-        
-        {/* Error Toast Notification */}
-        {exportError && (
-          <div className="fixed top-24 right-6 z-50 animate-in slide-in-from-right duration-300">
-            <div className="bg-gradient-to-r from-red-500 to-rose-500 rounded-2xl shadow-2xl p-4 flex items-start gap-3 min-w-[320px] max-w-md">
-              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                <AlertCircle className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex-1">
-                <p className="text-white font-semibold text-sm">Gagal Export Laporan</p>
-                <p className="text-white/80 text-xs mt-0.5">{exportError.message}</p>
-                <p className="text-white/60 text-[10px] mt-1 font-mono">{exportError.hint}</p>
-              </div>
-              <button onClick={() => setExportError(null)} className="text-white/70 hover:text-white flex-shrink-0">
-                <X size="16" />
-              </button>
-            </div>
-          </div>
-        )}
         
         {/* Header */}
         <div className="relative mb-10 rounded-2xl overflow-visible">
@@ -384,7 +519,7 @@ function LaporanAkhir() {
                     <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 via-teal-800 to-blue-800 bg-clip-text text-transparent">
                       Laporan Akhir
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">Review dan validasi laporan akhir magang peserta</p>
+                    <p className="text-sm text-slate-500 mt-1">Lihat dan download laporan akhir magang peserta</p>
                   </div>
                 </div>
               </div>
@@ -393,38 +528,43 @@ function LaporanAkhir() {
               <div className="relative" ref={dropdownRef}>
                 <button 
                   onClick={() => setShowExportDropdown(!showExportDropdown)} 
-                  className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2"
+                  disabled={isExporting}
+                  className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2 disabled:opacity-50"
                 >
-                  <Download size="16" />
-                  <span>Export</span>
-                  <ChevronDown size="14" className={`transition-transform duration-200 ${showExportDropdown ? 'rotate-180' : ''}`} />
+                  {isExporting ? (
+                    <Loader2 size="16" className="animate-spin" />
+                  ) : (
+                    <Download size="16" />
+                  )}
+                  <span>{isExporting ? "Memproses..." : "Unduh Laporan"}</span>
+                  {!isExporting && <ChevronDown size="14" className={`transition-transform duration-200 ${showExportDropdown ? 'rotate-180' : ''}`} />}
                   <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                 </button>
                 
-                {showExportDropdown && (
+                {showExportDropdown && !isExporting && (
                   <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-[100]">
                     <button
-                      onClick={() => handleExport('excel')}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-teal-50 transition-colors border-b border-slate-100"
+                      onClick={handleExportExcel}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-emerald-50 transition-colors border-b border-slate-100"
                     >
                       <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
                         <FileText size="14" className="text-emerald-600" />
                       </div>
                       <div className="text-left">
                         <p className="font-medium">Export ke Excel</p>
-                        <p className="text-[10px] text-slate-400">Format .csv</p>
+                        <p className="text-[10px] text-slate-400">Format .xlsx</p>
                       </div>
                     </button>
                     <button
-                      onClick={() => handleExport('pdf')}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-teal-50 transition-colors"
+                      onClick={handleExportPDF}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-red-50 transition-colors"
                     >
                       <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
                         <FileText size="14" className="text-red-600" />
                       </div>
                       <div className="text-left">
                         <p className="font-medium">Export ke PDF</p>
-                        <p className="text-[10px] text-slate-400">Format .html</p>
+                        <p className="text-[10px] text-slate-400">Format .pdf</p>
                       </div>
                     </button>
                   </div>
@@ -435,7 +575,7 @@ function LaporanAkhir() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-5 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
           <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
             <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div className="relative p-4 text-center">
@@ -462,33 +602,6 @@ function LaporanAkhir() {
               <p className="text-[10px] text-slate-500 mt-1">Belum Upload</p>
             </div>
           </div>
-
-          <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-4 text-center">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center mx-auto mb-2"><CheckCircle size="16" className="text-emerald-600" /></div>
-              <p className="text-2xl font-bold text-emerald-600">{summary.disetujui}</p>
-              <p className="text-[10px] text-slate-500 mt-1">Disetujui</p>
-            </div>
-          </div>
-
-          <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-4 text-center">
-              <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center mx-auto mb-2"><Clock size="16" className="text-purple-600" /></div>
-              <p className="text-2xl font-bold text-purple-600">{summary.pending || 0}</p>
-              <p className="text-[10px] text-slate-500 mt-1">Menunggu</p>
-            </div>
-          </div>
-
-          <div className="relative group overflow-hidden bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="relative p-4 text-center">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm mx-auto mb-2"><AlertCircle size="16" className="text-white" /></div>
-              <p className="text-2xl font-bold text-white">{summary.revisi}</p>
-              <p className="text-[10px] text-white/80 mt-1">Revisi</p>
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/30"></div>
-          </div>
         </div>
 
         {/* Filter Bar */}
@@ -501,9 +614,6 @@ function LaporanAkhir() {
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-5 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-teal-400 cursor-pointer">
               <option value="all">Semua Status</option>
               <option value="uploaded">Sudah Upload</option>
-              <option value="pending">Menunggu Review</option>
-              <option value="approved">Disetujui</option>
-              <option value="revision">Revisi</option>
               <option value="not_uploaded">Belum Upload</option>
             </select>
           </div>
@@ -512,50 +622,46 @@ function LaporanAkhir() {
         {/* Results Count */}
         <div className="mb-5"><p className="text-sm text-slate-500 flex items-center gap-2"><Sparkles size="14" className="text-teal-500" />Menampilkan <span className="font-bold text-slate-700">{currentItems.length}</span> dari <span className="font-bold text-slate-700">{filteredLaporan.length}</span> laporan</p></div>
 
-        {/* Laporan Table */}
+        {/* Laporan Table - 🔥 HAPUS KOLOM DIVISI */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
                   <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Peserta</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Divisi</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tgl Upload</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Aksi</th>
-                </tr>
+                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {currentItems.map((item) => {
-                  const status = getStatusBadge(item.status);
+                  const status = getStatusBadge(item.status, item.uploaded_at);
                   const StatusIcon = status.icon;
-                  const isHovered = hoveredRow === item.id;
                   const isDownloading = downloading === item.id;
+                  const hasUploaded = item.uploaded_at || (item.status !== "not_uploaded");
                   
                   return (
-                    <tr key={item.id || item.peserta_id} className="transition-all duration-300 group cursor-pointer" onMouseEnter={() => setHoveredRow(item.id)} onMouseLeave={() => setHoveredRow(null)} style={{ backgroundColor: isHovered ? 'rgba(20, 184, 166, 0.02)' : 'transparent' }}>
+                    <tr key={item.id || item.peserta_id} className="transition-colors duration-200 hover:bg-slate-50/50">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
                             {item.peserta_nama?.charAt(0) || "P"}
                           </div>
                           <div>
-                            <p className="text-sm font-semibold text-slate-800 group-hover:text-teal-600 transition-colors">{item.peserta_nama}</p>
+                            <p className="text-sm font-semibold text-slate-800">{item.peserta_nama}</p>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-[9px] text-slate-400">{item.peserta_divisi}</span>
-                              <span className="text-[9px] text-slate-300">•</span>
-                              <span className="text-[9px] text-slate-400">Progress {item.progress || 0}%</span>
                             </div>
-                            {item.judul && <p className="text-[10px] text-slate-400 truncate max-w-[200px] mt-0.5">{item.judul}</p>}
+                            {item.judul && <p className="text-[10px] text-slate-400 truncate max-w-[250px] mt-0.5">{item.judul}</p>}
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4"><span className="text-xs font-medium text-slate-600">{item.peserta_divisi}</span></td>
+                       </td>
                       <td className="px-6 py-4">
-                        {item.uploaded_at ? (
+                        {hasUploaded ? (
                           <div className="flex items-center gap-2">
                             <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center"><Calendar size="12" className="text-teal-500" /></div>
-                            <div><span className="text-xs font-medium text-slate-700">{new Date(item.uploaded_at).toLocaleDateString('id-ID')}</span><p className="text-[10px] text-slate-400">{new Date(item.uploaded_at).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</p></div>
+                            <div><span className="text-xs font-medium text-slate-700">{item.uploaded_at ? new Date(item.uploaded_at).toLocaleDateString('id-ID') : '-'}</span><p className="text-[10px] text-slate-400">{item.uploaded_at ? new Date(item.uploaded_at).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}) : '-'}</p></div>
                           </div>
                         ) : (
                           <span className="text-xs text-slate-400 flex items-center gap-2"><div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center"><Clock size="12" className="text-slate-400" /></div>Belum upload</span>
@@ -563,38 +669,31 @@ function LaporanAkhir() {
                       </td>
                       <td className="px-6 py-4">
                         <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${status.bg} ${status.text} border ${status.border} shadow-sm`}><StatusIcon size="10" /><span className="text-[10px] font-semibold">{status.label}</span></div>
-                        {item.catatan && (item.status === "revision" || item.status === "approved") && (
-                          <div className="flex items-center gap-1.5 mt-1.5"><div className="p-0.5 rounded-full bg-purple-100"><MessageSquare size="8" className="text-purple-500" /></div><span className="text-[9px] text-slate-500 truncate max-w-[150px]">{item.catatan}</span></div>
-                        )}
-                        {item.nilai_akhir && item.status === "approved" && (
-                          <div className="flex items-center gap-1.5 mt-1.5"><div className="p-0.5 rounded-full bg-emerald-100"><Star size="8" className="text-emerald-500" /></div><span className="text-[9px] font-semibold text-emerald-600">Nilai: {item.nilai_akhir}</span></div>
-                        )}
                       </td>
                       <td className="px-6 py-4">
-                        {item.status === "not_uploaded" ? (
-                          <span className="text-xs text-slate-400 italic flex items-center gap-1.5"><div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center"><Clock size="10" className="text-slate-400" /></div>Menunggu upload</span>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            {item.file_url && (
-                              <>
-                                <button onClick={() => handlePreviewFile(item)} className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100 transition-all duration-200 hover:scale-105" title="Lihat Laporan"><Eye size="14" /></button>
-                                <button onClick={() => handleDownloadFile(item)} disabled={isDownloading} className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all duration-200 hover:scale-105 disabled:opacity-50" title="Download">
-                                  {isDownloading ? <Loader2 size="14" className="animate-spin" /> : <Download size="14" />}
-                                </button>
-                              </>
-                            )}
-                            {item.id && (
-                              <button onClick={() => handleOpenModal(item)} className={`relative overflow-hidden px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-300 flex items-center gap-1.5 ${
-                                item.status === "approved" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : 
-                                item.status === "revision" ? "bg-purple-100 text-purple-700 hover:bg-purple-200" :
-                                "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md hover:shadow-lg"
-                              }`}>
-                                {item.status === "approved" ? <CheckCircle size="12" /> : item.status === "revision" ? <AlertCircle size="12" /> : <Send size="12" />}
-                                {item.status === "approved" ? "Sudah" : item.status === "revision" ? "Revisi" : "Review"}
+                        <div className="flex items-center gap-2">
+                          {hasUploaded ? (
+                            <>
+                              <button 
+                                onClick={() => handlePreviewFile(item)} 
+                                className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100 transition-all duration-200" 
+                                title="Lihat Laporan"
+                              >
+                                <Eye size="14" />
                               </button>
-                            )}
-                          </div>
-                        )}
+                              <button 
+                                onClick={() => handleDownloadFile(item)} 
+                                disabled={isDownloading} 
+                                className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all duration-200 disabled:opacity-50" 
+                                title="Download"
+                              >
+                                {isDownloading ? <Loader2 size="14" className="animate-spin" /> : <Download size="14" />}
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic flex items-center gap-1.5"><div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center"><Clock size="10" className="text-slate-400" /></div>Menunggu upload</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -632,86 +731,86 @@ function LaporanAkhir() {
         <div className="mt-8 bg-gradient-to-r from-teal-50/90 via-blue-50/90 to-transparent backdrop-blur-sm rounded-2xl p-5 border border-teal-100 shadow-md">
           <div className="flex items-start gap-3">
             <div className="relative"><div className="absolute inset-0 bg-teal-500 rounded-xl blur-md opacity-30"></div><div className="relative p-2.5 bg-white rounded-xl shadow-md"><Shield size="16" className="text-teal-500" /></div></div>
-            <div><p className="text-sm font-bold text-teal-800">Informasi Laporan Akhir</p><p className="text-xs text-teal-700 mt-1 leading-relaxed">Laporan akhir yang sudah <span className="font-bold text-teal-800">disetujui</span> akan menjadi nilai final peserta magang. Pastikan laporan sudah lengkap dan sesuai dengan standar yang ditentukan sebelum memberikan persetujuan.</p></div>
+            <div><p className="text-sm font-bold text-teal-800">Informasi Laporan Akhir</p><p className="text-xs text-teal-700 mt-1 leading-relaxed">Halaman ini digunakan untuk melihat dan mendownload laporan akhir yang telah diupload oleh peserta magang. Klik ikon mata untuk preview laporan di halaman yang sama, atau ikon download untuk menyimpan file langsung ke perangkat Anda.</p></div>
           </div>
         </div>
       </div>
 
-      {/* Review Modal */}
-      {showModal && selectedLaporan && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-300">
-            <div className="sticky top-0 bg-white px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <div><div className="flex items-center gap-2"><div className="p-2 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 shadow-md"><FileText size="16" className="text-white" /></div><h3 className="text-lg font-bold text-slate-800">Review Laporan Akhir</h3></div><p className="text-sm text-slate-500 mt-1">{selectedLaporan.peserta_nama}</p></div>
-              <button onClick={() => setShowModal(false)} className="p-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200"><X size="18" /></button>
+      {/* Preview Modal */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[1000] p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-300">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-teal-50 to-blue-50 rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl shadow-md">
+                  <FileText size="16" className="text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800">Preview Laporan Akhir</h3>
+                  <p className="text-xs text-slate-500">{previewTitle}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    if (previewUrl && previewUrl.startsWith('blob:')) {
+                      URL.revokeObjectURL(previewUrl);
+                    }
+                    setShowPreviewModal(false);
+                    setPreviewUrl("");
+                  }} 
+                  className="p-2 rounded-lg bg-white/80 text-slate-500 hover:bg-slate-100 transition-colors"
+                >
+                  <X size="18" />
+                </button>
+              </div>
             </div>
             
-            <div className="p-6 space-y-6">
-              {/* Preview dan Download File */}
-              {selectedLaporan.file_url && (
-                <div className="bg-gradient-to-r from-slate-50 to-white rounded-xl p-4 border border-slate-100 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-teal-50"><FileText size="20" className="text-teal-500" /></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-slate-700">{selectedLaporan.judul || "Laporan Akhir"}</p>
-                      <p className="text-xs text-slate-400">Upload: {selectedLaporan.uploaded_at ? new Date(selectedLaporan.uploaded_at).toLocaleString('id-ID') : '-'}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => handlePreviewFile(selectedLaporan)} 
-                        className="px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-semibold hover:shadow-md transition-all duration-200 flex items-center gap-1.5"
-                      >
-                        <Eye size="12" />
-                        Preview
-                      </button>
-                      <button 
-                        onClick={() => handleDownloadFile(selectedLaporan)} 
-                        className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold hover:bg-teal-500 hover:text-white transition-all duration-200 flex items-center gap-1.5"
-                      >
-                        <Download size="12" />
-                        Download
-                      </button>
-                    </div>
+            <div className="flex-1 overflow-auto p-4 bg-slate-100">
+              {previewLoading ? (
+                <div className="flex items-center justify-center h-96">
+                  <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
+                  <span className="ml-3 text-slate-600">Memuat preview...</span>
+                </div>
+              ) : previewUrl ? (
+                previewUrl.toLowerCase().endsWith('.pdf') ? (
+                  <iframe 
+                    src={previewUrl} 
+                    className="w-full h-[70vh] rounded-lg border-0" 
+                    title="Preview Laporan"
+                  />
+                ) : previewUrl.toLowerCase().match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i) ? (
+                  <div className="flex items-center justify-center">
+                    <img src={previewUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-lg" />
                   </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-96 text-center">
+                    <FileText size="48" className="text-slate-400 mb-4" />
+                    <p className="text-slate-600 font-medium">File tidak dapat dipreview</p>
+                    <p className="text-sm text-slate-400 mt-1">Silakan download file untuk melihat isinya</p>
+                  </div>
+                )
+              ) : (
+                <div className="flex flex-col items-center justify-center h-96 text-center">
+                  <AlertCircle size="48" className="text-slate-400 mb-4" />
+                  <p className="text-slate-600 font-medium">Gagal memuat preview</p>
+                  <p className="text-sm text-slate-400 mt-1">Silakan coba lagi atau download file</p>
                 </div>
               )}
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                  <div className="p-1 rounded-lg bg-teal-50">
-                    <Activity size="12" className="text-teal-500" />
-                  </div>
-                  Status Review <span className="text-red-500">*</span>
-                </label>
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => setReviewForm(prev => ({ ...prev, status: "approved" }))} className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${reviewForm.status === "approved" ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md" : "border-2 border-slate-200 text-slate-600 hover:bg-slate-50"}`}><CheckCircle size="16" />Setujui</button>
-                  <button type="button" onClick={() => setReviewForm(prev => ({ ...prev, status: "revision" }))} className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${reviewForm.status === "revision" ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md" : "border-2 border-slate-200 text-slate-600 hover:bg-slate-50"}`}><AlertCircle size="16" />Revisi</button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                  <div className="p-1 rounded-lg bg-blue-50">
-                    <MessageSquare size="12" className="text-blue-500" />
-                  </div>
-                  Catatan
-                </label>
-                <textarea 
-                  value={reviewForm.catatan} 
-                  onChange={(e) => setReviewForm(prev => ({ ...prev, catatan: e.target.value }))} 
-                  rows="5" 
-                  placeholder="Berikan catatan atau masukan untuk perbaikan laporan..." 
-                  className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200 resize-none" 
-                />
-                <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1"><Sparkles size="10" />Catatan akan terlihat oleh peserta</p>
-              </div>
             </div>
-
-            <div className="sticky bottom-0 bg-white px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="px-5 py-2.5 border-2 border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-all duration-200">Batal</button>
-              <button onClick={handleSubmitReview} disabled={submitting || reviewForm.status === "pending"} className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-white font-semibold shadow-md hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-                <span className="relative z-10 flex items-center gap-2">{submitting ? <Loader2 size="16" className="animate-spin" /> : <Send size="16" />}{submitting ? "Menyimpan..." : "Simpan Review"}</span>
-                <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+            
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-2xl">
+              <button 
+                onClick={() => {
+                  if (previewUrl && previewUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(previewUrl);
+                  }
+                  setShowPreviewModal(false);
+                  setPreviewUrl("");
+                }} 
+                className="px-5 py-2 border-2 border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-white transition-colors"
+              >
+                Tutup
               </button>
             </div>
           </div>
@@ -721,11 +820,9 @@ function LaporanAkhir() {
       <style>{`
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         @keyframes zoom-in-95 { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        @keyframes slide-in-from-right { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
         .animate-in { animation-duration: 0.2s; animation-fill-mode: both; }
         .fade-in { animation-name: fade-in; }
         .zoom-in-95 { animation-name: zoom-in-95; }
-        .slide-in-from-right { animation-name: slide-in-from-right; }
       `}</style>
     </div>
   );

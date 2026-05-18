@@ -29,11 +29,10 @@ import MateriCOO from "./pages/coo/Materi";
 import AddMateriCOO from "./pages/coo/AddMateri";
 import EditMateriCOO from "./pages/coo/EditMateri";
 import DataManagement from "./pages/coo/DataManagement";
-import DetailPesertaCOO from "./pages/coo/DetailPeserta";
-import DetailMentorCOO from "./pages/coo/DetailMentor";
 import ProfileCOO from "./pages/coo/Profile";
 import SettingsCOO from "./pages/coo/Settings";
 import DaftarHasilKuis from "./pages/coo/DaftarHasilKuis";
+import KelolaSertifikat from "./pages/coo/KelolaSertifikat";
 
 // QUIZ COO PAGES
 import Quiz from "./pages/coo/Quiz";
@@ -55,7 +54,6 @@ import SettingsAttendance from "./pages/coo/SettingsAttendance";
 import MentorLayout from "./layouts/MentorLayout";
 import DashboardMentor from "./pages/mentor/Dashboard";
 import DaftarPesertaMentor from "./pages/mentor/DaftarPeserta";
-import PresensiMentor from "./pages/mentor/Presensi";
 import PresensiDailyReport from "./pages/mentor/PresensiDailyReport";
 import DaftarMateri from "./pages/mentor/DaftarMateri";
 import AddMateri from "./pages/mentor/AddMateri";
@@ -240,10 +238,9 @@ function App() {
           <Route path="laporan-presensi" element={<LaporanPresensiCOO />} />
           <Route path="settings-attendance" element={<SettingsAttendance />} />
           <Route path="data-management" element={<DataManagement />} />
-          <Route path="peserta/:id/detail" element={<DetailPesertaCOO />} />
-          <Route path="mentor/:id/detail" element={<DetailMentorCOO />} />
           <Route path="profile" element={<ProfileCOO />} />
           <Route path="settings" element={<SettingsCOO />} />
+          <Route path="/coo/kelola-sertifikat" element={<KelolaSertifikat />} />
         </Route>
 
         {/* ============================================ */}
@@ -262,7 +259,6 @@ function App() {
           <Route path="daftar-peserta" element={<DaftarPesertaMentor />} />
           <Route path="peserta" element={<DaftarPesertaMentor />} />
           <Route path="peserta/:id" element={<DetailPesertaMentor />} />
-          <Route path="presensi" element={<PresensiMentor />} />
           <Route path="presensi-daily-report" element={<PresensiDailyReport />} />
           
           {/* Materi Mentor Routes */}

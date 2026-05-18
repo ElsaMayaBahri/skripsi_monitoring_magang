@@ -19,7 +19,6 @@ import {
   AlertCircle,
   Clock,
   MoreHorizontal,
-  Search,
   Eye,
   TrendingUp,
   CheckCircle,
@@ -52,7 +51,6 @@ const Dashboard = () => {
   const [mentor, setMentor] = useState([]);
   const [divisiList, setDivisiList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
   const [recentActivities, setRecentActivities] = useState([]);
   const [quizProgress, setQuizProgress] = useState([]);
   const [attendanceData, setAttendanceData] = useState({
@@ -70,7 +68,7 @@ const Dashboard = () => {
     setLoading(true);
     
     try {
-      // Jalankan semua request secara paralel
+      // OPTIMIZATION: Semua request berjalan paralel dengan Promise.all
       const results = await Promise.allSettled([
         getAllUsers(),
         getAllDivisi(),
@@ -81,11 +79,6 @@ const Dashboard = () => {
       
       // Debug logs
       console.log("=== Dashboard Data Fetch Results ===");
-      console.log("Users result:", results[0]);
-      console.log("Divisi result:", results[1]);
-      console.log("Attendance result:", results[2]);
-      console.log("Quiz result:", results[3]);
-      console.log("Activities result:", results[4]);
       
       // Process Users Data (untuk peserta & mentor)
       const usersResult = results[0];
@@ -128,30 +121,18 @@ const Dashboard = () => {
         setAttendanceData({ hadir: 0, terlambat: 0, absen: 0, persentase: 0 });
       }
       
-      // ==================== FIXED: Process Quiz Data ====================
+      // Process Quiz Data
       const quizResult = results[3];
-      console.log("Processing quiz result...");
-      console.log("Quiz result status:", quizResult.status);
-      console.log("Quiz result value:", quizResult.value);
-      
-      // Cek apakah quiz result berhasil dan memiliki data
       if (quizResult.status === 'fulfilled' && quizResult.value) {
-        // Ambil data dari response - bisa berupa array langsung atau di dalam property data
         let quizData = null;
         
         if (Array.isArray(quizResult.value)) {
-          // Jika response langsung berupa array
           quizData = quizResult.value;
         } else if (quizResult.value.data && Array.isArray(quizResult.value.data)) {
-          // Jika response berbentuk { success: true, data: [...] }
           quizData = quizResult.value.data;
         } else if (quizResult.value.results && Array.isArray(quizResult.value.results)) {
-          // Alternatif lain
           quizData = quizResult.value.results;
         }
-        
-        console.log("Extracted quizData:", quizData);
-        console.log("QuizData length:", quizData?.length);
         
         if (quizData && quizData.length > 0) {
           const divisiProgressMap = {};
@@ -179,14 +160,11 @@ const Dashboard = () => {
             totalSubmissions: data.total
           }));
           
-          console.log("Generated progressArray:", progressArray);
           setQuizProgress(progressArray);
         } else {
-          console.log("Quiz data kosong atau tidak ada data");
           setQuizProgress([]);
         }
       } else {
-        console.log("Quiz result failed or no data:", quizResult);
         setQuizProgress([]);
       }
       
@@ -195,7 +173,6 @@ const Dashboard = () => {
       if (activitiesResult.status === 'fulfilled' && activitiesResult.value?.success && activitiesResult.value?.data && activitiesResult.value.data.length > 0) {
         setRecentActivities(activitiesResult.value.data);
       } else {
-        console.log("Belum ada data aktivitas di database");
         setRecentActivities([]);
       }
       
@@ -210,7 +187,7 @@ const Dashboard = () => {
     } finally {
       setTimeout(() => {
         setLoading(false);
-      }, 500);
+      }, 300);
     }
   };
 
@@ -218,15 +195,18 @@ const Dashboard = () => {
   const totalMentor = mentor.length;
   const totalPeserta = peserta.length;
 
+  // GREETING YANG DIPERBAIKI - sesuai waktu Indonesia
   const getCurrentGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return "Selamat Pagi";
-    if (hour < 18) return "Selamat Siang";
-    return "Selamat Malam";
+    if (hour >= 3 && hour < 11) return "Selamat Pagi";      // 03:00 - 10:59
+    if (hour >= 11 && hour < 15) return "Selamat Siang";    // 11:00 - 14:59
+    if (hour >= 15 && hour < 19) return "Selamat Sore";     // 15:00 - 18:59
+    return "Selamat Malam";                                  // 19:00 - 02:59
   };
 
+  // DEFINE belumAbsen dan filteredBelumAbsen
   const belumAbsen = peserta.filter(p => !p.status).slice(0, 5);
-  const completionRate = peserta.length > 0 ? Math.round((peserta.filter(p => p.status).length / peserta.length) * 100) : 0;
+  const filteredBelumAbsen = belumAbsen; // Karena tidak ada search, langsung assign saja
 
   // Navigation handlers
   const handleNavigateToDataManagement = () => {
@@ -258,18 +238,12 @@ const Dashboard = () => {
     <div className="group relative overflow-hidden bg-white rounded-2xl shadow-lg p-6 animate-pulse">
       <div className="flex items-center justify-between mb-4">
         <div className="w-14 h-14 bg-slate-200 rounded-2xl"></div>
-        <div className="w-16 h-6 bg-slate-200 rounded-full"></div>
       </div>
       <div className="space-y-2">
         <div className="h-8 bg-slate-200 rounded w-20"></div>
         <div className="h-4 bg-slate-200 rounded w-28"></div>
       </div>
-      <div className="mt-4 pt-3 border-t border-slate-100">
-        <div className="flex items-center justify-between">
-          <div className="h-2 bg-slate-200 rounded w-12"></div>
-          <div className="h-3 bg-slate-200 rounded w-8"></div>
-        </div>
-      </div>
+      <div className="mt-4 pt-3 border-t border-slate-100"></div>
     </div>
   );
 
@@ -283,7 +257,6 @@ const Dashboard = () => {
             <div className="h-3 bg-slate-200 rounded w-32"></div>
           </div>
         </div>
-        <div className="w-24 h-6 bg-slate-200 rounded-full"></div>
       </div>
       <div className="flex flex-col md:flex-row items-center gap-8">
         <div className="w-36 h-36 bg-slate-200 rounded-full"></div>
@@ -312,7 +285,6 @@ const Dashboard = () => {
             <div className="h-3 bg-slate-200 rounded w-36"></div>
           </div>
         </div>
-        <div className="w-24 h-6 bg-slate-200 rounded-full"></div>
       </div>
       <div className="space-y-4">
         {[1, 2, 3].map(i => (
@@ -351,10 +323,6 @@ const Dashboard = () => {
                   <div className="h-4 bg-slate-200 rounded w-32"></div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-64 h-10 bg-slate-200 rounded-xl"></div>
-                <div className="w-11 h-11 bg-slate-200 rounded-xl"></div>
-              </div>
             </div>
           </div>
           
@@ -381,7 +349,6 @@ const Dashboard = () => {
                   <div className="h-3 bg-slate-200 rounded w-32"></div>
                 </div>
               </div>
-              <div className="w-32 h-8 bg-slate-200 rounded-xl"></div>
             </div>
             <div className="space-y-3">
               {[1, 2, 3].map(i => (
@@ -401,12 +368,6 @@ const Dashboard = () => {
     );
   }
 
-  // Filter user berdasarkan search
-  const filteredBelumAbsen = belumAbsen.filter(u =>
-    u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.divisi?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/40">
       <div className="fixed inset-0 opacity-[0.03] pointer-events-none">
@@ -416,7 +377,7 @@ const Dashboard = () => {
 
       <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
         
-        {/* Header Section */}
+        {/* Header Section - Tanpa Search Bar dan Avatar */}
         <div className="mb-8">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div className="relative">
@@ -441,30 +402,10 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
-            
-            <div className="flex items-center gap-3">
-              <div className="relative group">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={16} />
-                <input
-                  type="text"
-                  placeholder="Cari peserta, mentor..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 w-64 text-sm text-slate-700 shadow-sm transition-all"
-                />
-              </div>
-              
-              <div className="relative group cursor-pointer">
-                <div className="w-11 h-11 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md group-hover:scale-105 transition-transform ring-2 ring-white/20">
-                  {mentor.length > 0 ? mentor[0]?.name?.charAt(0) || "C" : "C"}
-                </div>
-                <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white shadow-sm"></div>
-              </div>
-            </div>
           </div>
         </div>
 
-        {/* Stats Cards - Clickable */}
+        {/* Stats Cards - Tanpa badge tambahan */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {/* Card Peserta */}
           <div 
@@ -478,28 +419,15 @@ const Dashboard = () => {
                 <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300">
                   <Users className="w-7 h-7 text-white" />
                 </div>
-                <div className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 rounded-full">
-                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-                  <span className="text-[11px] font-semibold text-emerald-600">Aktif</span>
-                </div>
               </div>
               <div className="space-y-1">
                 <p className="text-3xl font-bold text-slate-800">{totalPeserta}</p>
                 <p className="text-sm text-slate-500">Total Peserta</p>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1 w-12 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"></div>
-                    <span className="text-[11px] text-slate-400">Kehadiran</span>
-                  </div>
-                  <span className="text-[11px] font-semibold text-indigo-600">{completionRate}%</span>
-                </div>
-              </div>
             </div>
           </div>
 
-          {/* Card Mentor */}
+          {/* Card Mentor - Tanpa badge */}
           <div 
             onClick={() => navigate("/coo/data-management", { state: { activeTab: "mentor" } })}
             className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
@@ -511,28 +439,15 @@ const Dashboard = () => {
                 <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300">
                   <UserCheck className="w-7 h-7 text-white" />
                 </div>
-                <div className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 rounded-full">
-                  <TrendingUp className="w-3 h-3 text-emerald-500" />
-                  <span className="text-[11px] font-semibold text-emerald-600">+12%</span>
-                </div>
               </div>
               <div className="space-y-1">
                 <p className="text-3xl font-bold text-slate-800">{totalMentor}</p>
-                <p className="text-sm text-slate-500">Mentor</p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1 w-12 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full"></div>
-                    <span className="text-[11px] text-slate-400">Rasio</span>
-                  </div>
-                  <span className="text-[11px] font-semibold text-emerald-600">1:{totalPeserta > 0 && totalMentor > 0 ? Math.ceil(totalPeserta / totalMentor) : 0}</span>
-                </div>
+                <p className="text-sm text-slate-500">Total Mentor</p>
               </div>
             </div>
           </div>
 
-          {/* Card Divisi */}
+          {/* Card Divisi - Tanpa badge */}
           <div 
             onClick={() => navigate("/coo/data-management", { state: { activeTab: "divisi" } })}
             className="group relative overflow-hidden bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
@@ -544,23 +459,10 @@ const Dashboard = () => {
                 <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300">
                   <Building2 className="w-7 h-7 text-white" />
                 </div>
-                <div className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 rounded-full">
-                  <Star className="w-3 h-3 text-slate-500" />
-                  <span className="text-[11px] font-semibold text-slate-600">Aktif</span>
-                </div>
               </div>
               <div className="space-y-1">
                 <p className="text-3xl font-bold text-slate-800">{totalDivisi}</p>
-                <p className="text-sm text-slate-500">Divisi Aktif</p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1 w-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
-                    <span className="text-[11px] text-slate-400">Program</span>
-                  </div>
-                  <span className="text-[11px] font-semibold text-purple-600">Berjalan</span>
-                </div>
+                <p className="text-sm text-slate-500">Total Divisi</p>
               </div>
             </div>
           </div>
@@ -819,18 +721,18 @@ const Dashboard = () => {
                           </div>
                           <span className="font-semibold text-slate-800 text-sm">{u.name}</span>
                         </div>
-                       </td>
+                      </td>
                       <td className="px-6 py-3">
                         <span className="inline-block px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-[11px] font-medium">
                           {u.divisi || "-"}
                         </span>
-                       </td>
+                      </td>
                       <td className="px-6 py-3">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
                           <span className="text-amber-600 text-xs font-medium">Belum Absen</span>
                         </div>
-                       </td>
+                      </td>
                       <td className="px-6 py-3">
                         <button 
                           onClick={() => handleRemindPeserta(u.name)}
@@ -839,7 +741,7 @@ const Dashboard = () => {
                           <Bell size={10} />
                           Ingatkan
                         </button>
-                       </td>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

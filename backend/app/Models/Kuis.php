@@ -19,7 +19,8 @@ class Kuis extends Model
         'divisi',
         'durasi',
         'passing',
-        'status',        // 🔥 TAMBAHKAN INI - PENTING!
+        'level',
+        'status',
         'total_soal',
         'questions',
         'peserta',
@@ -75,6 +76,15 @@ class Kuis extends Model
         return $this->passing ?? 75;
     }
 
+    // 🔥 HAPUS ACCESSOR LEVEL INI!
+    // /**
+    //  * Accessor untuk level (kompatibel dengan frontend)
+    //  */
+    // public function getLevelAttribute()
+    // {
+    //     return $this->level ?? 1;
+    // }
+
     /**
      * Relasi ke SoalKuis
      */
@@ -120,19 +130,7 @@ class Kuis extends Model
     }
 
     /**
-     * Get status kuis dinamis berdasarkan tanggal
-     * OVERRIDE: Ini akan mengabaikan nilai status di database
-     */
-    // public function getStatusAttribute()
-    // {
-    //     if ($this->is_belum_mulai) return 'akan_datang';
-    //     if ($this->is_aktif) return 'aktif';
-    //     return 'selesai';
-    // }
-
-    /**
      * Get status kuis dari database (manual)
-     * 🔥 PERBAIKAN: Gunakan status dari database, bukan dari tanggal
      */
     public function getStatusManualAttribute()
     {

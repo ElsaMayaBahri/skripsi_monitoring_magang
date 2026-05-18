@@ -18,16 +18,26 @@ class MateriPelatihanController extends Controller
     public function index()
     {
         try {
-            $materi = MateriPelatihan::orderBy('created_at', 'desc')->get();
-
-            // Tambahkan URL file yang bisa diakses
-            $materi = $materi->map(function ($item) {
-                return $this->addFileUrl($item);
-            });
+            // Load relasi divisi
+            $materi = MateriPelatihan::with('divisiRelasi')->orderBy('created_at', 'desc')->get();
 
             return response()->json([
                 'success' => true,
-                'data' => $materi
+                'data' => $materi->map(function ($item) {
+                    return [
+                        'id_materi_pelatihan' => $item->id_materi_pelatihan,
+                        'judul' => $item->judul,
+                        'deskripsi' => $item->deskripsi,
+                        'id_divisi' => $item->id_divisi,
+                        'divisi' => $item->divisi_nama,
+                        'kategori' => $item->kategori,
+                        'file_materi' => $item->file_materi,
+                        'file_url' => $item->file_url,
+                        'views' => $item->views,
+                        'created_at' => $item->created_at,
+                        'updated_at' => $item->updated_at,
+                    ];
+                })
             ], 200);
         } catch (\Exception $e) {
             Log::error('Error index materi: ' . $e->getMessage());
@@ -45,7 +55,6 @@ class MateriPelatihanController extends Controller
     private function addFileUrl($materi)
     {
         if ($materi->file_materi) {
-            // Get filename from path
             $filename = basename($materi->file_materi);
             $materi->file_materi_url = url('/api/materi-file/' . $filename);
             $materi->file_url = url('/api/materi-file/' . $filename);
@@ -77,7 +86,7 @@ class MateriPelatihanController extends Controller
             $validator = Validator::make($request->all(), [
                 'judul' => 'required|string|max:150',
                 'deskripsi' => 'nullable|string',
-                'divisi' => 'nullable|string|max:100',
+                'id_divisi' => 'nullable|exists:divisis,id_divisi',
                 'kategori' => 'nullable|string|max:50',
                 'file' => [
                     'required',
@@ -133,18 +142,29 @@ class MateriPelatihanController extends Controller
             $materi = MateriPelatihan::create([
                 'judul' => $request->judul,
                 'deskripsi' => $request->deskripsi,
-                'divisi' => $request->divisi,
+                'id_divisi' => $request->id_divisi,
                 'kategori' => $request->kategori,
                 'file_materi' => $filePath,
                 'views' => 0
             ]);
 
-            $materi = $this->addFileUrl($materi);
+            // Load relasi divisi untuk response
+            $materi->load('divisiRelasi');
 
             return response()->json([
                 'success' => true,
                 'message' => 'Materi berhasil ditambahkan',
-                'data' => $materi
+                'data' => [
+                    'id_materi_pelatihan' => $materi->id_materi_pelatihan,
+                    'judul' => $materi->judul,
+                    'deskripsi' => $materi->deskripsi,
+                    'id_divisi' => $materi->id_divisi,
+                    'divisi' => $materi->divisi_nama,
+                    'kategori' => $materi->kategori,
+                    'file_url' => $materi->file_url,
+                    'views' => $materi->views,
+                    'created_at' => $materi->created_at,
+                ]
             ], 201);
         } catch (\Exception $e) {
             Log::error('Error store materi: ' . $e->getMessage());
@@ -161,13 +181,23 @@ class MateriPelatihanController extends Controller
     public function show($id)
     {
         try {
-            $materi = MateriPelatihan::findOrFail($id);
+            $materi = MateriPelatihan::with('divisiRelasi')->findOrFail($id);
             $materi->increment('views');
-            $materi = $this->addFileUrl($materi);
-
+            
             return response()->json([
                 'success' => true,
-                'data' => $materi
+                'data' => [
+                    'id_materi_pelatihan' => $materi->id_materi_pelatihan,
+                    'judul' => $materi->judul,
+                    'deskripsi' => $materi->deskripsi,
+                    'id_divisi' => $materi->id_divisi,
+                    'divisi' => $materi->divisi_nama,
+                    'kategori' => $materi->kategori,
+                    'file_materi' => $materi->file_materi,
+                    'file_url' => $materi->file_url,
+                    'views' => $materi->views,
+                    'created_at' => $materi->created_at,
+                ]
             ], 200);
         } catch (\Exception $e) {
             Log::error('Error show materi: ' . $e->getMessage());
@@ -189,7 +219,7 @@ class MateriPelatihanController extends Controller
             $validator = Validator::make($request->all(), [
                 'judul' => 'sometimes|string|max:150',
                 'deskripsi' => 'nullable|string',
-                'divisi' => 'nullable|string|max:100',
+                'id_divisi' => 'nullable|exists:divisis,id_divisi',
                 'kategori' => 'nullable|string|max:50',
                 'file' => [
                     'nullable',
@@ -231,16 +261,26 @@ class MateriPelatihanController extends Controller
 
             if ($request->has('judul')) $materi->judul = $request->judul;
             if ($request->has('deskripsi')) $materi->deskripsi = $request->deskripsi;
-            if ($request->has('divisi')) $materi->divisi = $request->divisi;
+            if ($request->has('id_divisi')) $materi->id_divisi = $request->id_divisi;
             if ($request->has('kategori')) $materi->kategori = $request->kategori;
 
             $materi->save();
-            $materi = $this->addFileUrl($materi);
+            $materi->load('divisiRelasi');
 
             return response()->json([
                 'success' => true,
                 'message' => 'Materi berhasil diupdate',
-                'data' => $materi
+                'data' => [
+                    'id_materi_pelatihan' => $materi->id_materi_pelatihan,
+                    'judul' => $materi->judul,
+                    'deskripsi' => $materi->deskripsi,
+                    'id_divisi' => $materi->id_divisi,
+                    'divisi' => $materi->divisi_nama,
+                    'kategori' => $materi->kategori,
+                    'file_url' => $materi->file_url,
+                    'views' => $materi->views,
+                    'created_at' => $materi->created_at,
+                ]
             ], 200);
         } catch (\Exception $e) {
             Log::error('Error update materi: ' . $e->getMessage());
@@ -281,20 +321,29 @@ class MateriPelatihanController extends Controller
     /**
      * Get materi by divisi
      */
-    public function getByDivisi($divisi)
+    public function getByDivisi($divisiId)
     {
         try {
-            $materi = MateriPelatihan::where('divisi', $divisi)
+            $materi = MateriPelatihan::with('divisiRelasi')
+                ->where('id_divisi', $divisiId)
                 ->orderBy('created_at', 'desc')
                 ->get();
 
-            $materi = $materi->map(function ($item) {
-                return $this->addFileUrl($item);
-            });
-
             return response()->json([
                 'success' => true,
-                'data' => $materi
+                'data' => $materi->map(function ($item) {
+                    return [
+                        'id_materi_pelatihan' => $item->id_materi_pelatihan,
+                        'judul' => $item->judul,
+                        'deskripsi' => $item->deskripsi,
+                        'id_divisi' => $item->id_divisi,
+                        'divisi' => $item->divisi_nama,
+                        'kategori' => $item->kategori,
+                        'file_url' => $item->file_url,
+                        'views' => $item->views,
+                        'created_at' => $item->created_at,
+                    ];
+                })
             ], 200);
         } catch (\Exception $e) {
             Log::error('Error getByDivisi materi: ' . $e->getMessage());

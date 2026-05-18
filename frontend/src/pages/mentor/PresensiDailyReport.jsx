@@ -67,8 +67,6 @@ function PresensiDailyReport() {
   const [hoveredRow, setHoveredRow] = useState(null);
   
   const [showExportDropdown, setShowExportDropdown] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [exportType, setExportType] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
   const dropdownRef = useRef(null);
   
@@ -220,31 +218,6 @@ function PresensiDailyReport() {
     }
   };
 
-  const showConfirmExport = (type) => {
-    setExportType(type);
-    setShowConfirmModal(true);
-    setShowExportDropdown(false);
-  };
-
-  const executeExport = async () => {
-    setShowConfirmModal(false);
-    setIsExporting(true);
-    
-    try {
-      if (exportType === 'excel') {
-        handleExportExcel();
-      } else if (exportType === 'pdf') {
-        handleExportPDF();
-      }
-    } catch (error) {
-      console.error("Export error:", error);
-      alert("Gagal mengexport laporan");
-    } finally {
-      setIsExporting(false);
-      setExportType(null);
-    }
-  };
-
   const getNamaPeserta = (item) => {
     return item.peserta_nama || item.nama || "-";
   };
@@ -253,209 +226,271 @@ function PresensiDailyReport() {
     return item.peserta_divisi || item.divisi || "-";
   };
 
-  // src/pages/mentor/PresensiDailyReport.jsx
-
-// Ganti fungsi formatDateTime dengan ini
-const formatDateTime = (dateTime) => {
-  if (!dateTime) return "-";
-  
-  // Jika data sudah dalam format waktu saja (HH:MM atau HH:MM:SS)
-  if (typeof dateTime === 'string') {
-    // Cek format HH:MM (misal "08:30")
-    if (dateTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)) {
-      return dateTime;
+  // Format tanggal untuk PDF - FUNGSI YANG HILANG (DITAMBAHKAN)
+  const formatDatePDF = (dateString) => {
+    if (!dateString) return "-";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "-";
+      return date.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      });
+    } catch {
+      return "-";
     }
-    // Cek format HH:MM:SS (misal "08:30:00")
-    if (dateTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/)) {
-      // Ambil hanya jam dan menit
-      const parts = dateTime.split(':');
-      return `${parts[0]}:${parts[1]}`;
-    }
-  }
-  
-  // Coba parse sebagai Date object
-  try {
-    const date = new Date(dateTime);
-    if (isNaN(date.getTime())) return "-";
-    
-    // Format hanya jam:menit
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
-  } catch {
-    return "-";
-  }
-};
+  };
 
-// Ganti fungsi formatDateOnly dengan ini
-const formatDateOnly = (dateTime) => {
-  if (!dateTime) return "-";
-  
-  // Jika data sudah dalam format tanggal (YYYY-MM-DD)
-  if (typeof dateTime === 'string' && dateTime.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    const [year, month, day] = dateTime.split('-');
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    return `${day} ${months[parseInt(month) - 1]} ${year}`;
-  }
-  
-  try {
-    const date = new Date(dateTime);
-    if (isNaN(date.getTime())) return "-";
-    return date.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
+  // Escape HTML untuk keamanan
+  const escapeHtml = (text) => {
+    if (!text) return '';
+    return String(text).replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
     });
-  } catch {
-    return "-";
-  }
-};
+  };
 
+  // Format waktu
+  const formatDateTime = (dateTime) => {
+    if (!dateTime) return "-";
+    
+    if (typeof dateTime === 'string') {
+      if (dateTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)) {
+        return dateTime;
+      }
+      if (dateTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/)) {
+        const parts = dateTime.split(':');
+        return `${parts[0]}:${parts[1]}`;
+      }
+    }
+    
+    try {
+      const date = new Date(dateTime);
+      if (isNaN(date.getTime())) return "-";
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      return `${hours}:${minutes}`;
+    } catch {
+      return "-";
+    }
+  };
+
+  // Format tanggal
+  const formatDateOnly = (dateTime) => {
+    if (!dateTime) return "-";
+    
+    if (typeof dateTime === 'string' && dateTime.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = dateTime.split('-');
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      return `${day} ${months[parseInt(month) - 1]} ${year}`;
+    }
+    
+    try {
+      const date = new Date(dateTime);
+      if (isNaN(date.getTime())) return "-";
+      return date.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch {
+      return "-";
+    }
+  };
+
+  // EXPORT EXCEL - LANGSUNG TANPA POPUP
   const handleExportExcel = () => {
-  const exportData = filteredReports.map((item, index) => ({
-    "No": index + 1,
-    "Nama Peserta": getNamaPeserta(item),
-    "Divisi": getDivisiPeserta(item),
-    "Tanggal": formatDateOnly(item.tanggal || selectedDate),
-    "Check-In": formatDateTime(item.check_in),
-    "Check-Out": formatDateTime(item.check_out),
-    "Status Kehadiran": item.status_kehadiran || "-",
-    "Aktivitas": item.aktivitas || "-",
-    "Kendala": item.kendala || "-",
-    "Lokasi": item.lokasi || "-",
-    "Device": item.device || "-"
-  }));
+    if (!filteredReports || filteredReports.length === 0) {
+      alert("Tidak ada data untuk diekspor");
+      return;
+    }
+    
+    setIsExporting(true);
+    setShowExportDropdown(false);
+    
+    try {
+      const exportData = filteredReports.map((item, index) => ({
+        "No": index + 1,
+        "Nama Peserta": getNamaPeserta(item),
+        "Divisi": getDivisiPeserta(item),
+        "Tanggal": formatDateOnly(item.tanggal || selectedDate),
+        "Check-In": formatDateTime(item.check_in),
+        "Check-Out": formatDateTime(item.check_out),
+        "Status Kehadiran": item.status_kehadiran || "-",
+        "Aktivitas": item.aktivitas || "-",
+        "Kendala": item.kendala || "-",
+        "Lokasi": item.lokasi || "-",
+        "Device": item.device || "-"
+      }));
 
-  const ws = XLSX.utils.json_to_sheet(exportData);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Rekap Daily Report");
-  
-  const fileName = `daily_report_${filterType === "single" ? selectedDate : `${startDate}_to_${endDate}`}.xlsx`;
-  XLSX.writeFile(wb, fileName);
-  // ALERT DIHAPUS - langsung download
-};
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Rekap Daily Report");
+      
+      const fileName = `daily_report_${filterType === "single" ? selectedDate : `${startDate}_to_${endDate}`}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (error) {
+      console.error("Export Excel error:", error);
+      alert("Gagal mengexport ke Excel: " + error.message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
-// Ganti fungsi handleExportPDF dengan ini (hapus alert)
-const handleExportPDF = () => {
-  const today = new Date().toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  });
+  // EXPORT PDF - LANGSUNG TANPA POPUP (DIPERBAIKI)
+  const handleExportPDF = () => {
+    if (!filteredReports || filteredReports.length === 0) {
+      alert("Tidak ada data untuk diekspor");
+      return;
+    }
     
-     const startDateFormatted = filterType === "single" ? formatDatePDF(selectedDate) : (startDate ? formatDatePDF(startDate) : "Semua");
-  const endDateFormatted = filterType === "single" ? formatDatePDF(selectedDate) : (endDate ? formatDatePDF(endDate) : "Semua");
-  
-  const element = document.createElement('div');
-  element.style.padding = '30px';
-  element.style.fontFamily = "'Times New Roman', Arial, sans-serif";
-  element.style.backgroundColor = 'white';
-  
-  element.innerHTML = `
-    <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #1e3a5f; padding-bottom: 20px;">
-      <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
-        <img src="${logo}" alt="Logo Perusahaan" style="height: 60px; width: auto;" />
-        <div style="text-align: left;">
-          <h1 style="color: #1e3a5f; margin: 0; font-size: 24px;">PT KUANTA PRIMA INDONESIA</h1>
-          <p style="color: #64748b; margin: 5px 0 0 0; font-size: 10px;">Jl. Gayungsari IV No. 33 Surabaya</p>
-          <p style="color: #64748b; margin: 2px 0 0 0; font-size: 10px;">+62 821-4338-0273 | partnership@kuanta.id</p>
-        </div>
-      </div>
-    </div>
+    setIsExporting(true);
+    setShowExportDropdown(false);
     
-    <div style="text-align: center; margin-bottom: 25px;">
-      <h2 style="color: #1e293b; margin: 0; font-size: 20px;">LAPORAN DAILY REPORT PESERTA MAGANG</h2>
-      <p style="color: #64748b; margin: 8px 0 0 0; font-size: 12px;">Periode: ${startDateFormatted} s/d ${endDateFormatted}</p>
-    </div>
-    
-    <div style="margin-bottom: 20px; text-align: right;">
-      <p style="color: #94a3b8; font-size: 10px; margin: 0;">Dicetak: ${today}</p>
-    </div>
-    
-    <div style="display: flex; gap: 15px; margin-bottom: 25px; padding: 15px; background: #f8fafc; border-radius: 8px;">
-      <div style="flex: 1; text-align: center;">
-        <div style="font-size: 22px; font-weight: bold; color: #2563eb;">${summary.total}</div>
-        <div style="font-size: 10px; color: #64748b;">Total Peserta</div>
-      </div>
-      <div style="flex: 1; text-align: center;">
-        <div style="font-size: 22px; font-weight: bold; color: #16a34a;">${summary.sudahMengisi}</div>
-        <div style="font-size: 10px; color: #64748b;">Sudah Mengisi</div>
-      </div>
-      <div style="flex: 1; text-align: center;">
-        <div style="font-size: 22px; font-weight: bold; color: #d97706;">${summary.belumMengisi}</div>
-        <div style="font-size: 10px; color: #64748b;">Belum Mengisi</div>
-      </div>
-      <div style="flex: 1; text-align: center;">
-        <div style="font-size: 22px; font-weight: bold; color: #7c3aed;">${summary.persentase}%</div>
-        <div style="font-size: 10px; color: #64748b;">Partisipasi</div>
-      </div>
-    </div>
-    
-    <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
-      <thead>
-        <tr>
-          <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">No</th>
-          <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: left;">Nama Peserta</th>
-          <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: left;">Divisi</th>
-          <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Tanggal</th>
-          <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Check-In</th>
-          <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Check-Out</th>
-          <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: center;">Status</th>
-          <th style="border: 1px solid #cbd5e1; padding: 10px; background-color: #1e3a5f; color: white; text-align: left;">Aktivitas</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${filteredReports.map((item, index) => `
-          <tr>
+    try {
+      const today = new Date().toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+      
+      const startDateFormatted = filterType === "single" 
+        ? formatDatePDF(selectedDate) 
+        : (startDate ? formatDatePDF(startDate) : "Semua");
+      const endDateFormatted = filterType === "single" 
+        ? formatDatePDF(selectedDate) 
+        : (endDate ? formatDatePDF(endDate) : "Semua");
+      
+      const element = document.createElement('div');
+      element.style.padding = '30px';
+      element.style.fontFamily = "'Times New Roman', Arial, sans-serif";
+      element.style.backgroundColor = 'white';
+      element.style.width = '100%';
+      
+      // Build table rows
+      let tableRows = '';
+      filteredReports.forEach((item, index) => {
+        const aktivitasText = (item.aktivitas || '-').substring(0, 100);
+        tableRows += `
+          <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${index + 1}</td>
-            <td style="border: 1px solid #cbd5e1; padding: 8px;">${getNamaPeserta(item)}</td>
-            <td style="border: 1px solid #cbd5e1; padding: 8px;">${getDivisiPeserta(item)}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 8px;">${escapeHtml(getNamaPeserta(item))}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 8px;">${escapeHtml(getDivisiPeserta(item))}</td>
             <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${formatDateOnly(item.tanggal || selectedDate)}</td>
             <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${formatDateTime(item.check_in)}</td>
             <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${formatDateTime(item.check_out)}</td>
             <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.status_kehadiran || '-'}</td>
-            <td style="border: 1px solid #cbd5e1; padding: 8px;">${item.aktivitas || '-'}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 8px;">${escapeHtml(aktivitasText)}${(item.aktivitas || '').length > 100 ? '...' : ''}</td>
           </tr>
-        `).join('')}
-        ${filteredReports.length === 0 ? `
+        `;
+      });
+      
+      if (filteredReports.length === 0) {
+        tableRows = `
           <tr>
             <td colspan="8" style="border: 1px solid #cbd5e1; padding: 40px; text-align: center; color: #94a3b8;">Tidak ada data daily report</td>
           </tr>
-        ` : ''}
-      </tbody>
-    </table>
-    
-    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #cbd5e1;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-        <div style="text-align: left;">
-          <p style="font-size: 9px; color: #94a3b8; margin: 0;">Dokumen ini dicetak secara elektronik</p>
-          <p style="font-size: 9px; color: #94a3b8; margin: 2px 0 0 0;">&copy; ${new Date().getFullYear()} PT Kuanta Prima Indonesia - All Rights Reserved</p>
-        </div>
-        <div style="text-align: right;">
-          <div style="margin-top: 30px;">
-            <p style="font-size: 10px; margin: 0;">Surabaya, ${today}</p>
-            <p style="font-size: 10px; margin: 20px 0 0 0;">Mentor</p>
-            <div style="margin-top: 30px;">
-              <p style="font-size: 10px; margin: 0; text-decoration: underline;">(_____________________)</p>
-              <p style="font-size: 9px; color: #64748b; margin: 2px 0 0 0;">Nama Lengkap & Tanda Tangan</p>
+        `;
+      }
+      
+      element.innerHTML = `
+        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #1e3a5f; padding-bottom: 20px;">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+            <img src="${logo}" alt="Logo Perusahaan" style="height: 60px; width: auto;" />
+            <div style="text-align: left;">
+              <h1 style="color: #1e3a5f; margin: 0; font-size: 24px;">PT KUANTA PRIMA INDONESIA</h1>
+              <p style="color: #64748b; margin: 5px 0 0 0; font-size: 10px;">Jl. Gayungsari IV No. 33 Surabaya</p>
+              <p style="color: #64748b; margin: 2px 0 0 0; font-size: 10px;">+62 821-4338-0273 | partnership@kuanta.id</p>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  `;
-  
-  const opt = {
-    margin: [0.5, 0.5, 0.5, 0.5],
-    filename: `daily_report_${filterType === "single" ? selectedDate : `${startDate}_to_${endDate}`}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-    jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+        
+        <div style="text-align: center; margin-bottom: 25px;">
+          <h2 style="color: #1e293b; margin: 0; font-size: 20px;">LAPORAN DAILY REPORT PESERTA MAGANG</h2>
+          <p style="color: #64748b; margin: 8px 0 0 0; font-size: 12px;">Periode: ${startDateFormatted} s/d ${endDateFormatted}</p>
+          ${searchTerm ? `<p style="color: #64748b; margin: 4px 0 0 0; font-size: 11px;">Pencarian: ${escapeHtml(searchTerm)}</p>` : ''}
+        </div>
+        
+        <div style="margin-bottom: 20px; text-align: right;">
+          <p style="color: #94a3b8; font-size: 10px; margin: 0;">Dicetak: ${today}</p>
+        </div>
+        
+        <div style="display: flex; gap: 15px; margin-bottom: 25px; padding: 15px; background: #f8fafc; border-radius: 8px;">
+          <div style="flex: 1; text-align: center;">
+            <div style="font-size: 22px; font-weight: bold; color: #2563eb;">${summary.total}</div>
+            <div style="font-size: 10px; color: #64748b;">Total Peserta</div>
+          </div>
+          <div style="flex: 1; text-align: center;">
+            <div style="font-size: 22px; font-weight: bold; color: #16a34a;">${summary.sudahMengisi}</div>
+            <div style="font-size: 10px; color: #64748b;">Sudah Mengisi</div>
+          </div>
+          <div style="flex: 1; text-align: center;">
+            <div style="font-size: 22px; font-weight: bold; color: #d97706;">${summary.belumMengisi}</div>
+            <div style="font-size: 10px; color: #64748b;">Belum Mengisi</div>
+          </div>
+          <div style="flex: 1; text-align: center;">
+            <div style="font-size: 22px; font-weight: bold; color: #7c3aed;">${summary.persentase}%</div>
+            <div style="font-size: 10px; color: #64748b;">Partisipasi</div>
+          </div>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+          <thead>
+            <tr style="background-color: #1e3a5f;">
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">No</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: left;">Nama Peserta</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: left;">Divisi</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Tanggal</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Check-In</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Check-Out</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Status</th>
+              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: left;">Aktivitas</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #cbd5e1;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div style="text-align: left;">
+              <p style="font-size: 9px; color: #94a3b8; margin: 0;">Dokumen ini dicetak secara elektronik</p>
+              <p style="font-size: 9px; color: #94a3b8; margin: 2px 0 0 0;">&copy; ${new Date().getFullYear()} PT Kuanta Prima Indonesia - All Rights Reserved</p>
+            </div>
+            <div style="text-align: right;">
+              <div style="margin-top: 30px;">
+                <p style="font-size: 10px; margin: 0;">Surabaya, ${today}</p>
+                <p style="font-size: 10px; margin: 20px 0 0 0;">Mentor</p>
+                <div style="margin-top: 30px;">
+                  <p style="font-size: 10px; margin: 0; text-decoration: underline;">(_____________________)</p>
+                  <p style="font-size: 9px; color: #64748b; margin: 2px 0 0 0;">Nama Lengkap & Tanda Tangan</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      const opt = {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        filename: `daily_report_${filterType === "single" ? selectedDate : `${startDate}_to_${endDate}`}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+      };
+      
+      html2pdf().set(opt).from(element).save();
+    } catch (error) {
+      console.error("Export PDF error:", error);
+      alert("Gagal mengexport ke PDF: " + error.message);
+    } finally {
+      setIsExporting(false);
+    }
   };
-  
-  html2pdf().set(opt).from(element).save();
-  // ALERT DIHAPUS - langsung download
-};
 
   const openDetailModal = (report) => {
     setSelectedDetailReport(report);
@@ -815,47 +850,6 @@ const handleExportPDF = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20">
       
-      {/* CONFIRMATION MODAL - HIGH Z-INDEX */}
-      {showConfirmModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[9999] p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-zoomIn relative z-[10000]">
-            <div className="relative">
-              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-t-2xl"></div>
-              <div className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-teal-100 rounded-xl">
-                    <Download className="w-6 h-6 text-teal-600" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-slate-800">Konfirmasi Unduh Laporan</h3>
-                </div>
-                <p className="text-slate-600 mb-6">
-                  Apakah Anda yakin ingin mengunduh laporan daily report dalam format <strong className="text-teal-600">{exportType?.toUpperCase()}</strong>?
-                  <br />
-                  <span className="text-sm text-slate-400">Data yang diunduh sesuai dengan filter yang sedang aktif.</span>
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowConfirmModal(false);
-                      setExportType(null);
-                    }}
-                    className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 transition-all"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    onClick={executeExport}
-                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-teal-600 to-blue-600 rounded-xl text-white font-medium hover:shadow-lg transition-all"
-                  >
-                    Ya, Unduh
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* LOADING OVERLAY SAAT EXPORT */}
       {isExporting && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999]">
@@ -875,7 +869,7 @@ const handleExportPDF = () => {
       
       <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
         
-        {/* Header - FIXED: overflow-hidden changed to overflow-visible */}
+        {/* Header */}
         <div className="relative mb-10 rounded-2xl overflow-visible">
           <div className="absolute inset-0 bg-gradient-to-r from-teal-500/15 via-blue-500/10 to-teal-500/15 rounded-2xl -z-10"></div>
           <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-6 px-6 py-5">
@@ -896,7 +890,7 @@ const handleExportPDF = () => {
               </div>
             </div>
             
-            {/* Export Dropdown - FIXED: Proper z-index and positioning */}
+            {/* Export Dropdown - LANGSUNG DOWNLOAD TANPA POPUP */}
             <div className="relative inline-block" ref={dropdownRef} style={{ zIndex: 9999 }}>
               <button
                 onClick={() => setShowExportDropdown(!showExportDropdown)}
@@ -912,11 +906,11 @@ const handleExportPDF = () => {
                 <ChevronDown size={16} className={`transition-transform duration-200 ${showExportDropdown ? 'rotate-180' : ''}`} />
               </button>
               
-              {/* Dropdown menu - HIGH Z-INDEX to ensure it's on top */}
+              {/* Dropdown menu */}
               {showExportDropdown && (
                 <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-[10000]">
                   <button
-                    onClick={() => showConfirmExport('excel')}
+                    onClick={handleExportExcel}
                     className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-emerald-50 transition-colors border-b border-slate-100"
                   >
                     <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
@@ -928,7 +922,7 @@ const handleExportPDF = () => {
                     </div>
                   </button>
                   <button
-                    onClick={() => showConfirmExport('pdf')}
+                    onClick={handleExportPDF}
                     className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-red-50 transition-colors"
                   >
                     <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
@@ -945,7 +939,7 @@ const handleExportPDF = () => {
           </div>
         </div>
 
-        {/* Filter Controls - unchanged */}
+        {/* Filter Controls */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5 mb-6">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex p-1 bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 shadow-sm">
@@ -1029,7 +1023,7 @@ const handleExportPDF = () => {
           </div>
         </div>
 
-        {/* Display date info - unchanged */}
+        {/* Display date info */}
         <div className="mb-5">
           <p className="text-sm text-slate-500 flex items-center gap-2">
             <Sparkles size="14" className="text-teal-500" />
@@ -1037,7 +1031,7 @@ const handleExportPDF = () => {
           </p>
         </div>
 
-        {/* Summary Cards - unchanged */}
+        {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
           <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl p-5 border border-slate-100 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer">
             <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -1055,7 +1049,7 @@ const handleExportPDF = () => {
           </div>
         </div>
 
-        {/* Table - unchanged */}
+        {/* Table */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -1095,20 +1089,20 @@ const handleExportPDF = () => {
                           <KehadiranIcon size="10" />
                           <span className="text-[10px] font-semibold">{kehadiran.label}</span>
                         </div>
-                      </td>
+                       </td>
                       <td className="px-6 py-4">
                         {report.aktivitas ? (
                           <p className="text-xs text-slate-600 max-w-[200px] truncate font-medium">{report.aktivitas}</p>
                         ) : (
                           <span className="text-xs text-slate-400 italic flex items-center gap-1.5"><AlertCircle size="10" />Belum mengisi</span>
                         )}
-                      </td>
+                       </td>
                       <td className="px-6 py-4 text-center">
                         <div className="relative overflow-hidden px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 rounded-lg text-xs font-medium text-white shadow-md hover:shadow-lg transition-all duration-300 group/btn inline-flex items-center gap-1.5 cursor-pointer" onClick={(e) => { e.stopPropagation(); openDetailModal(report); }}>
                           <span className="relative z-10 flex items-center gap-1.5"><Eye size="12" />Detail</span>
                           <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover/btn:translate-y-0 transition-transform duration-300"></div>
                         </div>
-                      </td>
+                       </td>
                     </tr>
                   );
                 })}
@@ -1153,7 +1147,7 @@ const handleExportPDF = () => {
           )}
         </div>
 
-        {/* Info Banner - unchanged */}
+        {/* Info Banner */}
         <div className="mt-8 bg-gradient-to-r from-teal-50/80 via-blue-50/80 to-transparent backdrop-blur-sm rounded-2xl p-5 border border-teal-100 shadow-md">
           <div className="flex items-start gap-3">
             <div className="relative"><div className="absolute inset-0 bg-teal-500 rounded-xl blur-md opacity-30"></div><div className="relative p-2.5 bg-white rounded-xl shadow-md"><Shield size="16" className="text-teal-500" /></div></div>

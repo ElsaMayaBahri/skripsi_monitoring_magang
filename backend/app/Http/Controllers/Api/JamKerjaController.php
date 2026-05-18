@@ -21,14 +21,21 @@ class JamKerjaController extends Controller
                     'data' => [
                         'jam_masuk' => '08:00',
                         'jam_pulang' => '17:00',
-                        'batas_terlambat' => 15
+                        'batas_terlambat' => 15 // tetap integer
                     ]
                 ]);
             }
             
+            // 🔥 KONVERSI TIME KE INTEGER SAAT RESPONSE
+            $data = $jamKerja->toArray();
+            if (isset($data['batas_terlambat'])) {
+                $parts = explode(':', $data['batas_terlambat']);
+                $data['batas_terlambat'] = (int)($parts[1] ?? 15); // ambil menit
+            }
+            
             return response()->json([
                 'success' => true,
-                'data' => $jamKerja
+                'data' => $data
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -55,16 +62,23 @@ class JamKerjaController extends Controller
                 ], 422);
             }
             
+            // 🔥 KONVERSI INTEGER KE FORMAT TIME
+            $batasTerlambatFormatted = sprintf('00:%02d:00', $request->batas_terlambat);
+            
             $jamKerja = JamKerja::create([
                 'jam_masuk' => $request->jam_masuk,
                 'jam_pulang' => $request->jam_pulang,
-                'batas_terlambat' => $request->batas_terlambat
+                'batas_terlambat' => $batasTerlambatFormatted
             ]);
+            
+            // 🔥 KONVERSI BALIK KE INTEGER UNTUK RESPONSE
+            $responseData = $jamKerja->toArray();
+            $responseData['batas_terlambat'] = $request->batas_terlambat;
             
             return response()->json([
                 'success' => true,
                 'message' => 'Pengaturan jam kerja berhasil disimpan',
-                'data' => $jamKerja
+                'data' => $responseData
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -100,16 +114,23 @@ class JamKerjaController extends Controller
                 ], 422);
             }
             
+            // 🔥 KONVERSI INTEGER KE FORMAT TIME
+            $batasTerlambatFormatted = sprintf('00:%02d:00', $request->batas_terlambat);
+            
             $jamKerja->update([
                 'jam_masuk' => $request->jam_masuk,
                 'jam_pulang' => $request->jam_pulang,
-                'batas_terlambat' => $request->batas_terlambat
+                'batas_terlambat' => $batasTerlambatFormatted
             ]);
+            
+            // 🔥 KONVERSI BALIK KE INTEGER UNTUK RESPONSE
+            $responseData = $jamKerja->toArray();
+            $responseData['batas_terlambat'] = $request->batas_terlambat;
             
             return response()->json([
                 'success' => true,
                 'message' => 'Pengaturan jam kerja berhasil diupdate',
-                'data' => $jamKerja
+                'data' => $responseData
             ]);
         } catch (\Exception $e) {
             return response()->json([

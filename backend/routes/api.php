@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\NilaiController;
 use App\Http\Controllers\Api\PresensiController;
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\LaporanController;     
+use App\Http\Controllers\Api\ProfileController;
 
 /*
 |--------------------------------------------------------------------------
@@ -104,6 +105,36 @@ Route::get('/materi-file/{filename}', function ($filename) {
     return response()->file($filePath, $headers);
 })->where('filename', '.*');
 
+// 🔥 ROUTE BARU UNTUK AKSES FILE TUGAS (PREVIEW/DOWNLOAD)
+Route::get('/file/{filename}', function ($filename) {
+    $paths = [
+        storage_path('app/public/tugas/' . $filename),
+        storage_path('app/public/' . $filename),
+    ];
+
+    $filePath = null;
+
+    foreach ($paths as $path) {
+        if (file_exists($path)) {
+            $filePath = $path;
+            break;
+        }
+    }
+
+    if (!$filePath) {
+        return response()->json([
+            'error' => 'File not found'
+        ], 404);
+    }
+
+    $mime = mime_content_type($filePath);
+
+    return response()->file($filePath, [
+        'Content-Type' => $mime,
+        'Access-Control-Allow-Origin' => '*',
+    ]);
+})->where('filename', '.*');
+
 /*
 |--------------------------------------------------------------------------
 | PROTECTED ROUTES
@@ -116,6 +147,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/update-profile', [AuthController::class, 'updateProfile']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
     
     // ==================== DIVISI ROUTES ====================
@@ -271,42 +303,15 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // ==================== ROUTES DASHBOARD MENTOR ====================
     
-    // PERBAIKAN: Gunakan controller method dashboard, bukan closure
     Route::get('/mentor/dashboard', [MentorController::class, 'dashboard']);
     
-    Route::get('/mentor/notifications', function (Request $request) {
-        $user = $request->user();
-        
-        if ($user->role !== 'mentor') {
-            return response()->json([], 403);
-        }
-        
-        return response()->json([]);
-    });
+    // Route untuk statistik mentor (profile)
+    Route::get('/mentor/stats', [MentorController::class, 'getStats']);
     
-    Route::get('/mentor/profile', function (Request $request) {
-        $user = $request->user();
-        
-        if ($user->role !== 'mentor') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-        
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'id' => $user->id_user,
-                'nama' => $user->nama,
-                'email' => $user->email,
-                'no_telepon' => $user->no_telepon,
-                'foto_profil' => $user->foto_profil,
-                'role' => $user->role,
-                'status_akun' => $user->status_akun
-            ]
-        ]);
-    });
+    // 🔥 PERBAIKAN: Route profile mentor - SEKARANG PAKAI METHOD CONTROLLER, BUKAN CLOSURE
+    Route::get('/mentor/profile', [MentorController::class, 'profile']);
+    
+    Route::get('/mentor/notifications', [MentorController::class, 'getNotifications']);
     
     // ==================== MENTOR PROFILE UPDATE ROUTE ====================
     Route::put('/mentor/profile', function (Request $request) {

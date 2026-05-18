@@ -30,6 +30,7 @@ class QuizController extends Controller
                     'duration' => $quiz->durasi,
                     'durasi' => $quiz->durasi,
                     'passing' => $quiz->passing ?? 75,
+                    'level' => $quiz->level ?? 1,  // 🔥 TAMBAHKAN LEVEL
                     'total_soal' => $quiz->total_soal,
                     'questions' => $quiz->questions,
                     'participants' => $quiz->peserta,
@@ -59,12 +60,11 @@ class QuizController extends Controller
     }
     
     /**
-     * Get all quiz results for dashboard - FIXED with correct column names
+     * Get all quiz results for dashboard
      */
     public function getAllResults()
     {
         try {
-            // Cek apakah tabel jawaban_kuis ada
             if (!Schema::hasTable('jawaban_kuis')) {
                 return response()->json([
                     'success' => true,
@@ -73,7 +73,6 @@ class QuizController extends Controller
                 ]);
             }
             
-            // Cek apakah ada data di jawaban_kuis
             $checkData = DB::table('jawaban_kuis')->count();
             Log::info('Jumlah data jawaban_kuis: ' . $checkData);
             
@@ -85,14 +84,13 @@ class QuizController extends Controller
                 ]);
             }
             
-            // FIXED: Gunakan 'id' bukan 'id_user', dan 'name' bukan 'nama'
             $results = DB::table('jawaban_kuis as jk')
-                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id')  // FIX: u.id (bukan id_user)
+                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id')
                 ->leftJoin('kuis as k', 'jk.id_kuis', '=', 'k.id_kuis')
                 ->select(
                     'jk.id_jawaban',
                     'jk.id_user',
-                    'u.name as user_name',  // FIX: u.name (bukan u.nama)
+                    'u.name as user_name',
                     'u.divisi as user_divisi',
                     'jk.id_kuis',
                     'k.judul_kuis as quiz_title',
@@ -106,9 +104,7 @@ class QuizController extends Controller
             
             Log::info('Hasil query jawaban_kuis: ' . $results->count() . ' records');
             
-            // Jika ada data, format hasilnya
             if ($results->isNotEmpty()) {
-                // Kelompokkan berdasarkan user dan quiz untuk menghitung rata-rata
                 $groupedResults = [];
                 
                 foreach ($results as $item) {
@@ -135,7 +131,6 @@ class QuizController extends Controller
                     ];
                 }
                 
-                // Format hasil akhir
                 $formattedResults = [];
                 foreach ($groupedResults as $group) {
                     $formattedResults[] = [
@@ -189,12 +184,11 @@ class QuizController extends Controller
                 ]);
             }
             
-            // FIX: Gunakan 'id' bukan 'id_user', dan 'name' bukan 'nama'
             $results = DB::table('jawaban_kuis as jk')
-                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id')  // FIX: u.id
+                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id')
                 ->select(
                     'jk.id_user',
-                    'u.name as user_name',  // FIX: u.name
+                    'u.name as user_name',
                     'u.divisi',
                     'jk.skor as score',
                     'jk.created_at'
@@ -227,6 +221,7 @@ class QuizController extends Controller
                 'divisi' => 'nullable|string|max:100',
                 'durasi' => 'nullable|integer|min:1|max:180',
                 'passing' => 'nullable|integer|min:0|max:100',
+                'level' => 'nullable|integer|min:1|max:3',  // 🔥 TAMBAHKAN VALIDASI LEVEL
                 'questions' => 'nullable|array',
                 'total_soal' => 'nullable|integer',
                 'tanggal_mulai' => 'required|date',
@@ -249,6 +244,7 @@ class QuizController extends Controller
                 'divisi' => $request->divisi,
                 'durasi' => $request->durasi ?? 30,
                 'passing' => $request->passing ?? 75,
+                'level' => $request->level ?? 1,  // 🔥 TAMBAHKAN LEVEL
                 'status' => 'aktif',
                 'total_soal' => count($request->questions ?? []),
                 'questions' => $request->questions,
@@ -289,6 +285,7 @@ class QuizController extends Controller
                     'duration' => $quiz->durasi,
                     'durasi' => $quiz->durasi,
                     'passing' => $quiz->passing ?? 75,
+                    'level' => $quiz->level ?? 1,  // 🔥 TAMBAHKAN LEVEL
                     'total_soal' => $quiz->total_soal,
                     'questions' => $quiz->questions,
                     'participants' => $quiz->peserta,
@@ -323,6 +320,7 @@ class QuizController extends Controller
                 'divisi' => 'nullable|string|max:100',
                 'durasi' => 'nullable|integer|min:1|max:180',
                 'passing' => 'nullable|integer|min:0|max:100',
+                'level' => 'nullable|integer|min:1|max:3',  // 🔥 TAMBAHKAN VALIDASI LEVEL
                 'status' => 'sometimes|in:aktif,nonaktif',
                 'questions' => 'nullable|array',
                 'tanggal_mulai' => 'nullable|date',
@@ -344,6 +342,7 @@ class QuizController extends Controller
             if ($request->has('divisi')) $quiz->divisi = $request->divisi;
             if ($request->has('durasi')) $quiz->durasi = $request->durasi;
             if ($request->has('passing')) $quiz->passing = $request->passing;
+            if ($request->has('level')) $quiz->level = $request->level;  // 🔥 TAMBAHKAN UPDATE LEVEL
             if ($request->has('status')) $quiz->status = $request->status;
             if ($request->has('questions')) {
                 $quiz->questions = $request->questions;
@@ -401,6 +400,7 @@ class QuizController extends Controller
                     'divisi' => $quiz->divisi,
                     'durasi' => $quiz->durasi,
                     'passing' => $quiz->passing ?? 75,
+                    'level' => $quiz->level ?? 1,  // 🔥 TAMBAHKAN LEVEL
                     'total_soal' => $quiz->total_soal,
                     'questions' => $quiz->questions,
                     'tanggal_mulai' => $quiz->tanggal_mulai,
@@ -478,7 +478,8 @@ class QuizController extends Controller
             $failed = 0;
             $errors = [];
             
-            $expectedHeaders = ['judul_kuis', 'deskripsi', 'divisi', 'durasi', 'passing', 'questions', 'tanggal_mulai', 'tanggal_selesai'];
+            // 🔥 TAMBAHKAN 'level' KE EXPECTED HEADERS
+            $expectedHeaders = ['judul_kuis', 'deskripsi', 'divisi', 'durasi', 'passing', 'level', 'questions', 'tanggal_mulai', 'tanggal_selesai'];
             $missingHeaders = array_diff($expectedHeaders, $headers);
             if (!empty($missingHeaders)) {
                 return response()->json([
@@ -535,12 +536,14 @@ class QuizController extends Controller
                         continue;
                     }
                     
+                    // 🔥 TAMBAHKAN LEVEL KE CREATE
                     $quiz = Kuis::create([
                         'judul_kuis' => $judul,
                         'deskripsi' => $data['deskripsi'] ?? null,
                         'divisi' => $data['divisi'] ?? null,
                         'durasi' => intval($data['durasi'] ?? 30),
                         'passing' => intval($data['passing'] ?? 75),
+                        'level' => intval($data['level'] ?? 1),  // 🔥 TAMBAHKAN LEVEL
                         'status' => 'aktif',
                         'total_soal' => $questions ? count($questions) : 0,
                         'questions' => $questions,
@@ -582,7 +585,8 @@ class QuizController extends Controller
     public function downloadTemplate()
     {
         try {
-            $headers = ['judul_kuis', 'deskripsi', 'divisi', 'durasi', 'passing', 'questions', 'tanggal_mulai', 'tanggal_selesai'];
+            // 🔥 TAMBAHKAN 'level' KE HEADERS
+            $headers = ['judul_kuis', 'deskripsi', 'divisi', 'durasi', 'passing', 'level', 'questions', 'tanggal_mulai', 'tanggal_selesai'];
             
             $exampleQuestion = json_encode([
                 [
@@ -598,6 +602,7 @@ class QuizController extends Controller
                 'ENGINEERING',
                 '30',
                 '75',
+                '1',  // 🔥 TAMBAHKAN LEVEL
                 $exampleQuestion,
                 date('Y-m-d'),
                 date('Y-m-d', strtotime('+30 days'))
@@ -631,6 +636,7 @@ class QuizController extends Controller
                     'ENGINEERING',
                     '45',
                     '70',
+                    '2',  // 🔥 TAMBAHKAN LEVEL (Level 2 - Menengah)
                     $multipleQuestions,
                     date('Y-m-d'),
                     date('Y-m-d', strtotime('+30 days'))

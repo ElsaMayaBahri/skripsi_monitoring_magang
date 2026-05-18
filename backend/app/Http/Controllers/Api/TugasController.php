@@ -82,7 +82,6 @@ class TugasController extends Controller
                         'peserta_nama' => $pengumpulan->peserta->user->nama ?? 'Unknown',
                         'status' => $pengumpulan->status,
                         'submitted_at' => $pengumpulan->tanggal_kumpul,
-                        'nilai' => $pengumpulan->nilai,
                         'catatan' => $pengumpulan->catatan_mentor,
                     ];
                 }
@@ -489,8 +488,6 @@ class TugasController extends Controller
 
     /**
      * Send reminder for tugas
-        /**
-     * Send reminder for tugas
      * POST /api/mentor/tugas/reminder
      * POST /api/mentor/tugas/{id}/reminder
      */
@@ -643,10 +640,10 @@ class TugasController extends Controller
                     'id_pengumpulan' => $item->id_pengumpulan,
                     'id_peserta' => $item->id_peserta,
                     'peserta_nama' => $item->peserta->user->nama ?? 'Unknown',
-                    'file_tugas' => $item->file_jawaban,
+                    'file_jawaban' => $item->file_jawaban,
                     'file_url' => $item->file_jawaban ? Storage::url($item->file_jawaban) : null,
+                    'link_jawaban' => $item->link_jawaban,
                     'status' => $item->status,
-                    'nilai' => $item->nilai,
                     'catatan_mentor' => $item->catatan_mentor,
                     'submitted_at' => $item->tanggal_kumpul ?? $item->created_at,
                 ];
@@ -701,7 +698,7 @@ class TugasController extends Controller
     }
 
     /**
-     * Update submission (nilai and feedback)
+     * Update submission (status and feedback only - NO nilai)
      * PUT /api/mentor/tugas/submissions/{id}
      */
     public function updateSubmission(Request $request, $submissionId)
@@ -716,9 +713,9 @@ class TugasController extends Controller
                 ], 403);
             }
 
+            // 🔥 VALIDASI - HAPUS VALIDASI NILAI KARENA KOLOM NILAI TIDAK ADA
             $request->validate([
-                'nilai' => 'nullable|integer|min:0|max:100',
-                'status' => 'nullable|in:dikumpulkan,dinilai,selesai,terlambat',
+                'status' => 'nullable|in:dikumpulkan,dinilai,selesai,terlambat,revisi',
                 'catatan_mentor' => 'nullable|string',
             ]);
 
@@ -731,26 +728,30 @@ class TugasController extends Controller
                 ], 404);
             }
 
+            // 🔥 UPDATE - HAPUS NILAI KARENA KOLOM NILAI TIDAK ADA
             $submission->update([
-                'nilai' => $request->nilai,
                 'status' => $request->status ?? $submission->status,
                 'catatan_mentor' => $request->catatan_mentor,
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Nilai berhasil disimpan',
+                'message' => 'Review berhasil disimpan',
                 'data' => $submission
             ]);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validasi gagal',
+                'errors' => $e->errors()
+            ], 422);
         } catch (\Exception $e) {
             Log::error('Update Submission Error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal menyimpan nilai: ' . $e->getMessage()
+                'message' => 'Gagal menyimpan review: ' . $e->getMessage()
             ], 500);
         }
     }
-    
-    
 }

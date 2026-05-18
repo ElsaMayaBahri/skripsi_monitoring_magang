@@ -24,37 +24,50 @@ import {
 import { useNavigate } from "react-router-dom";
 import axiosInstance from "../../api/axios";
 
-// Mapping kategori ke konfigurasi file yang diizinkan
-const KATEGORI_FILE_CONFIG = {
+// Mapping ekstensi file ke kategori
+const FILE_EXTENSION_TO_KATEGORI = {
+  pdf: "PDF",
+  mp4: "Video",
+  mkv: "Video",
+  mov: "Video",
+  ppt: "Presentasi",
+  pptx: "Presentasi",
+  doc: "Dokumen",
+  docx: "Dokumen",
+};
+
+const KATEGORI_CONFIG = {
   PDF: {
-    accept: ".pdf",
-    mimeTypes: ["application/pdf"],
+    icon: FileText,
+    color: "text-red-500",
+    bg: "bg-red-50",
+    border: "border-red-200",
+    gradient: "from-red-500 to-red-600",
     label: "PDF",
-    description: "Hanya file PDF yang diizinkan",
   },
   Video: {
-    accept: ".mp4",
-    mimeTypes: ["video/mp4"],
-    label: "MP4",
-    description: "Hanya file video MP4 yang diizinkan",
+    icon: Video,
+    color: "text-blue-500",
+    bg: "bg-blue-50",
+    border: "border-blue-200",
+    gradient: "from-blue-500 to-blue-600",
+    label: "Video",
   },
   Presentasi: {
-    accept: ".ppt,.pptx",
-    mimeTypes: [
-      "application/vnd.ms-powerpoint",
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ],
-    label: "PPT / PPTX",
-    description: "Hanya file presentasi PPT/PPTX yang diizinkan",
+    icon: File,
+    color: "text-orange-500",
+    bg: "bg-orange-50",
+    border: "border-orange-200",
+    gradient: "from-orange-500 to-orange-600",
+    label: "Presentasi",
   },
   Dokumen: {
-    accept: ".doc,.docx",
-    mimeTypes: [
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ],
-    label: "DOC / DOCX",
-    description: "Hanya file dokumen DOC/DOCX yang diizinkan",
+    icon: FileText,
+    color: "text-emerald-500",
+    bg: "bg-emerald-50",
+    border: "border-emerald-200",
+    gradient: "from-emerald-500 to-emerald-600",
+    label: "Dokumen",
   },
 };
 
@@ -64,12 +77,12 @@ function AddMateri() {
   const [form, setForm] = useState({ 
     judul: "", 
     deskripsi: "", 
-    divisi: "", 
-    kategori: "" 
+    divisi: "" 
   });
   const [file, setFile] = useState(null);
   const [fileInfo, setFileInfo] = useState(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState(null);
+  const [detectedKategori, setDetectedKategori] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -77,10 +90,6 @@ function AddMateri() {
   const [loadingDivisi, setLoadingDivisi] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successData, setSuccessData] = useState(null);
-  
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [selectedDivisi, setSelectedDivisi] = useState("all");
-  const [selectedKategori, setSelectedKategori] = useState("all");
 
   const BASE_URL = "http://localhost:8000";
 
@@ -94,15 +103,6 @@ function AddMateri() {
     };
   }, [filePreviewUrl]);
 
-  // Saat kategori berubah, hapus file yang sudah terunggah
-  useEffect(() => {
-    if (file) {
-      removeFile();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.kategori]);
-
-  // Fungsi fetch divisi - HANYA AMBIL DIVISI AKTIF
   const fetchDivisi = async () => {
     setLoadingDivisi(true);
     try {
@@ -132,18 +132,24 @@ function AddMateri() {
     setSuccess(null);
   };
 
-  const activeConfig = form.kategori ? KATEGORI_FILE_CONFIG[form.kategori] : null;
-  const acceptAttr = activeConfig ? activeConfig.accept : "";
+  const detectKategoriFromFile = (fileName, fileType) => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    
+    if (FILE_EXTENSION_TO_KATEGORI[extension]) {
+      return FILE_EXTENSION_TO_KATEGORI[extension];
+    }
+    
+    if (fileType.includes("pdf")) return "PDF";
+    if (fileType.includes("video")) return "Video";
+    if (fileType.includes("powerpoint") || fileType.includes("presentation")) return "Presentasi";
+    if (fileType.includes("word") || fileType.includes("document")) return "Dokumen";
+    
+    return null;
+  };
 
   const handleFile = (e) => {
     const selectedFile = e.target.files[0];
     if (!selectedFile) return;
-
-    if (!form.kategori) {
-      setError("Silakan pilih kategori terlebih dahulu sebelum mengunggah file");
-      e.target.value = "";
-      return;
-    }
 
     if (selectedFile.size > 50 * 1024 * 1024) {
       setError("Ukuran file maksimal 50MB");
@@ -151,23 +157,11 @@ function AddMateri() {
       return;
     }
 
-    const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase();
-    const allowedExtensions = {
-      PDF: ['pdf'],
-      Video: ['mp4'],
-      Presentasi: ['ppt', 'pptx'],
-      Dokumen: ['doc', 'docx']
-    };
+    // Auto detect kategori dari file
+    const kategori = detectKategoriFromFile(selectedFile.name, selectedFile.type);
     
-    const currentAllowed = allowedExtensions[form.kategori];
-    if (!currentAllowed || !currentAllowed.includes(fileExtension)) {
-      setError(`Kategori "${form.kategori}" hanya menerima file ${activeConfig?.label}. Silakan pilih file yang sesuai.`);
-      e.target.value = "";
-      return;
-    }
-
-    if (activeConfig && !activeConfig.mimeTypes.includes(selectedFile.type)) {
-      setError(`Format file tidak sesuai dengan kategori "${form.kategori}". Harus ${activeConfig.label}`);
+    if (!kategori) {
+      setError("Format file tidak dikenali. Silakan upload file PDF, MP4, PPT, PPTX, DOC, atau DOCX");
       e.target.value = "";
       return;
     }
@@ -182,10 +176,12 @@ function AddMateri() {
 
     setError(null);
     setFile(selectedFile);
+    setDetectedKategori(kategori);
     setFileInfo({
       name: selectedFile.name,
       size: (selectedFile.size / 1024 / 1024).toFixed(2) + " MB",
       type: selectedFile.type,
+      kategori: kategori,
     });
     
     e.target.value = "";
@@ -196,18 +192,22 @@ function AddMateri() {
     setFile(null);
     setFileInfo(null);
     setFilePreviewUrl(null);
+    setDetectedKategori(null);
   };
 
-  const getFileIcon = (type) => {
-    if (!type) return { icon: File, color: "text-slate-500", bg: "bg-slate-50" };
-    if (type.includes("pdf")) return { icon: FileText, color: "text-red-500", bg: "bg-red-50" };
-    if (type.includes("video")) return { icon: Video, color: "text-blue-500", bg: "bg-blue-50" };
-    if (type.includes("powerpoint") || type.includes("presentation"))
-      return { icon: File, color: "text-orange-500", bg: "bg-orange-50" };
-    return { icon: File, color: "text-emerald-500", bg: "bg-emerald-50" };
+  const getFileIcon = () => {
+    if (!detectedKategori) return { icon: File, color: "text-slate-500", bg: "bg-slate-50", label: "File" };
+    const config = KATEGORI_CONFIG[detectedKategori];
+    return {
+      icon: config.icon,
+      color: config.color,
+      bg: config.bg,
+      label: config.label,
+      border: config.border,
+      gradient: config.gradient,
+    };
   };
 
-  // Fungsi submit menggunakan axiosInstance
   const handleSubmit = async () => {
     if (!form.judul.trim()) { 
       setError("Judul materi wajib diisi"); 
@@ -217,13 +217,13 @@ function AddMateri() {
       setError("Divisi wajib dipilih"); 
       return; 
     }
-    if (!form.kategori) { 
-      setError("Kategori wajib dipilih"); 
-      return; 
-    }
     if (!file) { 
       setError("File materi wajib diunggah"); 
       return; 
+    }
+    if (!detectedKategori) {
+      setError("Kategori file tidak terdeteksi. Silakan upload file yang valid");
+      return;
     }
 
     setIsSubmitting(true);
@@ -235,7 +235,7 @@ function AddMateri() {
       formData.append("judul", form.judul.trim());
       formData.append("deskripsi", form.deskripsi || "");
       formData.append("divisi", form.divisi);
-      formData.append("kategori", form.kategori);
+      formData.append("kategori", detectedKategori);
       formData.append("file", file);
 
       const response = await axiosInstance.post("/materi-pelatihan", formData, {
@@ -245,18 +245,16 @@ function AddMateri() {
       });
       
       if (response.data && response.data.success) {
-        // Simpan data untuk popup modal
         setSuccessData({
           judul: form.judul.trim(),
           divisi: form.divisi,
-          kategori: form.kategori,
+          kategori: detectedKategori,
           file_name: file.name,
         });
         setShowSuccessModal(true);
         
-        // Reset form setelah sukses
         setTimeout(() => {
-          setForm({ judul: "", deskripsi: "", divisi: "", kategori: "" });
+          setForm({ judul: "", deskripsi: "", divisi: "" });
           removeFile();
         }, 100);
       } else {
@@ -277,12 +275,9 @@ function AddMateri() {
 
   const handleAddAnother = () => {
     setShowSuccessModal(false);
-    setForm({ judul: "", deskripsi: "", divisi: "", kategori: "" });
+    setForm({ judul: "", deskripsi: "", divisi: "" });
     removeFile();
   };
-
-  const fileIconData = fileInfo ? getFileIcon(fileInfo.type) : null;
-  const FileIconComponent = fileIconData?.icon;
 
   const getDivisiName = (divisiValue) => {
     if (!divisiValue) return "";
@@ -290,11 +285,14 @@ function AddMateri() {
     return divisi ? (divisi.nama_divisi || divisi) : divisiValue;
   };
 
+  const fileIconData = getFileIcon();
+  const FileIconComponent = fileIconData.icon;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
-      <div className="p-5 lg:p-6 max-w-[1400px] mx-auto">
+      <div className="p-5 lg:p-6 max-w-[1200px] mx-auto">
 
-        {/* HEADER - Tanpa tombol Kembali */}
+        {/* HEADER */}
         <div className="mb-8">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-xl shadow-md">
@@ -306,7 +304,7 @@ function AddMateri() {
               </h1>
               <p className="text-xs text-slate-500 flex items-center gap-1.5">
                 <span className="w-1 h-1 bg-emerald-500 rounded-full" />
-                Lengkapi detail informasi dan unggah berkas materi
+                Unggah file, sistem akan otomatis mendeteksi kategori
               </p>
             </div>
           </div>
@@ -330,281 +328,163 @@ function AddMateri() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* LEFT PANEL - Metadata */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
-              <div className="p-5">
-                <div className="flex items-center gap-2 mb-5">
-                  <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg shadow-md">
-                    <BookOpen className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-800">Detail Metadata</h3>
-                    <p className="text-xs text-slate-400">Informasi dasar materi pelatihan</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                      Judul Materi <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      name="judul"
-                      placeholder="Contoh: Pengenalan Budaya Perusahaan"
-                      value={form.judul}
-                      onChange={handleChange}
-                      className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                      Deskripsi Materi
-                    </label>
-                    <textarea
-                      name="deskripsi"
-                      placeholder="Jelaskan secara singkat tentang materi ini..."
-                      value={form.deskripsi}
-                      onChange={handleChange}
-                      rows={4}
-                      className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all resize-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                        Divisi <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <select
-                          name="divisi"
-                          value={form.divisi}
-                          onChange={handleChange}
-                          disabled={loadingDivisi}
-                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all bg-white disabled:opacity-60"
-                        >
-                          <option value="">
-                            {loadingDivisi ? "Memuat divisi..." : "Pilih Divisi"}
-                          </option>
-                          {!loadingDivisi && divisiList.map((divisi) => (
-                            <option key={divisi.id_divisi} value={divisi.nama_divisi}>
-                              {divisi.nama_divisi}
-                            </option>
-                          ))}
-                        </select>
-                        {loadingDivisi && (
-                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                            <Loader2 size={14} className="animate-spin text-slate-400" />
-                          </div>
-                        )}
-                      </div>
-                      {!loadingDivisi && divisiList.length === 0 && (
-                        <p className="mt-1.5 text-[10px] text-amber-600 flex items-center gap-1">
-                          <AlertCircle size={10} />
-                          <span>Tidak ada divisi aktif. Periksa kembali data divisi.</span>
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                        Kategori <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        name="kategori"
-                        value={form.kategori}
-                        onChange={handleChange}
-                        className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all bg-white"
-                      >
-                        <option value="">Pilih Kategori</option>
-                        <option value="PDF">PDF</option>
-                        <option value="Video">Video</option>
-                        <option value="Presentasi">Presentasi</option>
-                        <option value="Dokumen">Dokumen</option>
-                      </select>
-
-                      {!form.kategori && (
-                        <p className="mt-1.5 text-[10px] text-blue-600 flex items-center gap-1">
-                          <AlertCircle size={10} className="text-blue-500" />
-                          <span>Pilih kategori sebelum mengunggah file</span>
-                        </p>
-                      )}
-
-                      {activeConfig && (
-                        <p className="mt-1.5 text-[10px] text-emerald-600 flex items-center gap-1">
-                          <CheckCircle size={10} className="text-emerald-500" />
-                          Menerima: <span className="font-semibold">{activeConfig.label}</span>
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Informasi Penting Card - di kiri bawah */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100 p-4">
-              <div className="flex items-start gap-3">
-                <div className="p-1.5 bg-blue-100 rounded-lg">
-                  <Shield className="w-4 h-4 text-blue-600" />
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+            <div className="p-5">
+              <div className="flex items-center gap-2 mb-5">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg shadow-md">
+                  <BookOpen className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-blue-800">Informasi Penting</p>
-                  <div className="mt-1.5 space-y-1">
-                    <p className="text-[11px] text-blue-700 flex items-start gap-1.5">
-                      <span className="text-blue-500">•</span>
-                      Pilih kategori terlebih dahulu sebelum mengunggah file
-                    </p>
-                    <p className="text-[11px] text-blue-700 flex items-start gap-1.5">
-                      <span className="text-blue-500">•</span>
-                      Setelah diterbitkan, materi akan langsung tersedia untuk semua peserta
-                    </p>
-                    <p className="text-[11px] text-blue-700 flex items-start gap-1.5">
-                      <span className="text-blue-500">•</span>
-                      Pastikan semua data sudah benar sebelum menerbitkan
-                    </p>
+                  <h3 className="font-bold text-slate-800">Informasi Materi</h3>
+                  <p className="text-xs text-slate-400">Isi detail materi pelatihan</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                    Judul Materi <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    name="judul"
+                    placeholder="Contoh: Pengenalan Budaya Perusahaan"
+                    value={form.judul}
+                    onChange={handleChange}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                    Deskripsi Materi
+                  </label>
+                  <textarea
+                    name="deskripsi"
+                    placeholder="Jelaskan secara singkat tentang materi ini..."
+                    value={form.deskripsi}
+                    onChange={handleChange}
+                    rows={4}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all resize-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                    Divisi <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <select
+                      name="divisi"
+                      value={form.divisi}
+                      onChange={handleChange}
+                      disabled={loadingDivisi}
+                      className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all bg-white disabled:opacity-60"
+                    >
+                      <option value="">
+                        {loadingDivisi ? "Memuat divisi..." : "Pilih Divisi"}
+                      </option>
+                      {!loadingDivisi && divisiList.map((divisi) => (
+                        <option key={divisi.id_divisi} value={divisi.nama_divisi}>
+                          {divisi.nama_divisi}
+                        </option>
+                      ))}
+                    </select>
+                    {loadingDivisi && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 size={14} className="animate-spin text-slate-400" />
+                      </div>
+                    )}
                   </div>
+                  {!loadingDivisi && divisiList.length === 0 && (
+                    <p className="mt-1.5 text-[10px] text-amber-600 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      <span>Tidak ada divisi aktif</span>
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* RIGHT PANEL - File Upload + Tips */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
-              <div className="p-5">
-                <div className="flex items-center gap-2 mb-5">
-                  <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg shadow-md">
-                    <UploadCloud className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-800">Unggah File</h3>
-                    <p className="text-xs text-slate-400">
-                      Maksimal 50MB •{" "}
-                      {activeConfig
-                        ? activeConfig.description
-                        : "Pilih kategori terlebih dahulu"}
-                    </p>
-                  </div>
-                </div>
-
-                {!fileInfo ? (
-                  <label
-                    className={`group block border-2 border-dashed rounded-xl p-8 transition-all cursor-pointer ${
-                      !form.kategori
-                        ? 'border-slate-200 bg-slate-50/20 cursor-not-allowed opacity-60'
-                        : 'border-slate-200 hover:border-blue-400 hover:bg-blue-50/30'
-                    }`}
-                  >
-                    <input
-                      type="file"
-                      className="hidden"
-                      onChange={handleFile}
-                      accept={acceptAttr}
-                      disabled={!form.kategori}
-                    />
-                    <div className="flex flex-col items-center text-center">
-                      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-3 transition-transform ${
-                        !form.kategori 
-                          ? 'bg-slate-100' 
-                          : 'bg-blue-50 group-hover:scale-110'
-                      }`}>
-                        <UploadCloud className={`${!form.kategori ? 'text-slate-400' : 'text-blue-500'}`} size={32} />
-                      </div>
-                      
-                      {!form.kategori ? (
-                        <>
-                          <p className="text-sm font-medium text-slate-500">Pilih kategori terlebih dahulu</p>
-                          <p className="text-xs text-slate-400 mt-1">Kategori wajib dipilih sebelum mengunggah file</p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm font-medium text-slate-700">Seret & letakkan file di sini</p>
-                          <p className="text-xs text-blue-500 mt-1">Atau klik untuk memilih dari komputer</p>
-                        </>
-                      )}
-
-                      <div className="flex gap-2 mt-3 flex-wrap justify-center">
-                        {activeConfig ? (
-                          <span className="text-[10px] px-2 py-1 bg-blue-100 text-blue-600 rounded-full font-medium">
-                            {activeConfig.label}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] px-2 py-1 bg-slate-100 text-slate-500 rounded-full font-medium">
-                            Pilih kategori dulu
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </label>
-                ) : (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-medium text-slate-600">File Terunggah</span>
-                      <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">1 file</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 ${fileIconData?.bg} rounded-xl flex items-center justify-center`}>
-                          {FileIconComponent && <FileIconComponent size={18} className={fileIconData?.color} />}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-slate-700">{fileInfo.name}</p>
-                          <p className="text-[10px] text-slate-400">{fileInfo.size}</p>
-                        </div>
-                      </div>
-                      <button onClick={removeFile} className="p-1.5 hover:bg-red-100 rounded-lg transition">
-                        <X size={14} className="text-red-500" />
-                      </button>
-                    </div>
-
-                    {filePreviewUrl && (
-                      <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
-                        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-                          <span className="text-xs font-medium text-slate-600">Preview File</span>
-                        </div>
-                        <div className="bg-white" style={{ height: 300 }}>
-                          {fileInfo.type === "application/pdf" ? (
-                            <iframe src={filePreviewUrl} className="w-full h-full" title="PDF Preview" />
-                          ) : fileInfo.type.includes("video") ? (
-                            <video src={filePreviewUrl} controls className="w-full h-full" />
-                          ) : null}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Tips Card - di kanan bawah (sejajar dengan Informasi Penting) */}
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-100 p-4">
-              <div className="flex items-start gap-3">
-                <div className="p-1.5 bg-emerald-100 rounded-lg">
-                  <Lightbulb className="w-4 h-4 text-emerald-600" />
+          {/* RIGHT PANEL - File Upload */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
+            <div className="p-5">
+              <div className="flex items-center gap-2 mb-5">
+                <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg shadow-md">
+                  <UploadCloud className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-emerald-800">Tips Membuat Materi Berkualitas</p>
-                  <div className="mt-1.5 space-y-1">
-                    <p className="text-[11px] text-emerald-700 flex items-start gap-1.5">
-                      <span className="text-emerald-500">•</span>
-                      Gunakan judul yang jelas dan mudah dipahami
-                    </p>
-                    <p className="text-[11px] text-emerald-700 flex items-start gap-1.5">
-                      <span className="text-emerald-500">•</span>
-                      Pastikan file yang diunggah sesuai dengan kategori yang dipilih
-                    </p>
-                    <p className="text-[11px] text-emerald-700 flex items-start gap-1.5">
-                      <span className="text-emerald-500">•</span>
-                      Deskripsikan materi dengan detail agar mudah dipahami
-                    </p>
-                  </div>
+                  <h3 className="font-bold text-slate-800">Unggah File</h3>
+                  <p className="text-xs text-slate-400">
+                    Maksimal 50MB • PDF, MP4, PPT, DOC
+                  </p>
                 </div>
               </div>
+
+              {!fileInfo ? (
+                <label className="group block border-2 border-dashed border-slate-200 rounded-xl p-10 transition-all cursor-pointer hover:border-blue-400 hover:bg-blue-50/30">
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={handleFile}
+                    accept=".pdf,.mp4,.ppt,.pptx,.doc,.docx"
+                  />
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                      <UploadCloud className="text-blue-500" size={32} />
+                    </div>
+                    <p className="text-sm font-medium text-slate-700">Klik atau seret file ke sini</p>
+                    <p className="text-xs text-slate-400 mt-1">PDF, MP4, PPT, DOC, DOCX</p>
+                    <div className="flex gap-2 mt-3 flex-wrap justify-center">
+                      <span className="text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded-full">PDF</span>
+                      <span className="text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded-full">MP4</span>
+                      <span className="text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded-full">PPT</span>
+                      <span className="text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded-full">DOC</span>
+                    </div>
+                  </div>
+                </label>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-medium text-slate-600">File Terunggah</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${fileIconData.bg} ${fileIconData.color}`}>
+                      {fileIconData.label} Terdeteksi
+                    </span>
+                  </div>
+
+                  <div className={`flex items-center justify-between p-3 ${fileIconData.bg} rounded-xl border ${fileIconData.border}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 ${fileIconData.bg} rounded-xl flex items-center justify-center`}>
+                        {FileIconComponent && <FileIconComponent size={18} className={fileIconData.color} />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">{fileInfo.name}</p>
+                        <p className="text-[10px] text-slate-400">{fileInfo.size}</p>
+                      </div>
+                    </div>
+                    <button onClick={removeFile} className="p-1.5 hover:bg-red-100 rounded-lg transition">
+                      <X size={14} className="text-red-500" />
+                    </button>
+                  </div>
+
+                  {filePreviewUrl && (
+                    <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+                      <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+                        <span className="text-xs font-medium text-slate-600">Preview File</span>
+                      </div>
+                      <div className="bg-white" style={{ height: 300 }}>
+                        {fileInfo.type === "application/pdf" ? (
+                          <iframe src={filePreviewUrl} className="w-full h-full" title="PDF Preview" />
+                        ) : fileInfo.type.includes("video") ? (
+                          <video src={filePreviewUrl} controls className="w-full h-full" />
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -620,7 +500,7 @@ function AddMateri() {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || !form.judul || !file || !form.divisi || !form.kategori}
+            disabled={isSubmitting || !form.judul || !file || !form.divisi}
             className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-50 disabled:hover:scale-100"
           >
             {isSubmitting
@@ -635,7 +515,7 @@ function AddMateri() {
           <div className="mt-6 p-4 bg-slate-50/50 rounded-xl border border-slate-200">
             <div className="flex items-center gap-2 mb-3">
               <CheckCircle size={14} className="text-emerald-500" />
-              <span className="text-xs font-medium text-slate-600">Preview Materi</span>
+              <span className="text-xs font-medium text-slate-600">Ringkasan Materi</span>
             </div>
             <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
               <span className="flex items-center gap-1">
@@ -646,10 +526,12 @@ function AddMateri() {
                 <Users size={12} />
                 {getDivisiName(form.divisi) || "Divisi"}
               </span>
-              <span className="flex items-center gap-1">
-                <Tag size={12} />
-                {form.kategori || "Kategori"}
-              </span>
+              {detectedKategori && (
+                <span className="flex items-center gap-1">
+                  <Tag size={12} />
+                  {detectedKategori}
+                </span>
+              )}
               <span className="flex items-center gap-1">
                 <Calendar size={12} />
                 {new Date().toLocaleDateString("id-ID")}
@@ -660,11 +542,10 @@ function AddMateri() {
 
       </div>
 
-      {/* SUCCESS MODAL POPUP PREMIUM */}
+      {/* SUCCESS MODAL */}
       {showSuccessModal && successData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in duration-300">
-            {/* Header Modal dengan gradient */}
             <div className="relative bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-5 text-center">
               <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
               <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12"></div>
@@ -673,42 +554,33 @@ function AddMateri() {
                   <PartyPopper className="w-8 h-8 text-white" />
                 </div>
                 <h3 className="text-white text-xl font-bold">Materi Berhasil Ditambahkan!</h3>
-                <p className="text-emerald-100 text-sm mt-1">Materi telah diterbitkan dan tersedia untuk peserta</p>
+                <p className="text-emerald-100 text-sm mt-1">Materi telah diterbitkan</p>
               </div>
             </div>
             
-            {/* Body Modal */}
             <div className="p-6">
-              <div className="bg-emerald-50 rounded-xl p-4 mb-5">
+              <div className={`${KATEGORI_CONFIG[successData.kategori]?.bg || 'bg-emerald-50'} rounded-xl p-4 mb-5`}>
                 <div className="flex items-start gap-3">
-                  <div className="p-1.5 bg-emerald-100 rounded-lg">
-                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  <div className={`p-1.5 ${KATEGORI_CONFIG[successData.kategori]?.bg || 'bg-emerald-100'} rounded-lg`}>
+                    <CheckCircle className={`w-4 h-4 ${KATEGORI_CONFIG[successData.kategori]?.color || 'text-emerald-600'}`} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-emerald-800">Detail Materi</p>
+                    <p className="text-sm font-semibold text-slate-800">Detail Materi</p>
                     <div className="mt-2 space-y-1.5">
-                      <p className="text-xs text-emerald-700">
+                      <p className="text-xs text-slate-600">
                         <span className="font-medium">Judul:</span> {successData.judul}
                       </p>
-                      <p className="text-xs text-emerald-700">
+                      <p className="text-xs text-slate-600">
                         <span className="font-medium">Divisi:</span> {successData.divisi}
                       </p>
-                      <p className="text-xs text-emerald-700">
+                      <p className="text-xs text-slate-600">
                         <span className="font-medium">Kategori:</span> {successData.kategori}
-                      </p>
-                      <p className="text-xs text-emerald-700">
-                        <span className="font-medium">File:</span> {successData.file_name}
                       </p>
                     </div>
                   </div>
                 </div>
               </div>
               
-              <p className="text-xs text-slate-500 text-center mb-5">
-                Materi sudah dapat diakses oleh semua peserta pelatihan di halaman materi.
-              </p>
-              
-              {/* Tombol Aksi */}
               <div className="flex gap-3">
                 <button
                   onClick={handleAddAnother}

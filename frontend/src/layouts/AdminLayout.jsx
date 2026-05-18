@@ -1,3 +1,4 @@
+// src/layouts/AdminLayout.jsx
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
 import logo from "../assets/logo.png"
@@ -29,7 +30,9 @@ function AdminLayout() {
   const location = useLocation()
   const navigate = useNavigate()
 
+  // Sidebar states
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [usersSubmenuOpen, setUsersSubmenuOpen] = useState(true)
   const [notifOpen, setNotifOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -42,6 +45,41 @@ function AdminLayout() {
   const userInitial = currentUser.nama ? currentUser.nama.charAt(0).toUpperCase() : "A"
   const userFullName = currentUser.nama || "Admin Sistem"
   const userEmail = currentUser.email || "admin@kuantaacademy.com"
+
+  // Tutup mobile sidebar saat resize ke desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setMobileSidebarOpen(false)
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Tutup dropdown saat klik di luar
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileOpen) {
+        const profileButton = document.getElementById('profile-button-admin')
+        const profileDropdown = document.getElementById('profile-dropdown-admin')
+        if (profileButton && !profileButton.contains(event.target) && 
+            profileDropdown && !profileDropdown.contains(event.target)) {
+          setProfileOpen(false)
+        }
+      }
+      if (notifOpen) {
+        const notifButton = document.getElementById('notif-button-admin')
+        const notifDropdown = document.getElementById('notif-dropdown-admin')
+        if (notifButton && !notifButton.contains(event.target) && 
+            notifDropdown && !notifDropdown.contains(event.target)) {
+          setNotifOpen(false)
+        }
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [profileOpen, notifOpen])
 
   useEffect(() => {
     const storedNotif = JSON.parse(localStorage.getItem("notifications") || "[]")
@@ -106,16 +144,8 @@ function AdminLayout() {
       "divisi": "Kelola Divisi",
       "add-mentor": "Tambah Mentor",
       "add-peserta": "Tambah Peserta",
-      
     }
     return titles[path] || path
-  }
-
-  const getParentPage = () => {
-    if (location.pathname.includes("/admin/users/edit")) {
-      return "Kelola Akun"
-    }
-    return null
   }
 
   const unreadCount = notifications.filter(n => !n.is_read).length
@@ -145,165 +175,209 @@ function AdminLayout() {
     }
   }
 
-  const handleUsersMenuClick = () => {
-    navigate("/admin/users")
+  const handleMenuClick = () => {
+    // Tutup mobile sidebar setelah klik menu
+    if (mobileSidebarOpen) {
+      setMobileSidebarOpen(false)
+    }
   }
 
+  // Sidebar Content Component (reusable)
+  const SidebarContent = ({ collapsed: isCollapsed, onMenuClick }) => (
+    <>
+      {/* LOGO */}
+      <div className={`px-4 py-5 flex items-center gap-3 border-b border-gray-200 ${isCollapsed ? "justify-center" : ""}`}>
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-xl blur-md opacity-60"></div>
+          <img src={logo} className="relative w-10 h-10 object-contain bg-white rounded-xl p-1.5 shadow-md" alt="Logo" />
+        </div>
+        {!isCollapsed && (
+          <div>
+            <h1 className="font-bold text-gray-800 text-lg tracking-tight">
+              Kuanta <span className="text-teal-500">Academy</span>
+            </h1>
+            <p className="text-xs text-gray-400 font-medium">Admin Portal</p>
+          </div>
+        )}
+      </div>
+
+      {/* MENU */}
+      <div className="px-3 py-6 flex-1 overflow-y-auto">
+        <div className="mb-4">
+          <ul className="space-y-1 text-sm">
+            
+            {/* DASHBOARD */}
+            <Link to="/admin/dashboard" onClick={onMenuClick}>
+              <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                isActive("/admin/dashboard")
+                  ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}>
+                <LayoutDashboard size={18} />
+                {!isCollapsed && <span className="font-medium">Dashboard</span>}
+                {isActive("/admin/dashboard") && !isCollapsed && (
+                  <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
+                )}
+              </li>
+            </Link>
+
+            {/* Kelola Akun dengan dropdown */}
+            <li>
+              <div 
+                onClick={() => {
+                  if (!isCollapsed) {
+                    navigate("/admin/users")
+                  }
+                }}
+                className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                  isUsersMenuActive()
+                    ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Users size={18} />
+                  {!isCollapsed && <span className="font-medium">Kelola Akun</span>}
+                </div>
+                {!isCollapsed && (
+                  <button onClick={toggleUsersSubmenu} className="p-0.5">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                      className={`transition-transform duration-200 ${usersSubmenuOpen ? "rotate-180" : ""}`}>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {!isCollapsed && usersSubmenuOpen && (
+                <div className="ml-7 mt-2 space-y-1">
+                  <Link to="/admin/add-mentor" onClick={onMenuClick}>
+                    <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                      isSubmenuActive("add-mentor")
+                        ? "bg-teal-50 text-teal-600 font-medium"
+                        : "text-gray-500 hover:bg-gray-100"
+                    }`}>
+                      <UserPlus size={14} />
+                      <span>Tambah Mentor</span>
+                    </div>
+                  </Link>
+                  <Link to="/admin/add-peserta" onClick={onMenuClick}>
+                    <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                      isSubmenuActive("add-peserta")
+                        ? "bg-teal-50 text-teal-600 font-medium"
+                        : "text-gray-500 hover:bg-gray-100"
+                    }`}>
+                      <GraduationCap size={14} />
+                      <span>Tambah Peserta</span>
+                    </div>
+                  </Link>
+                </div>
+              )}
+            </li>
+
+            {/* KELOLA DIVISI */}
+            <Link to="/admin/divisi" onClick={onMenuClick}>
+              <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                isActive("/admin/divisi")
+                  ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}>
+                <Building2 size={18} />
+                {!isCollapsed && <span className="font-medium">Kelola Divisi</span>}
+                {isActive("/admin/divisi") && !isCollapsed && (
+                  <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
+                )}
+              </li>
+            </Link>
+
+          </ul>
+        </div>
+      </div>
+
+      {/* LOGOUT BUTTON */}
+      <div className="p-4 border-t border-gray-200">
+        <button
+          onClick={handleLogoutClick}
+          className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-md shadow-red-500/20 hover:shadow-lg hover:shadow-red-500/30"
+        >
+          <div className="absolute inset-0 bg-white/20 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-300"></div>
+          <div className={`relative flex items-center justify-center gap-2 py-2.5 ${isCollapsed ? "px-2" : "px-4"}`}>
+            <Power size={16} className="group-hover:rotate-90 transition-transform duration-300" />
+            {!isCollapsed && <span className="font-medium">Keluar</span>}
+          </div>
+        </button>
+      </div>
+    </>
+  )
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden relative">
       
-      {/* DECORATIVE GRADIENT LINE - FULL WIDTH DI ATAS */}
+      {/* DECORATIVE GRADIENT LINE */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-400 via-blue-500 to-teal-400 z-50"></div>
 
       {/* MAIN CONTENT AREA */}
       <div className="flex flex-1 overflow-hidden pt-1">
         
-        {/* SIDEBAR */}
-        <div className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300 shadow-lg shadow-gray-200/50 shrink-0 relative z-20 ${collapsed ? "w-20" : "w-64"}`}>
+        {/* DESKTOP SIDEBAR - Permanent, hanya tampil di lg ke atas */}
+        <div className={`
+          hidden lg:flex
+          bg-white border-r border-gray-200
+          flex-col transition-all duration-300
+          shadow-lg shadow-gray-200/50 shrink-0 relative z-20
+          ${collapsed ? "w-20" : "w-64"}
+        `}>
+          <SidebarContent collapsed={collapsed} onMenuClick={() => {}} />
           
-          {/* LOGO */}
-          <div className={`px-4 py-5 flex items-center gap-3 border-b border-gray-200 ${collapsed ? "justify-center" : ""}`}>
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-xl blur-md opacity-60"></div>
-              <img src={logo} className="relative w-10 h-10 object-contain bg-white rounded-xl p-1.5 shadow-md" alt="Logo" />
-            </div>
-            {!collapsed && (
-              <div>
-                <h1 className="font-bold text-gray-800 text-lg tracking-tight">
-                  Kuanta <span className="text-teal-500">Academy</span>
-                </h1>
-                <p className="text-xs text-gray-400 font-medium">Admin Portal</p>
-              </div>
-            )}
-          </div>
-
-          {/* MENU */}
-          <div className="px-3 py-6 flex-1 overflow-y-auto">
-            <div className="mb-4">
-              <ul className="space-y-1 text-sm">
-                
-                <Link to="/admin/dashboard">
-                  <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                    isActive("/admin/dashboard")
-                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}>
-                    <LayoutDashboard size={18} />
-                    {!collapsed && <span className="font-medium">Dashboard</span>}
-                    {isActive("/admin/dashboard") && !collapsed && (
-                      <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
-                    )}
-                  </li>
-                </Link>
-
-                {/* Kelola Akun dengan dropdown */}
-                <li>
-                  <div 
-                    onClick={handleUsersMenuClick}
-                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                      isUsersMenuActive()
-                        ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Users size={18} />
-                      {!collapsed && <span className="font-medium">Kelola Akun</span>}
-                    </div>
-                    {!collapsed && (
-                      <button onClick={toggleUsersSubmenu} className="p-0.5">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                          className={`transition-transform duration-200 ${usersSubmenuOpen ? "rotate-180" : ""}`}>
-                          <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-
-                  {!collapsed && usersSubmenuOpen && (
-                    <div className="ml-7 mt-2 space-y-1">
-                      <Link to="/admin/add-mentor">
-                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                          isSubmenuActive("add-mentor")
-                            ? "bg-teal-50 text-teal-600 font-medium"
-                            : "text-gray-500 hover:bg-gray-100"
-                        }`}>
-                          <UserPlus size={14} />
-                          <span>Tambah Mentor</span>
-                        </div>
-                      </Link>
-                      <Link to="/admin/add-peserta">
-                        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                          isSubmenuActive("add-peserta")
-                            ? "bg-teal-50 text-teal-600 font-medium"
-                            : "text-gray-500 hover:bg-gray-100"
-                        }`}>
-                          <GraduationCap size={14} />
-                          <span>Tambah Peserta</span>
-                        </div>
-                      </Link>
-                    </div>
-                  )}
-                </li>
-
-                <Link to="/admin/divisi">
-                  <li className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                    isActive("/admin/divisi")
-                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}>
-                    <Building2 size={18} />
-                    {!collapsed && <span className="font-medium">Kelola Divisi</span>}
-                    {isActive("/admin/divisi") && !collapsed && (
-                      <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
-                    )}
-                  </li>
-                </Link>
-
-              </ul>
-            </div>
-          </div>
-
-          {/* LOGOUT BUTTON - SIDEBAR - PREMIUM */}
-          <div className="p-4 border-t border-gray-200">
-            <button
-              onClick={handleLogoutClick}
-              className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-md shadow-red-500/20 hover:shadow-lg hover:shadow-red-500/30"
-            >
-              <div className="absolute inset-0 bg-white/20 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-300"></div>
-              <div className={`relative flex items-center justify-center gap-2 py-2.5 ${collapsed ? "px-2" : "px-4"}`}>
-                <Power size={16} className="group-hover:rotate-90 transition-transform duration-300" />
-                {!collapsed && <span className="font-medium">Keluar</span>}
-              </div>
-            </button>
-          </div>
-
-          {/* COLLAPSE BUTTON */}
+          {/* COLLAPSE BUTTON - Hanya di desktop */}
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="absolute -right-3 top-24 bg-white border border-gray-300 rounded-full p-1 shadow-md hover:bg-gray-100 transition-all z-30 hover:scale-110"
+            className="absolute -right-3 top-24 bg-white border border-gray-300 rounded-full p-1 shadow-md hover:bg-gray-100 transition-all z-30 hover:scale-110 hidden lg:block"
           >
             {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
           </button>
-
         </div>
+
+        {/* MOBILE SIDEBAR - Overlay, hanya tampil saat mobileSidebarOpen true */}
+        {mobileSidebarOpen && (
+          <>
+            {/* BACKDROP */}
+            <div
+              className="fixed inset-0 bg-black/40 z-40 lg:hidden animate-fadeIn"
+              onClick={() => setMobileSidebarOpen(false)}
+            />
+            
+            {/* SIDEBAR OVERLAY */}
+            <div className="
+              fixed left-0 top-0 h-full w-64
+              bg-white z-50 shadow-2xl
+              lg:hidden
+              flex flex-col
+              animate-slideInLeft
+            ">
+              <SidebarContent collapsed={false} onMenuClick={handleMenuClick} />
+            </div>
+          </>
+        )}
 
         {/* RIGHT SIDE - Topbar + Content */}
         <div className="flex-1 flex flex-col overflow-hidden relative z-10 bg-gradient-to-br from-gray-50 to-gray-100">
           
-          {/* TOPBAR PREMIUM */}
-          <div className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-6 shadow-sm shrink-0 relative z-50">
+          {/* TOPBAR */}
+          <div className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-4 md:px-6 shadow-sm shrink-0 relative z-30">
             
-            {/* LEFT SIDE */}
-            <div className="flex items-center gap-4">
+            {/* LEFT SIDE - Hamburger Menu untuk mobile */}
+            <div className="flex items-center gap-3">
+              {/* Tombol hamburger untuk membuka mobile sidebar */}
               <button 
-                onClick={() => setCollapsed(!collapsed)} 
+                onClick={() => setMobileSidebarOpen(true)} 
                 className="p-2 hover:bg-gray-100 rounded-xl transition-all lg:hidden"
               >
-                <Menu size={18} className="text-gray-600" />
+                <Menu size={20} className="text-gray-600" />
               </button>
-              <div className="hidden md:flex items-center gap-3">
+              
+              {/* Breadcrumb */}
+              <div className="hidden md:flex items-center gap-2">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-500">Admin</span>
                   <ChevronRight size={12} className="text-gray-400" />
@@ -312,12 +386,17 @@ function AdminLayout() {
                   </span>
                 </div>
               </div>
+              
+              {/* Title untuk mobile */}
+              <div className="md:hidden">
+                <span className="font-semibold text-gray-800 text-sm">{getBreadcrumbTitle()}</span>
+              </div>
             </div>
 
             {/* RIGHT SIDE */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4">
               
-              {/* Date Time Card - Compact & Premium */}
+              {/* Date Time Card - hide di mobile */}
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white/70 backdrop-blur-sm rounded-xl border border-gray-200/80 shadow-sm">
                 <div className="flex items-center gap-1.5">
                   <Calendar size={14} className="text-teal-500" />
@@ -331,8 +410,9 @@ function AdminLayout() {
               </div>
 
               {/* Notification Bell */}
-              <div className="relative">
+              <div className="relative" style={{ zIndex: 9999 }}>
                 <button 
+                  id="notif-button-admin"
                   onClick={() => setNotifOpen(!notifOpen)}
                   className="relative p-2 hover:bg-gray-100 rounded-xl transition-all duration-200"
                 >
@@ -343,7 +423,11 @@ function AdminLayout() {
                 </button>
 
                 {notifOpen && (
-                  <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 z-[100] overflow-hidden">
+                  <div 
+                    id="notif-dropdown-admin"
+                    className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
+                    style={{ zIndex: 99999 }}
+                  >
                     <div className="px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-teal-50/50 to-blue-50/50">
                       <div className="flex justify-between items-center">
                         <div>
@@ -375,24 +459,29 @@ function AdminLayout() {
                 )}
               </div>
 
-              {/* Profile Dropdown Premium */}
-              <div className="relative">
+              {/* Profile Dropdown */}
+              <div className="relative" style={{ zIndex: 9999 }}>
                 <button
+                  id="profile-button-admin"
                   onClick={() => setProfileOpen(!profileOpen)}
-                  className="flex items-center gap-2 p-1.5 hover:bg-gray-100 rounded-xl transition-all duration-200 group relative z-50"
+                  className="flex items-center gap-2 p-1.5 hover:bg-gray-100 rounded-xl transition-all duration-200 group"
                 >
-                  <div className="w-9 h-9 bg-gradient-to-br from-teal-500 to-blue-600 text-white flex items-center justify-center rounded-xl font-bold text-sm shadow-md shadow-teal-500/25 group-hover:scale-105 transition-transform">
+                  <div className="w-8 h-8 md:w-9 md:h-9 bg-gradient-to-br from-teal-500 to-blue-600 text-white flex items-center justify-center rounded-xl font-bold text-sm shadow-md shadow-teal-500/25 group-hover:scale-105 transition-transform">
                     {userInitial}
                   </div>
                   <div className="hidden md:block text-left">
                     <p className="text-sm font-semibold text-gray-800">{userFullName}</p>
                     <p className="text-xs text-gray-400">Administrator</p>
                   </div>
-                  <ChevronDown size={14} className="text-gray-400 group-hover:text-gray-600 transition" />
+                  <ChevronDown size={14} className="hidden md:block text-gray-400 group-hover:text-gray-600 transition" />
                 </button>
 
                 {profileOpen && (
-                  <div className="absolute right-0 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-gray-200 z-[100] overflow-hidden">
+                  <div 
+                    id="profile-dropdown-admin"
+                    className="absolute right-0 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
+                    style={{ zIndex: 99999 }}
+                  >
                     {/* Header Profile */}
                     <div className="px-5 py-5 border-b border-gray-200 bg-gradient-to-r from-teal-500/10 to-blue-500/10">
                       <div className="flex items-center gap-4">
@@ -410,8 +499,7 @@ function AdminLayout() {
                       </div>
                     </div>
 
-                    {/* LOGOUT BUTTON - PROFILE DROPDOWN - PREMIUM & RATA */}
-                    <div className="py-2">
+                    <div className="py-2 pb-3">
                       <button 
                         onClick={handleLogoutClick}
                         className="w-full flex items-center gap-3 px-5 py-3 text-sm text-red-600 hover:bg-red-50 transition group"
@@ -431,7 +519,7 @@ function AdminLayout() {
             </div>
           </div>
 
-          {/* CONTENT AREA - FULLY INTEGRATED, NO EXTRA CARD */}
+          {/* CONTENT AREA */}
           <div className="flex-1 overflow-auto">
             <Outlet />
           </div>
@@ -442,8 +530,8 @@ function AdminLayout() {
 
       {/* LOGOUT CONFIRMATION MODAL */}
       {logoutConfirmOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-zoomIn">
             {/* Header Modal */}
             <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-red-50 to-orange-50">
               <div className="flex items-center gap-3">
@@ -494,6 +582,30 @@ function AdminLayout() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes zoomIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes slideInLeft {
+          from { transform: translateX(-100%); }
+          to { transform: translateX(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .animate-zoomIn {
+          animation: zoomIn 0.2s ease-out;
+        }
+        .animate-slideInLeft {
+          animation: slideInLeft 0.3s ease-out;
+        }
+      `}</style>
     </div>
   )
 }

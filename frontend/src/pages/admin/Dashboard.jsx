@@ -318,26 +318,6 @@ function DashboardAdmin() {
                 </div>
               </div>
             </div>
-            
-            <div className="flex items-center gap-2">
-              <button
-                onClick={fetchAllData}
-                className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition shadow-sm"
-                title="Refresh data"
-              >
-                <RefreshCw size={16} className={`text-slate-500 ${loading ? 'animate-spin' : ''}`} />
-              </button>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                <input
-                  type="text"
-                  placeholder="Cari pengguna..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 w-64 text-sm text-slate-700 shadow-sm"
-                />
-              </div>
-            </div>
           </div>
         </div>
 

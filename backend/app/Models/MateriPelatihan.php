@@ -16,7 +16,7 @@ class MateriPelatihan extends Model
     protected $fillable = [
         'judul',
         'deskripsi',
-        'divisi',
+        'id_divisi',  // Ubah dari 'divisi' menjadi 'id_divisi'
         'kategori',
         'file_materi',
         'views'
@@ -28,15 +28,34 @@ class MateriPelatihan extends Model
         'views' => 'integer'
     ];
 
-    protected $appends = ['file_url']; // Tambahkan ini
+    protected $appends = ['file_url', 'divisi_nama'];
 
-public function getFileUrlAttribute()
-{
-    if ($this->file_materi) {
-        return asset('storage/' . $this->file_materi);
+    /**
+     * Relasi ke tabel divisi
+     */
+    public function divisiRelasi()
+    {
+        return $this->belongsTo(Divisi::class, 'id_divisi', 'id_divisi');
     }
-    return null;
-}
+
+    /**
+     * Accessor untuk mendapatkan nama divisi
+     */
+    public function getDivisiNamaAttribute()
+    {
+        return $this->divisiRelasi ? $this->divisiRelasi->nama_divisi : 'Umum';
+    }
+
+    /**
+     * Get file URL attribute
+     */
+    public function getFileUrlAttribute()
+    {
+        if ($this->file_materi) {
+            return asset('storage/' . $this->file_materi);
+        }
+        return null;
+    }
     
     /**
      * Get file size in human readable format
@@ -79,9 +98,9 @@ public function getFileUrlAttribute()
     /**
      * Scope untuk filter divisi
      */
-    public function scopeByDivisi($query, $divisi)
+    public function scopeByDivisi($query, $divisiId)
     {
-        return $query->where('divisi', $divisi);
+        return $query->where('id_divisi', $divisiId);
     }
     
     /**

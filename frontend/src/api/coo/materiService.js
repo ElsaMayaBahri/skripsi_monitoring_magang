@@ -23,10 +23,11 @@ export const createMateri = async (formData) => {
   return response.data
 }
 
-// Update materi (with file upload) - Use PUT method
+// Update materi (with file upload) - Use POST with _method PUT
 export const updateMateri = async (id, formData) => {
-  // Gunakan method PUT untuk update (sesuai REST API backend)
-  const response = await axiosInstance.put(`/materi-pelatihan/${id}`, formData, {
+  formData.append("_method", "PUT")
+  
+  const response = await axiosInstance.post(`/materi-pelatihan/${id}`, formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
@@ -49,7 +50,7 @@ export const downloadMateri = async (id) => {
 }
 
 // Get materi by division
-export const getMateriByDivisi = async (divisi) => {
-  const response = await axiosInstance.get(`/materi-pelatihan/divisi/${encodeURIComponent(divisi)}`)
+export const getMateriByDivisi = async (divisiId) => {
+  const response = await axiosInstance.get(`/materi-pelatihan/divisi/${divisiId}`)
   return response.data
 }

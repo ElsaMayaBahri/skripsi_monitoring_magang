@@ -41,13 +41,16 @@ function PesertaLayout() {
   const location = useLocation()
   const navigate = useNavigate()
 
+  // Sidebar states
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  
   const [time, setTime] = useState(new Date())
   const [notifOpen, setNotifOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   
-  // Menu dropdown states - sesuai struktur baru
+  // Menu dropdown states
   const [presensiOpen, setPresensiOpen] = useState(false)
   const [pembelajaranMentorOpen, setPembelajaranMentorOpen] = useState(false)
   const [pelatihanKompetensiOpen, setPelatihanKompetensiOpen] = useState(false)
@@ -59,6 +62,41 @@ function PesertaLayout() {
   const userInitial = currentUser.nama ? currentUser.nama.charAt(0).toUpperCase() : "P"
   const userFullName = currentUser.nama || "Peserta Magang"
   const userEmail = currentUser.email || "peserta@kuantaacademy.com"
+
+  // Tutup mobile sidebar saat resize ke desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setMobileSidebarOpen(false)
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Tutup dropdown saat klik di luar
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileOpen) {
+        const profileButton = document.getElementById('profile-button-peserta')
+        const profileDropdown = document.getElementById('profile-dropdown-peserta')
+        if (profileButton && !profileButton.contains(event.target) && 
+            profileDropdown && !profileDropdown.contains(event.target)) {
+          setProfileOpen(false)
+        }
+      }
+      if (notifOpen) {
+        const notifButton = document.getElementById('notif-button-peserta')
+        const notifDropdown = document.getElementById('notif-dropdown-peserta')
+        if (notifButton && !notifButton.contains(event.target) && 
+            notifDropdown && !notifDropdown.contains(event.target)) {
+          setNotifOpen(false)
+        }
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [profileOpen, notifOpen])
 
   useEffect(() => {
     const storedNotif = JSON.parse(localStorage.getItem("notifications")) || []
@@ -156,6 +194,268 @@ function PesertaLayout() {
     navigate("/peserta/settings")
   }
 
+  const handleMenuClick = () => {
+    // Tutup mobile sidebar setelah klik menu
+    if (mobileSidebarOpen) {
+      setMobileSidebarOpen(false)
+    }
+  }
+
+  // Sidebar Content Component (reusable)
+  const SidebarContent = ({ collapsed: isCollapsed, onMenuClick }) => (
+    <>
+      {/* LOGO */}
+      <div className={`px-4 py-5 flex items-center gap-3 border-b border-gray-200 ${isCollapsed ? "justify-center" : ""}`}>
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-xl blur-md opacity-60"></div>
+          <img src={logo} className="relative w-10 h-10 object-contain bg-white rounded-xl p-1.5 shadow-md" alt="Logo" />
+        </div>
+        {!isCollapsed && (
+          <div>
+            <h1 className="font-bold text-gray-800 text-lg tracking-tight">
+              Kuanta <span className="text-teal-500">Academy</span>
+            </h1>
+            <p className="text-xs text-gray-400 font-medium">Peserta Panel</p>
+          </div>
+        )}
+      </div>
+
+      {/* MENU NAVIGATION */}
+      <div className="px-3 py-6 flex-1 overflow-y-auto">
+        <ul className="space-y-1 text-sm">
+          
+          {/* DASHBOARD */}
+          <li>
+            <Link to="/peserta/dashboard" onClick={onMenuClick}>
+              <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                isActive("/peserta/dashboard")
+                  ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}>
+                <LayoutDashboard size={18} />
+                {!isCollapsed && <span className="font-medium">Dashboard</span>}
+                {isActive("/peserta/dashboard") && !isCollapsed && (
+                  <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
+                )}
+              </div>
+            </Link>
+          </li>
+
+          {/* PRESENSI MENU */}
+          <li>
+            <div 
+              onClick={() => !isCollapsed && setPresensiOpen(!presensiOpen)}
+              className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                isPresensiActive()
+                  ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Calendar size={18} />
+                {!isCollapsed && <span className="font-medium">Presensi</span>}
+              </div>
+              {!isCollapsed && (
+                <button onClick={(e) => { e.stopPropagation(); setPresensiOpen(!presensiOpen); }} className="p-0.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    className={`transition-transform duration-200 ${presensiOpen ? "rotate-180" : ""}`}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {!isCollapsed && presensiOpen && (
+              <div className="ml-7 mt-2 space-y-1">
+                <Link to="/peserta/presensi" onClick={onMenuClick}>
+                  <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                    location.pathname === "/peserta/presensi"
+                      ? "bg-teal-50 text-teal-600 font-medium"
+                      : "text-gray-500 hover:bg-gray-100"
+                  }`}>
+                    <CheckCircle size={14} />
+                    <span>Check-in / Check-out</span>
+                  </div>
+                </Link>
+                <Link to="/peserta/riwayat-presensi" onClick={onMenuClick}>
+                  <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                    location.pathname === "/peserta/riwayat-presensi"
+                      ? "bg-teal-50 text-teal-600 font-medium"
+                      : "text-gray-500 hover:bg-gray-100"
+                  }`}>
+                    <History size={14} />
+                    <span>Riwayat Presensi</span>
+                  </div>
+                </Link>
+              </div>
+            )}
+          </li>
+
+          {/* PEMBELAJARAN MENTOR MENU */}
+          <li>
+            <div 
+              onClick={() => !isCollapsed && setPembelajaranMentorOpen(!pembelajaranMentorOpen)}
+              className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                isPembelajaranMentorActive()
+                  ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <BookOpen size={18} />
+                {!isCollapsed && <span className="font-medium">Pembelajaran Mentor</span>}
+              </div>
+              {!isCollapsed && (
+                <button onClick={(e) => { e.stopPropagation(); setPembelajaranMentorOpen(!pembelajaranMentorOpen); }} className="p-0.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    className={`transition-transform duration-200 ${pembelajaranMentorOpen ? "rotate-180" : ""}`}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {!isCollapsed && pembelajaranMentorOpen && (
+              <div className="ml-7 mt-2 space-y-1">
+                <Link to="/peserta/materi-mentor" onClick={onMenuClick}>
+                  <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                    location.pathname === "/peserta/materi-mentor"
+                      ? "bg-teal-50 text-teal-600 font-medium"
+                      : "text-gray-500 hover:bg-gray-100"
+                  }`}>
+                    <BookMarked size={14} />
+                    <span>Materi Mentor</span>
+                  </div>
+                </Link>
+                <Link to="/peserta/tugas" onClick={onMenuClick}>
+                  <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                    location.pathname === "/peserta/tugas" || location.pathname.startsWith("/peserta/tugas/")
+                      ? "bg-teal-50 text-teal-600 font-medium"
+                      : "text-gray-500 hover:bg-gray-100"
+                  }`}>
+                    <FileText size={14} />
+                    <span>Tugas</span>
+                  </div>
+                </Link>
+              </div>
+            )}
+          </li>
+
+          {/* PELATIHAN KOMPETENSI MENU */}
+          <li>
+            <div 
+              onClick={() => !isCollapsed && setPelatihanKompetensiOpen(!pelatihanKompetensiOpen)}
+              className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                isPelatihanKompetensiActive()
+                  ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <GraduationCap size={18} />
+                {!isCollapsed && <span className="font-medium">Pelatihan Kompetensi</span>}
+              </div>
+              {!isCollapsed && (
+                <button onClick={(e) => { e.stopPropagation(); setPelatihanKompetensiOpen(!pelatihanKompetensiOpen); }} className="p-0.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    className={`transition-transform duration-200 ${pelatihanKompetensiOpen ? "rotate-180" : ""}`}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {!isCollapsed && pelatihanKompetensiOpen && (
+              <div className="ml-7 mt-2 space-y-1">
+                <Link to="/peserta/materi-kompetensi" onClick={onMenuClick}>
+                  <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                    location.pathname === "/peserta/materi-kompetensi"
+                      ? "bg-teal-50 text-teal-600 font-medium"
+                      : "text-gray-500 hover:bg-gray-100"
+                  }`}>
+                    <BookOpen size={14} />
+                    <span>Materi Kompetensi</span>
+                  </div>
+                </Link>
+                <Link to="/peserta/daftar-kuis-kompetensi" onClick={onMenuClick}>
+                  <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                    location.pathname === "/peserta/daftar-kuis-kompetensi"
+                      ? "bg-teal-50 text-teal-600 font-medium"
+                      : "text-gray-500 hover:bg-gray-100"
+                  }`}>
+                    <ClipboardList size={14} />
+                    <span>Kuis Kompetensi</span>
+                  </div>
+                </Link>
+                <Link to="/peserta/sertifikat" onClick={onMenuClick}>
+                  <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                    location.pathname === "/peserta/sertifikat"
+                      ? "bg-teal-50 text-teal-600 font-medium"
+                      : "text-gray-500 hover:bg-gray-100"
+                  }`}>
+                    <Trophy size={14} />
+                    <span>Sertifikat</span>
+                  </div>
+                </Link>
+              </div>
+            )}
+          </li>
+
+          {/* PENILAIAN MENU */}
+          <li>
+            <div 
+              onClick={() => !isCollapsed && setPenilaianOpen(!penilaianOpen)}
+              className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                isPenilaianActive()
+                  ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Award size={18} />
+                {!isCollapsed && <span className="font-medium">Penilaian</span>}
+              </div>
+              {!isCollapsed && (
+                <button onClick={(e) => { e.stopPropagation(); setPenilaianOpen(!penilaianOpen); }} className="p-0.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    className={`transition-transform duration-200 ${penilaianOpen ? "rotate-180" : ""}`}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {!isCollapsed && penilaianOpen && (
+              <div className="ml-7 mt-2 space-y-1">
+                <Link to="/peserta/nilai-akhir" onClick={onMenuClick}>
+                  <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
+                    location.pathname === "/peserta/nilai-akhir"
+                      ? "bg-teal-50 text-teal-600 font-medium"
+                      : "text-gray-500 hover:bg-gray-100"
+                  }`}>
+                    <Star size={14} />
+                    <span>Nilai Akhir</span>
+                  </div>
+                </Link>
+              </div>
+            )}
+          </li>
+        </ul>
+      </div>
+
+      {/* LOGOUT BUTTON */}
+      <div className="p-4 border-t border-gray-200">
+        <button
+          onClick={handleLogoutClick}
+          className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white py-2.5 rounded-xl transition-all duration-200 shadow-md shadow-red-500/20 group"
+        >
+          <LogOut size={18} className="transition-transform group-hover:scale-110" />
+          {!isCollapsed && <span className="font-medium">Keluar</span>}
+        </button>
+      </div>
+    </>
+  )
+
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden relative">
       
@@ -165,284 +465,65 @@ function PesertaLayout() {
       {/* MAIN CONTENT AREA */}
       <div className="flex flex-1 overflow-hidden pt-1">
         
-        {/* SIDEBAR */}
-        <div className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300 shadow-lg shadow-gray-200/50 shrink-0 relative z-20 ${collapsed ? "w-20" : "w-64"}`}>
+        {/* DESKTOP SIDEBAR - Permanent, hanya tampil di lg ke atas */}
+        <div className={`
+          hidden lg:flex
+          bg-white border-r border-gray-200
+          flex-col transition-all duration-300
+          shadow-lg shadow-gray-200/50 shrink-0 relative z-20
+          ${collapsed ? "w-20" : "w-64"}
+        `}>
+          <SidebarContent collapsed={collapsed} onMenuClick={() => {}} />
           
-          {/* LOGO */}
-          <div className={`px-4 py-5 flex items-center gap-3 border-b border-gray-200 ${collapsed ? "justify-center" : ""}`}>
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-teal-400 to-blue-500 rounded-xl blur-md opacity-60"></div>
-              <img src={logo} className="relative w-10 h-10 object-contain bg-white rounded-xl p-1.5 shadow-md" alt="Logo" />
-            </div>
-            {!collapsed && (
-              <div>
-                <h1 className="font-bold text-gray-800 text-lg tracking-tight">
-                  Kuanta <span className="text-teal-500">Academy</span>
-                </h1>
-                <p className="text-xs text-gray-400 font-medium">Peserta Panel</p>
-              </div>
-            )}
-          </div>
-
-          {/* MENU NAVIGATION - STRUKTUR BARU */}
-          <div className="px-3 py-6 flex-1 overflow-y-auto">
-            <ul className="space-y-1 text-sm">
-              
-              {/* DASHBOARD */}
-              <li>
-                <Link to="/peserta/dashboard">
-                  <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                    isActive("/peserta/dashboard")
-                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}>
-                    <LayoutDashboard size={18} />
-                    {!collapsed && <span className="font-medium">Dashboard</span>}
-                    {isActive("/peserta/dashboard") && !collapsed && (
-                      <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
-                    )}
-                  </div>
-                </Link>
-              </li>
-
-              {/* PRESENSI MENU */}
-              <li>
-                <div 
-                  onClick={() => !collapsed && setPresensiOpen(!presensiOpen)}
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                    isPresensiActive()
-                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Calendar size={18} />
-                    {!collapsed && <span className="font-medium">Presensi</span>}
-                  </div>
-                  {!collapsed && (
-                    <button onClick={(e) => { e.stopPropagation(); setPresensiOpen(!presensiOpen); }} className="p-0.5">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                        className={`transition-transform duration-200 ${presensiOpen ? "rotate-180" : ""}`}>
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-
-                {!collapsed && presensiOpen && (
-                  <div className="ml-7 mt-2 space-y-1">
-                    <Link to="/peserta/presensi">
-                      <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                        location.pathname === "/peserta/presensi"
-                          ? "bg-teal-50 text-teal-600 font-medium"
-                          : "text-gray-500 hover:bg-gray-100"
-                      }`}>
-                        <CheckCircle size={14} />
-                        <span>Check-in / Check-out</span>
-                      </div>
-                    </Link>
-                    <Link to="/peserta/riwayat-presensi">
-                      <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                        location.pathname === "/peserta/riwayat-presensi"
-                          ? "bg-teal-50 text-teal-600 font-medium"
-                          : "text-gray-500 hover:bg-gray-100"
-                      }`}>
-                        <History size={14} />
-                        <span>Riwayat Presensi</span>
-                      </div>
-                    </Link>
-                  </div>
-                )}
-              </li>
-
-              {/* PEMBELAJARAN MENTOR MENU */}
-              <li>
-                <div 
-                  onClick={() => !collapsed && setPembelajaranMentorOpen(!pembelajaranMentorOpen)}
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                    isPembelajaranMentorActive()
-                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <BookOpen size={18} />
-                    {!collapsed && <span className="font-medium">Pembelajaran Mentor</span>}
-                  </div>
-                  {!collapsed && (
-                    <button onClick={(e) => { e.stopPropagation(); setPembelajaranMentorOpen(!pembelajaranMentorOpen); }} className="p-0.5">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                        className={`transition-transform duration-200 ${pembelajaranMentorOpen ? "rotate-180" : ""}`}>
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-
-                {!collapsed && pembelajaranMentorOpen && (
-                  <div className="ml-7 mt-2 space-y-1">
-                    <Link to="/peserta/materi-mentor">
-                      <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                        location.pathname === "/peserta/materi-mentor"
-                          ? "bg-teal-50 text-teal-600 font-medium"
-                          : "text-gray-500 hover:bg-gray-100"
-                      }`}>
-                        <BookMarked size={14} />
-                        <span>Materi Mentor</span>
-                      </div>
-                    </Link>
-                    <Link to="/peserta/tugas">
-                      <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                        location.pathname === "/peserta/tugas" || location.pathname.startsWith("/peserta/tugas/")
-                          ? "bg-teal-50 text-teal-600 font-medium"
-                          : "text-gray-500 hover:bg-gray-100"
-                      }`}>
-                        <FileText size={14} />
-                        <span>Tugas</span>
-                      </div>
-                    </Link>
-                  </div>
-                )}
-              </li>
-
-              {/* PELATIHAN KOMPETENSI MENU */}
-              <li>
-                <div 
-                  onClick={() => !collapsed && setPelatihanKompetensiOpen(!pelatihanKompetensiOpen)}
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                    isPelatihanKompetensiActive()
-                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <GraduationCap size={18} />
-                    {!collapsed && <span className="font-medium">Pelatihan Kompetensi</span>}
-                  </div>
-                  {!collapsed && (
-                    <button onClick={(e) => { e.stopPropagation(); setPelatihanKompetensiOpen(!pelatihanKompetensiOpen); }} className="p-0.5">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                        className={`transition-transform duration-200 ${pelatihanKompetensiOpen ? "rotate-180" : ""}`}>
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-
-                {!collapsed && pelatihanKompetensiOpen && (
-                  <div className="ml-7 mt-2 space-y-1">
-                    <Link to="/peserta/materi-kompetensi">
-                      <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                        location.pathname === "/peserta/materi-kompetensi"
-                          ? "bg-teal-50 text-teal-600 font-medium"
-                          : "text-gray-500 hover:bg-gray-100"
-                      }`}>
-                        <BookOpen size={14} />
-                        <span>Materi Kompetensi</span>
-                      </div>
-                    </Link>
-                    <Link to="/peserta/daftar-kuis-kompetensi">
-                      <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                        location.pathname === "/peserta/daftar-kuis-kompetensi"
-                          ? "bg-teal-50 text-teal-600 font-medium"
-                          : "text-gray-500 hover:bg-gray-100"
-                      }`}>
-                        <ClipboardList size={14} />
-                        <span>Kuis Kompetensi</span>
-                      </div>
-                    </Link>
-                    <Link to="/peserta/sertifikat">
-                      <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                        location.pathname === "/peserta/sertifikat"
-                          ? "bg-teal-50 text-teal-600 font-medium"
-                          : "text-gray-500 hover:bg-gray-100"
-                      }`}>
-                        <Trophy size={14} />
-                        <span>Sertifikat</span>
-                      </div>
-                    </Link>
-                  </div>
-                )}
-              </li>
-
-              {/* PENILAIAN MENU */}
-              <li>
-                <div 
-                  onClick={() => !collapsed && setPenilaianOpen(!penilaianOpen)}
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                    isPenilaianActive()
-                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Award size={18} />
-                    {!collapsed && <span className="font-medium">Penilaian</span>}
-                  </div>
-                  {!collapsed && (
-                    <button onClick={(e) => { e.stopPropagation(); setPenilaianOpen(!penilaianOpen); }} className="p-0.5">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                        className={`transition-transform duration-200 ${penilaianOpen ? "rotate-180" : ""}`}>
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-
-                {!collapsed && penilaianOpen && (
-                  <div className="ml-7 mt-2 space-y-1">
-                    <Link to="/peserta/nilai-akhir">
-                      <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                        location.pathname === "/peserta/nilai-akhir"
-                          ? "bg-teal-50 text-teal-600 font-medium"
-                          : "text-gray-500 hover:bg-gray-100"
-                      }`}>
-                        <Star size={14} />
-                        <span>Nilai Akhir</span>
-                      </div>
-                    </Link>
-                  </div>
-                )}
-              </li>
-            </ul>
-          </div>
-
-          {/* LOGOUT BUTTON */}
-          <div className="p-4 border-t border-gray-200">
-            <button
-              onClick={handleLogoutClick}
-              className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white py-2.5 rounded-xl transition-all duration-200 shadow-md shadow-red-500/20 group"
-            >
-              <LogOut size={18} className="transition-transform group-hover:scale-110" />
-              {!collapsed && <span className="font-medium">Keluar</span>}
-            </button>
-          </div>
-
-          {/* COLLAPSE BUTTON */}
+          {/* COLLAPSE BUTTON - Hanya di desktop */}
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="absolute -right-3 top-24 bg-white border border-gray-300 rounded-full p-1 shadow-md hover:bg-gray-100 transition-all z-30 hover:scale-110"
+            className="absolute -right-3 top-24 bg-white border border-gray-300 rounded-full p-1 shadow-md hover:bg-gray-100 transition-all z-30 hover:scale-110 hidden lg:block"
           >
             {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
           </button>
-
         </div>
 
-        {/* RIGHT SIDE */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-white">
+        {/* MOBILE SIDEBAR - Overlay, hanya tampil saat mobileSidebarOpen true */}
+        {mobileSidebarOpen && (
+          <>
+            {/* BACKDROP */}
+            <div
+              className="fixed inset-0 bg-black/40 z-40 lg:hidden animate-fadeIn"
+              onClick={() => setMobileSidebarOpen(false)}
+            />
+            
+            {/* SIDEBAR OVERLAY */}
+            <div className="
+              fixed left-0 top-0 h-full w-64
+              bg-white z-50 shadow-2xl
+              lg:hidden
+              flex flex-col
+              animate-slideInLeft
+            ">
+              <SidebarContent collapsed={false} onMenuClick={handleMenuClick} />
+            </div>
+          </>
+        )}
+
+        {/* RIGHT SIDE - Topbar + Content */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-white relative z-10">
           
           {/* TOPBAR */}
-          <div className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
+          <div className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 shrink-0 relative z-30">
             
-            {/* LEFT SIDE */}
-            <div className="flex items-center gap-4">
+            {/* LEFT SIDE - Hamburger Menu untuk mobile */}
+            <div className="flex items-center gap-3">
+              {/* Tombol hamburger untuk membuka mobile sidebar */}
               <button 
-                onClick={() => setCollapsed(!collapsed)} 
+                onClick={() => setMobileSidebarOpen(true)} 
                 className="p-2 hover:bg-gray-100 rounded-xl transition-all lg:hidden"
               >
-                <Menu size={18} className="text-gray-600" />
+                <Menu size={20} className="text-gray-600" />
               </button>
-              <div className="hidden md:flex items-center gap-3">
+              
+              {/* Breadcrumb */}
+              <div className="hidden md:flex items-center gap-2">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-500">Peserta</span>
                   <ChevronRight size={12} className="text-gray-400" />
@@ -451,12 +532,17 @@ function PesertaLayout() {
                   </span>
                 </div>
               </div>
+              
+              {/* Title untuk mobile */}
+              <div className="md:hidden">
+                <span className="font-semibold text-gray-800 text-sm">{getPageTitle()}</span>
+              </div>
             </div>
 
             {/* RIGHT SIDE */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4">
               
-              {/* DATE TIME - Compact & Premium */}
+              {/* DATE TIME - hide di mobile */}
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white/70 backdrop-blur-sm rounded-xl border border-gray-200/80 shadow-sm">
                 <div className="flex items-center gap-1.5">
                   <Calendar size={14} className="text-teal-500" />
@@ -470,8 +556,9 @@ function PesertaLayout() {
               </div>
 
               {/* NOTIFICATION BELL */}
-              <div className="relative">
+              <div className="relative" style={{ zIndex: 9999 }}>
                 <button 
+                  id="notif-button-peserta"
                   onClick={() => setNotifOpen(!notifOpen)}
                   className="relative p-2 hover:bg-gray-100 rounded-lg transition-all duration-200"
                 >
@@ -482,7 +569,11 @@ function PesertaLayout() {
                 </button>
 
                 {notifOpen && (
-                  <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 z-[100] overflow-hidden">
+                  <div 
+                    id="notif-dropdown-peserta"
+                    className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
+                    style={{ zIndex: 99999 }}
+                  >
                     <div className="px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-teal-50/50 to-blue-50/50">
                       <div className="flex justify-between items-center">
                         <div>
@@ -515,12 +606,13 @@ function PesertaLayout() {
               </div>
 
               {/* PROFILE DROPDOWN */}
-              <div className="relative">
+              <div className="relative" style={{ zIndex: 9999 }}>
                 <button
+                  id="profile-button-peserta"
                   onClick={() => setProfileOpen(!profileOpen)}
                   className="flex items-center gap-2 pl-2 pr-1 py-1 hover:bg-gray-100 rounded-lg transition-all duration-200 group"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-br from-teal-500 to-blue-600 text-white flex items-center justify-center rounded-lg font-bold text-sm shadow-md shadow-teal-500/25">
+                  <div className="w-8 h-8 md:w-9 md:h-9 bg-gradient-to-br from-teal-500 to-blue-600 text-white flex items-center justify-center rounded-lg font-bold text-sm shadow-md shadow-teal-500/25">
                     {userInitial}
                   </div>
                   <div className="hidden md:block text-left">
@@ -530,11 +622,15 @@ function PesertaLayout() {
                       <p className="text-xs text-gray-400">Peserta</p>
                     </div>
                   </div>
-                  <ChevronDown size={14} className="text-gray-400 group-hover:text-gray-600 transition" />
+                  <ChevronDown size={14} className="hidden md:block text-gray-400 group-hover:text-gray-600 transition" />
                 </button>
 
                 {profileOpen && (
-                  <div className="absolute right-0 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-gray-200 z-[100] overflow-hidden">
+                  <div 
+                    id="profile-dropdown-peserta"
+                    className="absolute right-0 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
+                    style={{ zIndex: 99999 }}
+                  >
                     <div className="px-5 py-5 border-b border-gray-200 bg-gradient-to-r from-teal-500/10 to-blue-500/10">
                       <div className="flex items-center gap-4">
                         <div className="w-14 h-14 bg-gradient-to-br from-teal-500 to-blue-600 text-white flex items-center justify-center rounded-xl font-bold text-xl shadow-lg shadow-teal-500/25">
@@ -602,7 +698,7 @@ function PesertaLayout() {
           </div>
 
           {/* PAGE CONTENT */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-auto">
             <Outlet />
           </div>
           
@@ -612,8 +708,8 @@ function PesertaLayout() {
 
       {/* LOGOUT CONFIRMATION MODAL */}
       {logoutConfirmOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-zoomIn">
             {/* Header Modal */}
             <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-red-50 to-orange-50">
               <div className="flex items-center gap-3">
@@ -664,6 +760,30 @@ function PesertaLayout() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes zoomIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes slideInLeft {
+          from { transform: translateX(-100%); }
+          to { transform: translateX(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .animate-zoomIn {
+          animation: zoomIn 0.2s ease-out;
+        }
+        .animate-slideInLeft {
+          animation: slideInLeft 0.3s ease-out;
+        }
+      `}</style>
     </div>
   )
 }

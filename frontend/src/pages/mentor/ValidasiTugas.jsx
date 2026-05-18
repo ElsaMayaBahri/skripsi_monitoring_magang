@@ -21,11 +21,11 @@ import {
   Sparkles,
   Shield,
   Zap,
-  Target,
   Activity,
   SortAsc,
   SortDesc,
-  CheckCheck
+  CheckCheck,
+  ExternalLink
 } from "lucide-react";
 import axiosInstance from "../../api/axios";
 import { getTugasSubmissions, updateTugasSubmission } from "../../api/mentor/tugasService";
@@ -41,13 +41,12 @@ function ValidasiTugas() {
   const [sortOrder, setSortOrder] = useState("newest");
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [previewFileUrl, setPreviewFileUrl] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewType, setPreviewType] = useState("");
   const [previewFileName, setPreviewFileName] = useState("");
-  const [previewFileType, setPreviewFileType] = useState("");
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
-  const [hoveredRow, setHoveredRow] = useState(null);
   const [reviewForm, setReviewForm] = useState({
     catatan: "",
     status: "selesai"
@@ -57,31 +56,80 @@ function ValidasiTugas() {
   const [downloading, setDownloading] = useState(null);
   const [itemsPerPage] = useState(5);
 
-  // Helper untuk mendapatkan URL file langsung dari storage
+  const BASE_URL = "http://localhost:8000";
+
+  // Helper untuk mendapatkan URL file (langsung dari storage)
   const getFileUrl = (filePath) => {
     if (!filePath) return null;
-    if (filePath.startsWith("http")) return filePath;
-    return `http://localhost:8000/storage/${filePath}`;
+    if (filePath.startsWith('http')) return filePath;
+    if (filePath.startsWith('/storage')) return `${BASE_URL}${filePath}`;
+    return `${BASE_URL}/storage/${filePath}`;
   };
 
-  // Fungsi download file langsung
-  const handleDownloadFile = async (fileUrl, fileName, submissionId) => {
-    setDownloading(submissionId);
-    try {
-      // Gunakan axiosInstance untuk download dengan auth token
-      const response = await axiosInstance.get(fileUrl, {
-        responseType: 'blob'
-      });
+  // Deteksi tipe file berdasarkan ekstensi (untuk preview di modal)
+  const getFileTypeFromUrl = (url) => {
+    if (!url) return "other";
+    const ext = url.split('.').pop().toLowerCase();
+    
+    if (ext === "pdf") return "pdf";
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) return "image";
+    if (['doc', 'docx'].includes(ext)) return "document";
+    if (['xls', 'xlsx', 'csv'].includes(ext)) return "spreadsheet";
+    
+    return "other";
+  };
+
+  // 🔥 Fungsi Preview - ONLY untuk FILE (PDF/Image/Doc/Excel)
+  // 🔥 Untuk LINK eksternal, buka di tab baru dengan window.open
+  const handlePreview = (submission) => {
+    // CASE 1: Ada link eksternal - BUKA DI TAB BARU (bukan iframe)
+    if (submission.link_jawaban) {
+      window.open(submission.link_jawaban, '_blank');
+      return;
+    }
+    
+    // CASE 2: Ada file - PREVIEW DI MODAL
+    if (submission.file_path) {
+      const url = getFileUrl(submission.file_path);
+      const type = getFileTypeFromUrl(url);
       
-      const blob = new Blob([response.data]);
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = fileName || 'file';
+      // Hanya file yang bisa dipreview (PDF/Image/Doc/Excel)
+      if (type !== "other") {
+        setPreviewUrl(url);
+        setPreviewType(type);
+        setPreviewFileName(submission.file_name || "file");
+        setShowPreview(true);
+      } else {
+        // File tidak bisa dipreview (video, dll) - kasih tahu user
+        alert("File jenis ini tidak dapat dipreview. Silakan download untuk melihat.");
+      }
+      return;
+    }
+    
+    // CASE 3: Tidak ada file dan tidak ada link
+    alert("Tidak ada file atau link untuk dipreview");
+  };
+
+  // 🔥 Fungsi Download - ONLY untuk FILE
+  const handleDownload = async (submission) => {
+    if (!submission.file_path) {
+      alert("File tidak tersedia");
+      return;
+    }
+
+    setDownloading(submission.id_pengumpulan);
+
+    try {
+      const fileUrl = getFileUrl(submission.file_path);
+      const fileName = submission.file_name || fileUrl.split('/').pop() || "download";
+      
+      // Download ke device
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.setAttribute("download", fileName);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
     } catch (error) {
       console.error("Download error:", error);
       alert("Gagal mengunduh file. Silakan coba lagi.");
@@ -90,10 +138,10 @@ function ValidasiTugas() {
     }
   };
 
-  // Fungsi preview file - buka di tab baru
-  const handlePreviewFile = (fileUrl, fileName) => {
-    if (fileUrl) {
-      window.open(fileUrl, '_blank');
+  // 🔥 Fungsi Buka Link - untuk LINK eksternal
+  const handleOpenLink = (link) => {
+    if (link) {
+      window.open(link, '_blank');
     }
   };
 
@@ -110,14 +158,14 @@ function ValidasiTugas() {
           id_pengumpulan: item.id_pengumpulan,
           peserta_id: item.peserta_id,
           peserta_nama: item.peserta?.user?.nama || item.peserta_nama || "Tidak diketahui",
-          peserta_divisi: item.peserta?.divisi?.nama_divisi || item.peserta_divisi || "-",
+          peserta_divisi: item.peserta?.divisi?.nama_divisi || item.peserta_divisi || "",
           tugas_judul: item.tugas?.judul || "Tugas",
           status: item.status || "dikumpulkan",
           submitted_at: item.submitted_at,
-          file_url: getFileUrl(item.file_jawaban || item.file_url),
+          file_path: item.file_jawaban || item.file_url,
           file_name: item.file_jawaban?.split('/').pop() || "file",
           catatan_mentor: item.catatan_mentor || null,
-          progress: item.progress || 0
+          link_jawaban: item.link_jawaban || null
         }));
         setSubmissions(formattedData);
         setFilteredSubmissions(formattedData);
@@ -176,7 +224,7 @@ function ValidasiTugas() {
     try {
       const response = await updateTugasSubmission(selectedSubmission.id_pengumpulan, {
         status: reviewForm.status,
-        catatan: reviewForm.catatan
+        catatan_mentor: reviewForm.catatan
       });
       if (response && response.success) {
         const updatedSubmissions = submissions.map(s => 
@@ -215,7 +263,7 @@ function ValidasiTugas() {
   };
 
   const formatDateTime = (dateTime) => {
-    if (!dateTime) return "-";
+    if (!dateTime) return "";
     try {
       return new Date(dateTime).toLocaleString("id-ID", {
         day: "numeric",
@@ -225,7 +273,7 @@ function ValidasiTugas() {
         minute: "2-digit"
       });
     } catch {
-      return "-";
+      return "";
     }
   };
 
@@ -411,6 +459,9 @@ function ValidasiTugas() {
                   const status = getStatusBadge(sub.status);
                   const StatusIcon = status.icon;
                   const isDownloading = downloading === sub.id_pengumpulan;
+                  const hasFile = sub.file_path;
+                  const hasLink = sub.link_jawaban;
+                  
                   return (
                     <tr key={sub.id_pengumpulan} className="transition-all duration-300 group hover:bg-slate-50/50">
                       <td className="px-6 py-4">
@@ -420,11 +471,7 @@ function ValidasiTugas() {
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-slate-800">{sub.peserta_nama}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[9px] text-slate-400">{sub.peserta_divisi}</span>
-                              <span className="text-[9px] text-slate-300">•</span>
-                              <span className="text-[9px] text-slate-400">Progress {sub.progress}%</span>
-                            </div>
+                            <p className="text-[9px] text-slate-400">{sub.peserta_divisi}</p>
                           </div>
                         </div>
                       </td>
@@ -456,17 +503,18 @@ function ValidasiTugas() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          {sub.file_url && (
+                          {/* Jika ada FILE */}
+                          {hasFile && (
                             <>
                               <button 
-                                onClick={() => handlePreviewFile(sub.file_url, sub.file_name)} 
+                                onClick={() => handlePreview(sub)} 
                                 className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white transition-all duration-200" 
                                 title="Preview"
                               >
                                 <Eye size="14" />
                               </button>
                               <button 
-                                onClick={() => handleDownloadFile(sub.file_url, sub.file_name, sub.id_pengumpulan)} 
+                                onClick={() => handleDownload(sub)} 
                                 disabled={isDownloading} 
                                 className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-500 hover:text-white transition-all duration-200 disabled:opacity-50" 
                                 title="Download"
@@ -475,6 +523,18 @@ function ValidasiTugas() {
                               </button>
                             </>
                           )}
+                          
+                          {/* Jika ada LINK (dan TIDAK ada file, atau file tetap ada tapi link terpisah) */}
+                          {hasLink && (
+                            <button 
+                              onClick={() => handleOpenLink(sub.link_jawaban)} 
+                              className="p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all duration-200" 
+                              title="Buka Link"
+                            >
+                              <ExternalLink size="14" />
+                            </button>
+                          )}
+                          
                           <button 
                             onClick={() => handleOpenModal(sub)} 
                             className="relative overflow-hidden px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-xs font-semibold text-white shadow-md hover:shadow-xl transition-all duration-300"
@@ -622,6 +682,92 @@ function ValidasiTugas() {
               <button onClick={handleSubmitReview} disabled={submitting} className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-white font-semibold shadow-md hover:shadow-xl transition-all duration-300 disabled:opacity-50 flex items-center gap-2">
                 {submitting ? <Loader2 size="16" className="animate-spin" /> : <Send size="16" />}
                 {submitting ? "Menyimpan..." : "Simpan Review"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔥 PREVIEW MODAL - ONLY untuk FILE (PDF/Image/Doc/Excel) */}
+      {showPreview && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-teal-50 to-blue-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 shadow-md">
+                  <FileText size="16" className="text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-800">Preview File</h3>
+                  <p className="text-xs text-slate-500">{previewFileName}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPreview(false)} 
+                className="p-2 rounded-lg bg-white/80 text-slate-500 hover:bg-slate-100 transition"
+              >
+                <X size="18" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-auto p-4 bg-slate-100">
+              {previewType === "pdf" && (
+                <iframe
+                  src={previewUrl}
+                  className="w-full h-full rounded-lg border-0"
+                  title="Preview PDF"
+                  style={{ minHeight: 'calc(90vh - 80px)' }}
+                />
+              )}
+              {previewType === "image" && (
+                <div className="flex items-center justify-center h-full">
+                  <img 
+                    src={previewUrl} 
+                    alt={previewFileName} 
+                    className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+                  />
+                </div>
+              )}
+              {(previewType === "document" || previewType === "spreadsheet") && (
+                <iframe
+                  src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(previewUrl)}`}
+                  className="w-full h-full rounded-lg border-0 bg-white"
+                  title="Preview Office Document"
+                  style={{ minHeight: 'calc(90vh - 80px)' }}
+                />
+              )}
+              {previewType === "other" && (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <FileText size="64" className="text-slate-400 mb-4" />
+                  <p className="text-slate-600 font-medium">File tidak dapat dipreview</p>
+                  <p className="text-sm text-slate-400 mt-1">Silakan download file untuk melihat isinya</p>
+                  <button
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = previewUrl;
+                      link.setAttribute("download", previewFileName);
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="mt-4 px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition"
+                  >
+                    <Download size="16" className="inline mr-2" />
+                    Download File
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end px-6 py-3 border-t border-slate-200 bg-slate-50">
+              <button 
+                onClick={() => setShowPreview(false)} 
+                className="px-4 py-2 bg-gradient-to-r from-teal-500 to-blue-600 rounded-lg text-white text-sm font-medium shadow-sm hover:shadow-md transition"
+              >
+                Tutup
               </button>
             </div>
           </div>

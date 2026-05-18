@@ -435,7 +435,6 @@ function DaftarMateri() {
   const totalDokumen = materi.filter(m => m.tipe === "dokumen").length;
   const totalVideo = materi.filter(m => m.tipe === "video").length;
   const totalLink = materi.filter(m => m.tipe === "link").length;
-  const totalViews = materi.reduce((sum, m) => sum + (m.views || 0), 0);
 
   if (loading) {
     return (
@@ -479,8 +478,8 @@ function DaftarMateri() {
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          {/* Stats - Tanpa card Total Dilihat */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-slate-100 shadow-lg">
               <div className="flex items-center justify-between">
                 <div><p className="text-xs text-slate-500">Total Materi</p><p className="text-2xl font-bold text-slate-800">{totalMateri}</p></div>
@@ -495,9 +494,6 @@ function DaftarMateri() {
             </div>
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-slate-100 shadow-lg">
               <div className="flex items-center justify-between"><div><p className="text-xs text-slate-500">Link</p><p className="text-2xl font-bold text-slate-700">{totalLink}</p></div><div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center"><LinkIcon size="16" className="text-green-600" /></div></div>
-            </div>
-            <div className="bg-gradient-to-br from-teal-500 to-blue-600 rounded-2xl p-4 shadow-lg">
-              <div className="flex items-center justify-between"><div><p className="text-xs text-white/80">Total Dilihat</p><p className="text-2xl font-bold text-white">{totalViews}</p></div><div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><TrendingUp size="16" className="text-white" /></div></div>
             </div>
           </div>
 
@@ -717,7 +713,7 @@ function DaftarMateri() {
         </div>
       )}
 
-      {/* PREVIEW MODAL - TANPA TOMBOL KEMBALI */}
+      {/* PREVIEW MODAL */}
       {preview && (
         <div 
           style={{
@@ -735,7 +731,7 @@ function DaftarMateri() {
           }} 
           className="animate-in fade-in duration-200"
         >
-          {/* Header Preview - Tanpa tombol kembali */}
+          {/* Header Preview */}
           <div className="bg-gradient-to-r from-slate-900 to-slate-800 backdrop-blur-md px-6 py-4 flex justify-between items-center shadow-xl border-b border-white/20 flex-shrink-0">
             <div className="flex items-center gap-3 flex-1 min-w-0">
               {(() => {

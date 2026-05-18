@@ -21,7 +21,8 @@ import {
   Loader2,
   FileText,
   FileSpreadsheet,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle
 } from "lucide-react"
 import axiosInstance from "../../api/axios"
 import * as XLSX from 'xlsx'
@@ -40,8 +41,6 @@ function Presensi() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [showExportDropdown, setShowExportDropdown] = useState(false)
-  const [showConfirmModal, setShowConfirmModal] = useState(false)
-  const [exportType, setExportType] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [divisiList, setDivisiList] = useState([])
@@ -54,9 +53,32 @@ function Presensi() {
     persenKehadiran: 0
   })
   
+  // Toast notification state
+  const [toast, setToast] = useState({ show: false, message: "", type: "" })
+  
   const itemsPerPage = 8
 
-  // Load divisi list
+  // Auto hide toast after 5 seconds
+  useEffect(() => {
+    if (toast.show) {
+      const timer = setTimeout(() => {
+        setToast({ show: false, message: "", type: "" })
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [toast.show])
+
+  // Hitung rentang hari
+  const getDateRangeDays = () => {
+    if (!startDate && !endDate) return 0
+    const start = startDate ? new Date(startDate) : new Date()
+    const end = endDate ? new Date(endDate) : new Date()
+    const diffTime = Math.abs(end - start)
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays
+  }
+
+  // Load divisi list - HANYA DIVISI AKTIF
   const fetchDivisi = async () => {
     try {
       const response = await axiosInstance.get("/divisi")
@@ -66,30 +88,33 @@ function Presensi() {
       } else if (response.data && Array.isArray(response.data)) {
         divisiData = response.data
       }
-      setDivisiList(divisiData)
+      // Filter hanya divisi dengan status aktif
+      const aktifDivisi = divisiData.filter(div => 
+        div.status === "aktif" || div.status === 1 || div.status === true
+      )
+      setDivisiList(aktifDivisi)
     } catch (err) {
       console.error("Error fetching divisi:", err)
+      setDivisiList([])
     }
   }
 
-
-  // Format jam saja (HH:MM) - VERSI SEDERHANA
-const formatTimeOnly = (time) => {
-  if (!time) return "-"
-  try {
-    // Langsung split 'T' dan ambil 5 karakter pertama dari bagian jam
-    const timeStr = String(time)
-    if (timeStr.includes('T')) {
-      return timeStr.split('T')[1].substring(0, 5)
+  // Format jam saja (HH:MM)
+  const formatTimeOnly = (time) => {
+    if (!time) return "-"
+    try {
+      const timeStr = String(time)
+      if (timeStr.includes('T')) {
+        return timeStr.split('T')[1].substring(0, 5)
+      }
+      if (timeStr.includes(':')) {
+        return timeStr.substring(0, 5)
+      }
+      return "-"
+    } catch {
+      return "-"
     }
-    if (timeStr.includes(':')) {
-      return timeStr.substring(0, 5)
-    }
-    return "-"
-  } catch {
-    return "-"
   }
-}
 
   // Format hanya tanggal
   const formatDateOnly = (date) => {
@@ -141,8 +166,6 @@ const formatTimeOnly = (time) => {
       console.log("Fetching presensi from:", url)
       
       const response = await axiosInstance.get(url)
-      
-      console.log("Presensi response:", response)
       
       let presensiList = []
       if (response.data && response.data.success && response.data.data) {
@@ -225,20 +248,13 @@ const formatTimeOnly = (time) => {
     setIsModalOpen(true)
   }
 
-  const showConfirmExport = (type) => {
-    setExportType(type)
-    setShowConfirmModal(true)
-    setShowExportDropdown(false)
-  }
-
-  const executeExport = () => {
-    setShowConfirmModal(false)
-    if (exportType === 'excel') handleExportExcel()
-    else if (exportType === 'pdf') handleExportPDF()
-    setExportType(null)
-  }
-
+  // EXPORT EXCEL - LANGSUNG DOWNLOAD (TANPA POPUP)
   const handleExportExcel = () => {
+    if (filteredData.length === 0) {
+      setToast({ show: true, message: "Tidak ada data untuk diexport", type: "error" })
+      return
+    }
+    
     setIsExporting(true)
     try {
       const exportData = filteredData.map((item, index) => ({
@@ -258,19 +274,47 @@ const formatTimeOnly = (time) => {
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, "Rekap Presensi")
       XLSX.writeFile(wb, `rekap_presensi_${new Date().toISOString().split('T')[0]}.xlsx`)
-      alert("Laporan berhasil diunduh dalam format Excel")
+      
+      setToast({ show: true, message: "Laporan Excel berhasil diunduh", type: "success" })
     } catch (err) {
       console.error("Error exporting to Excel:", err)
-      alert("Gagal mengunduh laporan presensi dalam format Excel")
+      setToast({ show: true, message: "Gagal mengunduh laporan Excel", type: "error" })
     } finally {
       setIsExporting(false)
+      setShowExportDropdown(false)
     }
   }
 
+  // CEK RENTANG UNTUK PDF
   const handleExportPDF = () => {
+    if (filteredData.length === 0) {
+      setToast({ show: true, message: "Tidak ada data untuk diexport", type: "error" })
+      return
+    }
+    
+    const rangeDays = getDateRangeDays()
+    const THREE_MONTHS = 90
+    
+    // Jika rentang > 3 bulan (90 hari), tampilkan toast warning dan BATAL download
+    if (rangeDays > THREE_MONTHS) {
+      setToast({ 
+        show: true, 
+        message: `Rentang waktu terlalu panjang (${rangeDays} hari). Disarankan menggunakan format Excel untuk data dalam jumlah banyak.`, 
+        type: "warning" 
+      })
+      setShowExportDropdown(false)
+      return
+    }
+    
+    // Jika rentang ≤ 3 bulan, langsung download
+    executePDFExport()
+    setShowExportDropdown(false)
+  }
+
+  // EKSEKUSI DOWNLOAD PDF
+  const executePDFExport = () => {
     setIsExporting(true)
     try {
-      const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
       const startDateFormatted = startDate ? formatDatePDF(startDate) : "Semua"
       const endDateFormatted = endDate ? formatDatePDF(endDate) : "Semua"
       
@@ -292,33 +336,50 @@ const formatTimeOnly = (time) => {
         <div style="text-align: center; margin-bottom: 25px;">
           <h2>LAPORAN REKAP PRESENSI PESERTA MAGANG</h2>
           <p>Periode: ${startDateFormatted} s/d ${endDateFormatted}</p>
+          <p style="color: #64748b; font-size: 10px;">Total Data: ${filteredData.length} presensi</p>
         </div>
         <table style="width: 100%; border-collapse: collapse;">
           <thead>
-            <tr><th>No</th><th>Nama</th><th>Divisi</th><th>Tanggal</th><th>Check-In</th><th>Check-Out</th><th>Status</th><th>Telat</th></tr>
+            <tr>
+              <th style="border: 1px solid #ddd; padding: 8px;">No</th>
+              <th style="border: 1px solid #ddd; padding: 8px;">Nama</th>
+              <th style="border: 1px solid #ddd; padding: 8px;">Divisi</th>
+              <th style="border: 1px solid #ddd; padding: 8px;">Tanggal</th>
+              <th style="border: 1px solid #ddd; padding: 8px;">Check-In</th>
+              <th style="border: 1px solid #ddd; padding: 8px;">Check-Out</th>
+              <th style="border: 1px solid #ddd; padding: 8px;">Status</th>
+              <th style="border: 1px solid #ddd; padding: 8px;">Telat</th>
+            </tr>
           </thead>
           <tbody>
             ${filteredData.map((item, idx) => `
               <tr>
-                <td>${idx + 1}</td>
-                <td>${escapeHtml(getNamaPeserta(item))}</td>
-                <td>${escapeHtml(getDivisiPesertaString(item))}</td>
-                <td>${formatDateOnly(item.tanggal)}</td>
-                <td>${formatTimeOnly(item.check_in)}</td>
-                <td>${formatTimeOnly(item.check_out)}</td>
-                <td>${item.status || '-'}</td>
-                <td>${item.keterlambatan || 0} menit}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${idx + 1}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${escapeHtml(getNamaPeserta(item))}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${escapeHtml(getDivisiPesertaString(item))}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${formatDateOnly(item.tanggal)}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${formatTimeOnly(item.check_in)}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${formatTimeOnly(item.check_out)}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${item.status || '-'}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${item.keterlambatan || 0} menit}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
       `
       
-      html2pdf().set({ margin: 0.5, filename: `rekap_presensi_${new Date().toISOString().split('T')[0]}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' } }).from(element).save()
-      alert("Laporan berhasil diunduh dalam format PDF")
+      html2pdf().set({ 
+        margin: 0.5, 
+        filename: `rekap_presensi_${new Date().toISOString().split('T')[0]}.pdf`, 
+        image: { type: 'jpeg', quality: 0.98 }, 
+        html2canvas: { scale: 2 }, 
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' } 
+      }).from(element).save()
+      
+      setToast({ show: true, message: "Laporan PDF berhasil diunduh", type: "success" })
     } catch (err) {
       console.error("Error exporting to PDF:", err)
-      alert("Gagal mengunduh laporan presensi dalam format PDF")
+      setToast({ show: true, message: "Gagal mengunduh laporan PDF", type: "error" })
     } finally {
       setIsExporting(false)
     }
@@ -388,28 +449,30 @@ const formatTimeOnly = (time) => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-[1400px] mx-auto">
         
-        {/* CONFIRMATION MODAL */}
-        {showConfirmModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-zoomIn">
-              <div className="relative">
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-t-2xl"></div>
-                <div className="p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-blue-100 rounded-xl">
-                      <Download className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-slate-800">Konfirmasi Unduh Laporan</h3>
-                  </div>
-                  <p className="text-slate-600 mb-6">
-                    Apakah Anda yakin ingin mengunduh laporan presensi dalam format <strong className="text-blue-600">{exportType?.toUpperCase()}</strong>?
-                  </p>
-                  <div className="flex gap-3">
-                    <button onClick={() => { setShowConfirmModal(false); setExportType(null) }} className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50">Batal</button>
-                    <button onClick={executeExport} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl text-white font-medium hover:shadow-lg">Ya, Unduh</button>
-                  </div>
-                </div>
-              </div>
+        {/* TOAST NOTIFICATION - pojok kanan atas */}
+        {toast.show && (
+          <div className="fixed top-5 right-5 z-50 animate-slide-in-right">
+            <div className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border ${
+              toast.type === "success" ? "bg-emerald-50 border-emerald-200" :
+              toast.type === "warning" ? "bg-amber-50 border-amber-200" :
+              "bg-red-50 border-red-200"
+            }`}>
+              {toast.type === "success" && <CheckCircle size={18} className="text-emerald-600" />}
+              {toast.type === "warning" && <AlertTriangle size={18} className="text-amber-600" />}
+              {toast.type === "error" && <AlertCircle size={18} className="text-red-600" />}
+              <p className={`text-sm ${
+                toast.type === "success" ? "text-emerald-800" :
+                toast.type === "warning" ? "text-amber-800" :
+                "text-red-800"
+              }`}>
+                {toast.message}
+              </p>
+              <button 
+                onClick={() => setToast({ show: false, message: "", type: "" })}
+                className="ml-2 p-0.5 hover:bg-white/50 rounded-lg transition"
+              >
+                <X size={14} className="text-slate-500" />
+              </button>
             </div>
           </div>
         )}
@@ -430,15 +493,31 @@ const formatTimeOnly = (time) => {
             </div>
             
             <div className="relative" ref={dropdownRef}>
-              <button onClick={() => setShowExportDropdown(!showExportDropdown)} disabled={isExporting || filteredData.length === 0} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all disabled:opacity-50">
+              <button 
+                onClick={() => setShowExportDropdown(!showExportDropdown)} 
+                disabled={isExporting || filteredData.length === 0} 
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all disabled:opacity-50"
+              >
                 {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
                 Unduh Laporan
                 <ChevronDown size={16} className={`transition-transform ${showExportDropdown ? 'rotate-180' : ''}`} />
               </button>
               {showExportDropdown && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden z-50">
-                  <button onClick={() => showConfirmExport('excel')} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-emerald-50"><FileSpreadsheet size={16} className="text-emerald-600" />Export ke Excel</button>
-                  <button onClick={() => showConfirmExport('pdf')} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-red-50 border-t border-slate-100"><FileText size={16} className="text-red-600" />Export ke PDF</button>
+                  <button 
+                    onClick={handleExportExcel} 
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-emerald-50 transition"
+                  >
+                    <FileSpreadsheet size={16} className="text-emerald-600" />
+                    Export ke Excel
+                  </button>
+                  <button 
+                    onClick={handleExportPDF} 
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-red-50 border-t border-slate-100 transition"
+                  >
+                    <FileText size={16} className="text-red-600" />
+                    Export ke PDF
+                  </button>
                 </div>
               )}
             </div>
@@ -469,7 +548,7 @@ const formatTimeOnly = (time) => {
             </div>
             <div className="w-full md:w-48"><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" /></div>
             <div className="w-full md:w-48"><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" /></div>
-            {(searchTerm || selectedDivisi !== "all" || startDate || endDate) && <button onClick={resetFilters} className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700">Reset Filter</button>}
+            {(searchTerm || selectedDivisi !== "all" || startDate || endDate) && <button onClick={resetFilters} className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700 transition">Reset Filter</button>}
           </div>
         </div>
 
@@ -479,117 +558,116 @@ const formatTimeOnly = (time) => {
             <div className="flex items-start gap-3">
               <AlertCircle size={18} className="text-red-500 flex-shrink-0 mt-0.5" />
               <div className="flex-1"><p className="text-sm text-red-700 font-medium mb-1">Error Memuat Data</p><p className="text-sm text-red-600">{error}</p></div>
-              <button onClick={fetchPresensi} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded-lg text-white text-xs font-medium">Coba Lagi</button>
+              <button onClick={fetchPresensi} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded-lg text-white text-xs font-medium transition">Coba Lagi</button>
             </div>
           </div>
         )}
-
-        {/* TABLE */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Peserta</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Divisi</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tanggal</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Check-In</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Check-Out</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="text-center px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {paginatedData.length === 0 && !loading ? (
-                  <tr>
-                    <td colSpan="7" className="px-5 py-12 text-center">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center">
-                          <Users size={20} className="text-slate-400" />
-                        </div>
-                        <p className="text-slate-500 text-sm">Tidak ada data presensi</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedData.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/50 transition group">
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm">
-                            {getNamaPeserta(item).charAt(0)}
-                          </div>
-                          <span className="font-medium text-slate-800 text-sm">{getNamaPeserta(item)}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-full font-medium">
-                          {getDivisiPesertaString(item)}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-sm text-slate-600">
-                        {formatDateOnly(item.tanggal)}
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="text-sm text-slate-600">{formatTimeOnly(item.check_in)}</span>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="text-sm text-slate-600">{formatTimeOnly(item.check_out)}</span>
-                      </td>
-                      <td className="px-5 py-3">
-                        {getStatusBadge(item.status)}
-                      </td>
-                      <td className="px-5 py-3 text-center">
-                        <button onClick={() => handleViewDetail(item)} className="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition">
-                          <Eye size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="px-5 py-3 border-t border-slate-100 flex justify-between items-center">
-              <p className="text-[10px] text-slate-400">
-                Menampilkan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredData.length)} dari {filteredData.length}
-              </p>
-              <div className="flex gap-1">
-                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-50">
-                  <ChevronLeft size={14} />
-                </button>
-                <div className="flex gap-1">
-                  {[...Array(Math.min(totalPages, 5))].map((_, i) => {
-                    let pageNum = i + 1;
-                    if (totalPages > 5 && currentPage > 3) {
-                      pageNum = currentPage - 2 + i;
-                      if (pageNum > totalPages) return null;
-                    }
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => setCurrentPage(pageNum)}
-                        className={`w-7 h-7 rounded-lg text-xs font-medium transition ${
-                          currentPage === pageNum
-                            ? "bg-blue-600 text-white shadow-sm"
-                            : "text-slate-600 hover:bg-slate-100"
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    );
-                  })}
+{/* TABLE */}
+<div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+  <div className="overflow-x-auto">
+    <table className="w-full">
+      <thead>
+        <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+          <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Peserta</th>
+          <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Divisi</th>
+          <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tanggal</th>
+          <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Check-In</th>
+          <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Check-Out</th>
+          <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+          <th className="text-center px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Aksi</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-100">
+        {paginatedData.length === 0 && !loading ? (
+          <tr>
+            <td colSpan="7" className="px-5 py-12 text-center">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center">
+                  <Users size={20} className="text-slate-400" />
                 </div>
-                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-50">
-                  <ChevronRight size={14} />
-                </button>
+                <p className="text-slate-500 text-sm">Tidak ada data presensi</p>
               </div>
-            </div>
-          )}
+            </td>
+          </tr>
+        ) : (
+          paginatedData.map((item) => (
+            <tr key={item.id} className="hover:bg-slate-50/50 transition group">
+              <td className="px-5 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                    {getNamaPeserta(item).charAt(0)}
+                  </div>
+                  <span className="font-medium text-slate-800 text-sm">{getNamaPeserta(item)}</span>
+                </div>
+              </td>
+              <td className="px-5 py-3">
+                <span className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-full font-medium">
+                  {getDivisiPesertaString(item)}
+                </span>
+              </td>
+              <td className="px-5 py-3 text-sm text-slate-600">
+                {formatDateOnly(item.tanggal)}
+              </td>
+              <td className="px-5 py-3">
+                <span className="text-sm text-slate-600">{formatTimeOnly(item.check_in)}</span>
+              </td>
+              <td className="px-5 py-3">
+                <span className="text-sm text-slate-600">{formatTimeOnly(item.check_out)}</span>
+              </td>
+              <td className="px-5 py-3">
+                {getStatusBadge(item.status)}
+              </td>
+              <td className="px-5 py-3 text-center">
+                <button onClick={() => handleViewDetail(item)} className="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition">
+                  <Eye size={14} />
+                </button>
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
+
+  {/* Pagination */}
+  {totalPages > 1 && (
+    <div className="px-5 py-3 border-t border-slate-100 flex justify-between items-center">
+      <p className="text-[10px] text-slate-400">
+        Menampilkan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredData.length)} dari {filteredData.length}
+      </p>
+      <div className="flex gap-1">
+        <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition">
+          <ChevronLeft size={14} />
+        </button>
+        <div className="flex gap-1">
+          {[...Array(Math.min(totalPages, 5))].map((_, i) => {
+            let pageNum = i + 1;
+            if (totalPages > 5 && currentPage > 3) {
+              pageNum = currentPage - 2 + i;
+              if (pageNum > totalPages) return null;
+            }
+            return (
+              <button
+                key={i}
+                onClick={() => setCurrentPage(pageNum)}
+                className={`w-7 h-7 rounded-lg text-xs font-medium transition ${
+                  currentPage === pageNum
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
         </div>
+        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-slate-200 text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition">
+          <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
+  )}
+</div>
 
         {/* MODAL DETAIL PRESENSI */}
         {isModalOpen && selectedPresensi && (
@@ -605,7 +683,7 @@ const formatTimeOnly = (time) => {
                     <p className="text-[10px] text-slate-400">{formatDateOnly(selectedPresensi.tanggal)}</p>
                   </div>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-lg">
+                <button onClick={() => setIsModalOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-lg transition">
                   <X size={16} className="text-slate-400" />
                 </button>
               </div>
@@ -657,7 +735,21 @@ const formatTimeOnly = (time) => {
           </div>
         )}
       </div>
-      <style>{`@keyframes zoomIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}.animate-zoomIn{animation:zoomIn 0.3s ease-out}`}</style>
+      <style>{`
+        @keyframes slideInRight {
+          from {
+            opacity: 0;
+            transform: translateX(100%);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        .animate-slide-in-right {
+          animation: slideInRight 0.3s ease-out;
+        }
+      `}</style>
     </div>
   )
 }

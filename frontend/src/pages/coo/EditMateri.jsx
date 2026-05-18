@@ -6,7 +6,6 @@ import {
   Save, 
   FileText, 
   BookOpen, 
-  Tag, 
   Layers,
   Edit3,
   UploadCloud,
@@ -16,7 +15,10 @@ import {
   Trash2,
   Loader2,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Image,
+  FileCode,
+  Presentation
 } from "lucide-react"
 
 function EditMateri() {
@@ -26,18 +28,27 @@ function EditMateri() {
   const [form, setForm] = useState({
     judul: "",
     deskripsi: "",
-    divisi: "",
-    kategori: ""
+    id_divisi: ""  // Ubah dari divisi ke id_divisi
   })
   const [existingFile, setExistingFile] = useState(null)
   const [newFile, setNewFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
-  const [uploadProgress, setUploadProgress] = useState(0)
   const [divisiList, setDivisiList] = useState([])
 
   const BASE_URL = "http://localhost:8000"
+
+  const getFileIconByFileName = (fileName) => {
+    const ext = fileName?.split('.').pop()?.toLowerCase() || ''
+    if (ext === "pdf") return { icon: FileText, color: "text-red-500", bg: "bg-red-50", label: "PDF" }
+    if (ext === "mp4" || ext === "mov" || ext === "avi") return { icon: Video, color: "text-blue-500", bg: "bg-blue-50", label: "Video" }
+    if (ext === "jpg" || ext === "jpeg" || ext === "png" || ext === "gif") return { icon: Image, color: "text-purple-500", bg: "bg-purple-50", label: "Gambar" }
+    if (ext === "doc" || ext === "docx") return { icon: FileText, color: "text-blue-600", bg: "bg-blue-50", label: "Word" }
+    if (ext === "ppt" || ext === "pptx") return { icon: Presentation, color: "text-orange-500", bg: "bg-orange-50", label: "PowerPoint" }
+    if (ext === "xls" || ext === "xlsx") return { icon: FileCode, color: "text-green-500", bg: "bg-green-50", label: "Excel" }
+    return { icon: File, color: "text-slate-500", bg: "bg-slate-100", label: "File" }
+  }
 
   const cleanUrl = (filePath) => {
     if (!filePath) return null
@@ -61,23 +72,21 @@ function EditMateri() {
         const materiItem = response.data
         
         setForm({
-          judul: materiItem.judul || materiItem.title || "",
-          deskripsi: materiItem.deskripsi || materiItem.description || "",
-          divisi: materiItem.divisi || "",
-          kategori: materiItem.kategori || ""
+          judul: materiItem.judul || "",
+          deskripsi: materiItem.deskripsi || "",
+          id_divisi: materiItem.id_divisi || ""  // Gunakan id_divisi dari response
         })
         
         if (materiItem.file_materi) {
+          const fileName = materiItem.file_materi.split('/').pop()
+          
           setExistingFile({
-            name: materiItem.file_materi.split('/').pop(),
+            name: fileName,
             path: materiItem.file_materi,
-            url: cleanUrl(materiItem.file_materi),
-            type: materiItem.kategori === "PDF" ? "application/pdf" : 
-                   materiItem.kategori === "Video" ? "video/mp4" : "application/octet-stream"
+            url: materiItem.file_url || cleanUrl(materiItem.file_materi),
+            ext: fileName.split('.').pop()?.toLowerCase()
           })
         }
-      } else if (response && response.data && !response.success) {
-        setError(response.message || "Gagal mengambil data materi")
       } else {
         setError("Materi tidak ditemukan")
       }
@@ -98,8 +107,13 @@ function EditMateri() {
       } else if (Array.isArray(response)) {
         divisiData = response
       }
-      setDivisiList(divisiData)
-      console.log("Divisi list loaded:", divisiData)
+      // Filter hanya divisi yang aktif
+      const aktifDivisi = divisiData.filter(div => {
+        const status = div.status
+        return status === "aktif" || status === 1 || status === true
+      })
+      setDivisiList(aktifDivisi)
+      console.log("Divisi aktif loaded:", aktifDivisi)
     } catch (error) {
       console.error("Error fetch divisi:", error)
     }
@@ -122,29 +136,12 @@ function EditMateri() {
       return
     }
 
-    const allowedTypes = ['application/pdf', 'video/mp4']
-    if (!allowedTypes.includes(file.type)) {
-      setError("Format file harus PDF atau MP4")
-      return
-    }
-
-    setUploadProgress(0)
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          return 100
-        }
-        return prev + 10
-      })
-    }, 50)
-
     const newFileData = {
       name: file.name,
       size: (file.size / 1024 / 1024).toFixed(2) + " MB",
       type: file.type,
       file: file,
-      lastModified: new Date().toISOString()
+      ext: file.name.split('.').pop()?.toLowerCase()
     }
     
     setNewFile(newFileData)
@@ -152,19 +149,10 @@ function EditMateri() {
 
   const removeNewFile = () => {
     setNewFile(null)
-    setUploadProgress(0)
   }
 
   const removeExistingFile = () => {
     setExistingFile(null)
-  }
-
-  const getFileIcon = (type, kategori) => {
-    if (!type && !kategori) return { icon: File, color: "text-slate-500", bg: "bg-slate-100" }
-    const lowerType = (type || kategori || "").toLowerCase()
-    if (lowerType.includes("pdf")) return { icon: FileText, color: "text-red-500", bg: "bg-red-50" }
-    if (lowerType.includes("video") || lowerType.includes("mp4")) return { icon: Video, color: "text-blue-500", bg: "bg-blue-50" }
-    return { icon: File, color: "text-slate-500", bg: "bg-slate-100" }
   }
 
   const handleUpdate = async () => {
@@ -172,7 +160,7 @@ function EditMateri() {
       setError("Judul materi harus diisi")
       return
     }
-    if (!form.divisi) {
+    if (!form.id_divisi) {
       setError("Divisi harus dipilih")
       return
     }
@@ -185,14 +173,13 @@ function EditMateri() {
       const materiId = parseInt(id)
       
       const formData = new FormData()
-      
-      // Data untuk update
       formData.append("judul", form.judul.trim())
       formData.append("deskripsi", form.deskripsi || "")
-      formData.append("divisi", form.divisi)
-      formData.append("kategori", form.kategori || "")
+      formData.append("id_divisi", form.id_divisi)  // Kirim id_divisi, bukan divisi
       
-      // Hanya append file jika ada file baru
+      // Kirim sebagai POST dengan _method PUT untuk mengatasi form-data
+      formData.append("_method", "PUT")
+      
       if (newFile && newFile.file) {
         formData.append("file", newFile.file)
       }
@@ -200,8 +187,7 @@ function EditMateri() {
       console.log("Updating materi ID:", materiId)
       console.log("Data:", {
         judul: form.judul,
-        divisi: form.divisi,
-        kategori: form.kategori,
+        id_divisi: form.id_divisi,
         hasFile: !!(newFile && newFile.file)
       })
 
@@ -210,6 +196,8 @@ function EditMateri() {
       
       if (response && response.success) {
         setSuccess(response.message || "Materi berhasil diupdate!")
+        // Refresh data materi setelah update
+        await fetchMateri()
         setTimeout(() => {
           navigate("/coo/materi")
         }, 1500)
@@ -220,7 +208,7 @@ function EditMateri() {
       console.error("Error updating materi:", err)
       
       if (err.response?.status === 405) {
-        setError("Method tidak diizinkan. Pastikan backend mendukung method PUT.")
+        setError("Method tidak diizinkan. Pastikan backend mendukung method POST dengan _method PUT.")
       } else if (err.response?.status === 422) {
         const errors = err.response.data?.errors
         if (errors) {
@@ -239,14 +227,14 @@ function EditMateri() {
     }
   }
 
-  const existingFileInfo = existingFile ? getFileIcon(existingFile.type, form.kategori) : null
-  const newFileInfo = newFile ? getFileIcon(newFile.type) : null
+  const existingFileInfo = existingFile ? getFileIconByFileName(existingFile.name) : null
+  const newFileInfo = newFile ? getFileIconByFileName(newFile.name) : null
 
   if (loading && !form.judul) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200/30 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 size={32} className="animate-spin text-teal-600" />
+          <Loader2 size={32} className="animate-spin text-indigo-600" />
           <p className="text-slate-500 text-sm">Memuat data materi...</p>
         </div>
       </div>
@@ -254,21 +242,21 @@ function EditMateri() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200/30">
       <div className="p-5 lg:p-6 max-w-5xl mx-auto">
         
-        {/* HEADER - Tombol kembali ke materi sudah dihapus */}
+        {/* HEADER */}
         <div className="mb-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-teal-600 via-cyan-700 to-blue-800 rounded-xl shadow-md">
+            <div className="p-2 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-xl shadow-sm">
               <Edit3 className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 via-teal-800 to-cyan-800 bg-clip-text text-transparent">
+              <h1 className="text-2xl lg:text-3xl font-bold text-slate-800">
                 Edit Materi
               </h1>
               <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-teal-500 rounded-full"></span>
+                <span className="w-1 h-1 bg-indigo-500 rounded-full"></span>
                 Perbarui informasi dan file materi pelatihan
               </p>
             </div>
@@ -277,7 +265,7 @@ function EditMateri() {
 
         {/* MAIN FORM CARD */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="relative h-1 bg-gradient-to-r from-teal-600 via-cyan-700 to-blue-800"></div>
+          <div className="relative h-1 bg-gradient-to-r from-indigo-600 to-blue-600"></div>
           
           {error && (
             <div className="m-5 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
@@ -299,8 +287,8 @@ function EditMateri() {
               {/* LEFT COLUMN */}
               <div className="space-y-5">
                 <div className="flex items-center gap-2 mb-1">
-                  <div className="p-1 bg-blue-100 rounded-lg">
-                    <FileText size={12} className="text-blue-600" />
+                  <div className="p-1 bg-indigo-100 rounded-lg">
+                    <FileText size={12} className="text-indigo-600" />
                   </div>
                   <h3 className="text-sm font-semibold text-slate-700">Informasi Materi</h3>
                 </div>
@@ -316,7 +304,7 @@ function EditMateri() {
                       placeholder="Contoh: Pengenalan Budaya Perusahaan"
                       value={form.judul}
                       onChange={handleChange}
-                      className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition"
+                      className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 transition"
                     />
                   </div>
                 </div>
@@ -333,7 +321,7 @@ function EditMateri() {
                       value={form.deskripsi}
                       onChange={handleChange}
                       rows={4}
-                      className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition resize-none"
+                      className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 transition resize-none"
                     />
                   </div>
                 </div>
@@ -355,39 +343,20 @@ function EditMateri() {
                   <div className="relative">
                     <Layers size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <select
-                      name="divisi"
-                      value={form.divisi}
+                      name="id_divisi"
+                      value={form.id_divisi}
                       onChange={handleChange}
-                      className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 bg-white"
+                      className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 bg-white"
                     >
                       <option value="">Pilih Divisi</option>
                       {divisiList.map((div) => (
-                        <option key={div.id_divisi || div.id} value={div.nama_divisi || div.nama}>
+                        <option key={div.id_divisi || div.id} value={div.id_divisi || div.id}>
                           {div.nama_divisi || div.nama}
                         </option>
                       ))}
                     </select>
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                    Kategori
-                  </label>
-                  <div className="relative">
-                    <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <select
-                      name="kategori"
-                      value={form.kategori}
-                      onChange={handleChange}
-                      className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 bg-white"
-                    >
-                      <option value="">Pilih Kategori</option>
-                      <option value="PDF">PDF</option>
-                      <option value="Video">Video</option>
-                      <option value="Image">Image</option>
-                    </select>
-                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">* Hanya menampilkan divisi yang aktif</p>
                 </div>
               </div>
             </div>
@@ -399,7 +368,7 @@ function EditMateri() {
                   <UploadCloud size={12} className="text-emerald-600" />
                 </div>
                 <h3 className="text-sm font-semibold text-slate-700">File Materi</h3>
-                <span className="text-[10px] text-slate-400">(PDF, MP4 - maks 50MB)</span>
+                <span className="text-[10px] text-slate-400">(PDF, Word, PPT, Excel, Video, Gambar - maks 50MB)</span>
               </div>
 
               {existingFile && !newFile && (
@@ -411,7 +380,7 @@ function EditMateri() {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-slate-700">{existingFile.name}</p>
-                        <p className="text-[10px] text-slate-400">File saat ini</p>
+                        <p className="text-[10px] text-slate-400">File saat ini • {existingFileInfo?.label}</p>
                       </div>
                     </div>
                     <button
@@ -421,7 +390,7 @@ function EditMateri() {
                       <Trash2 size={14} />
                     </button>
                   </div>
-                  <p className="text-[10px] text-teal-600 mt-2 flex items-center gap-1">
+                  <p className="text-[10px] text-indigo-600 mt-2 flex items-center gap-1">
                     <AlertCircle size={10} />
                     Upload file baru untuk mengganti file saat ini.
                   </p>
@@ -429,16 +398,18 @@ function EditMateri() {
               )}
 
               <div className="relative">
-                <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-slate-300 rounded-xl p-6 cursor-pointer hover:border-teal-400 hover:bg-teal-50/30 transition-all duration-200">
+                <label className="flex flex-col items-center justify-center w-full border-2 border-dashed border-slate-300 rounded-xl p-6 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-all duration-200">
                   <input
                     type="file"
                     className="hidden"
                     onChange={handleFileChange}
-                    accept=".pdf,.mp4"
+                    accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.mp4,.jpg,.jpeg,.png,.gif"
                   />
                   <UploadCloud size={32} className="text-slate-400 mb-2" />
                   <p className="text-sm text-slate-600">Klik atau tarik file ke sini</p>
-                  <p className="text-[10px] text-slate-400 mt-1">PDF, MP4 (Maks. 50MB)</p>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    PDF, Word, PPT, Excel, Video, Gambar (Maks. 50MB)
+                  </p>
                 </label>
               </div>
 
@@ -451,7 +422,7 @@ function EditMateri() {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-slate-700">{newFile.name}</p>
-                        <p className="text-[10px] text-slate-400">{newFile.size}</p>
+                        <p className="text-[10px] text-slate-400">{newFile.size} • {newFileInfo?.label}</p>
                       </div>
                     </div>
                     <button
@@ -461,28 +432,10 @@ function EditMateri() {
                       <X size={14} />
                     </button>
                   </div>
-                  
-                  {uploadProgress < 100 && uploadProgress > 0 && (
-                    <div className="mt-2">
-                      <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                        <span>Mempersiapkan...</span>
-                        <span>{uploadProgress}%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-teal-500 to-cyan-500 rounded-full transition-all duration-200"
-                          style={{ width: `${uploadProgress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {uploadProgress === 100 && (
-                    <p className="text-[10px] text-teal-600 mt-2 flex items-center gap-1">
-                      <CheckCircle size={10} />
-                      File siap diupload
-                    </p>
-                  )}
+                  <p className="text-[10px] text-emerald-600 mt-2 flex items-center gap-1">
+                    <CheckCircle size={10} />
+                    File siap diupload
+                  </p>
                 </div>
               )}
             </div>
@@ -501,7 +454,7 @@ function EditMateri() {
             <button
               onClick={handleUpdate}
               disabled={loading}
-              className="px-6 py-2 bg-gradient-to-r from-teal-600 to-cyan-600 rounded-lg text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:hover:scale-100"
+              className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 rounded-lg text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:hover:scale-100"
             >
               {loading ? (
                 <>

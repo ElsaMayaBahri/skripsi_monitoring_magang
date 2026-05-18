@@ -1,6 +1,7 @@
+// frontend/src/pages/admin/Divisi.jsx
 import { useState, useEffect } from "react"
 import { useLocation } from "react-router-dom"
-import { getDivisi, createDivisi, updateDivisi, deleteDivisi } from "../../api/admin/divisiService"
+import { getDivisi, createDivisi, updateDivisi } from "../../api/admin/divisiService"
 import { getMentors } from "../../api/admin/dashboardService"
 import { getPeserta } from "../../api/admin/dashboardService"
 import { logActivity } from "../../utils/activityLogger"
@@ -9,7 +10,6 @@ import {
   Plus,
   Search,
   Edit2,
-  Trash2,
   Users,
   UserCheck,
   X,
@@ -55,9 +55,6 @@ function Divisi() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   const [successType, setSuccessType] = useState("success")
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const [form, setForm] = useState({
     nama_divisi: "",
@@ -233,69 +230,8 @@ function Divisi() {
     }
   }
 
-  const openDeleteModal = (item) => {
-    const stats = getStats(item.nama_divisi)
-    if (stats.peserta > 0 || stats.mentor > 0) {
-      setError(`Tidak dapat menghapus divisi "${item.nama_divisi}" karena masih memiliki ${stats.peserta} peserta dan ${stats.mentor} mentor. Nonaktifkan saja divisi ini melalui menu edit.`)
-      setTimeout(() => setError(""), 5000)
-      return
-    }
-    setDeleteTarget(item)
-    setShowDeleteModal(true)
-    setError("")
-  }
-
-  const confirmDelete = async () => {
-    if (!deleteTarget) return
-    
-    setDeleteLoading(true)
-    try {
-      console.log(`Attempting to delete divisi ID: ${deleteTarget.id_divisi}`)
-      
-      const response = await deleteDivisi(deleteTarget.id_divisi)
-      console.log("Delete response:", response)
-      
-      // Check if response indicates success
-      if (response && response.success === false) {
-        throw new Error(response.message || "Gagal menghapus divisi")
-      }
-      
-      logActivity("delete", "divisi", deleteTarget.nama_divisi)
-      
-      await loadData()
-      setShowDeleteModal(false)
-      setSuccessMessage(`Divisi "${deleteTarget.nama_divisi}" berhasil dihapus!`)
-      setSuccessType("delete")
-      setShowSuccessModal(true)
-      setDeleteTarget(null)
-      
-    } catch (err) {
-      console.error("Error deleting divisi:", err)
-      
-      let errorMessage = err.message || "Gagal menghapus divisi"
-      
-      if (err.response?.data?.message) {
-        errorMessage = err.response.data.message
-      } else if (err.response?.data?.error) {
-        errorMessage = err.response.data.error
-      } else if (err.response?.status === 400) {
-        errorMessage = `Divisi "${deleteTarget?.nama_divisi}" tidak dapat dihapus karena masih memiliki data terkait. Silahkan nonaktifkan divisi ini melalui menu edit.`
-      }
-      
-      setError(errorMessage)
-      setShowDeleteModal(false)
-      setDeleteTarget(null)
-      
-      // Scroll ke error message
-      setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100)
-    } finally {
-      setDeleteLoading(false)
-    }
-  }
-
   const handleModalClose = () => {
     setShowSuccessModal(false)
-    // Optional: reload data after modal closes
     loadData()
   }
 
@@ -694,20 +630,13 @@ function Divisi() {
                           )}
                         </td>
                         <td className="px-5 py-3.5 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
+                          <div className="flex items-center justify-center">
                             <button
                               onClick={() => handleEdit(d)}
                               className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200"
                               title="Edit"
                             >
                               <Edit2 size={14} />
-                            </button>
-                            <button
-                              onClick={() => openDeleteModal(d)}
-                              className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200"
-                              title="Hapus"
-                            >
-                              <Trash2 size={14} />
                             </button>
                           </div>
                         </td>
@@ -775,8 +704,8 @@ function Divisi() {
             </div>
             <div className="flex-1">
               <p className="text-xs text-blue-800">
-                <strong className="font-semibold">Informasi:</strong> Divisi yang memiliki peserta atau mentor tidak dapat dihapus. 
-                Gunakan fitur <strong className="text-indigo-600">"Nonaktifkan"</strong> melalui menu Edit untuk menyembunyikan divisi dari form pendaftaran baru.
+                <strong className="font-semibold">Informasi:</strong> Gunakan fitur <strong className="text-indigo-600">"Edit"</strong> untuk memperbarui informasi divisi atau mengubah status (Aktif/Nonaktifkan). 
+                Divisi yang dinonaktifkan tidak akan muncul di form pendaftaran baru.
               </p>
             </div>
           </div>
@@ -933,59 +862,6 @@ function Divisi() {
           </div>
         )}
 
-        {/* DELETE CONFIRMATION MODAL */}
-        {showDeleteModal && deleteTarget && (
-          <>
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-              <div className="w-full max-w-md pointer-events-auto">
-                <div className="relative bg-white rounded-2xl overflow-hidden shadow-2xl">
-                  <div className="h-1.5 bg-gradient-to-r from-red-500 via-rose-500 to-orange-500"></div>
-                  
-                  <div className="relative pt-6 pb-2 px-6 text-center">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-2xl mb-4">
-                      <Trash2 size={32} className="text-red-500" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-800">Hapus Divisi?</h3>
-                    <p className="text-sm text-slate-500 mt-2">
-                      Apakah Anda yakin ingin menghapus divisi <br />
-                      <span className="font-semibold text-red-600">"{deleteTarget.nama_divisi}"</span>?
-                    </p>
-                    <div className="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-200">
-                      <p className="text-[10px] text-amber-700">
-                        ⚠️ Tindakan ini tidak dapat dibatalkan. Data yang terkait dengan divisi ini akan terpengaruh.
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="p-6 pt-4 flex gap-3">
-                    <button
-                      onClick={() => setShowDeleteModal(false)}
-                      className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 transition"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      onClick={confirmDelete}
-                      disabled={deleteLoading}
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-xl text-white font-semibold shadow-md hover:shadow-lg transition flex items-center justify-center gap-2"
-                    >
-                      {deleteLoading ? (
-                        <Loader2 size={16} className="animate-spin" />
-                      ) : (
-                        <>
-                          <Trash2 size={14} />
-                          Hapus
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
         {/* SUCCESS MODAL */}
         {showSuccessModal && (
           <>
@@ -993,25 +869,15 @@ function Divisi() {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
               <div className="w-full max-w-md pointer-events-auto">
                 <div className="relative bg-white rounded-2xl overflow-hidden shadow-2xl">
-                  <div className={`h-1.5 bg-gradient-to-r ${
-                    successType === "delete" 
-                      ? "from-red-500 via-rose-500 to-orange-500"
-                      : "from-emerald-500 via-teal-500 to-cyan-500"
-                  }`} />
+                  <div className={`h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500`} />
                   
                   <div className="relative pt-8 pb-4 px-6 text-center">
-                    <div className={`inline-flex items-center justify-center w-20 h-20 rounded-2xl shadow-xl ${
-                      successType === "delete"
-                        ? "bg-gradient-to-br from-red-500 via-rose-500 to-orange-500"
-                        : "bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500"
-                    }`}>
+                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl shadow-xl bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500">
                       <CheckCircle size={42} className="text-white" strokeWidth={1.5} />
                     </div>
                     
                     <div className="mt-4">
-                      <h3 className="text-2xl font-bold text-slate-800">
-                        {successType === "delete" ? "Berhasil Dihapus!" : "Berhasil!"}
-                      </h3>
+                      <h3 className="text-2xl font-bold text-slate-800">Berhasil!</h3>
                       <p className="text-xs text-slate-500 mt-1">{successMessage}</p>
                     </div>
                   </div>
