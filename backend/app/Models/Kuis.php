@@ -19,12 +19,13 @@ class Kuis extends Model
         'divisi',
         'durasi',
         'passing',
-        'status',        // 🔥 TAMBAHKAN INI - PENTING!
+        'status',        
         'total_soal',
         'questions',
         'peserta',
         'tanggal_mulai',
         'tanggal_selesai',
+        'level',
     ];
 
     protected $casts = [

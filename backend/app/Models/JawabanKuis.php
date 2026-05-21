@@ -18,6 +18,7 @@ class JawabanKuis extends Model
         'id_kuis',
         'jawaban',
         'skor',
+        'attempt',
     ];
 
     protected $casts = [
@@ -48,21 +49,6 @@ class JawabanKuis extends Model
     public function kuis()
     {
         return $this->belongsTo(Kuis::class, 'id_kuis', 'id_kuis');
-    }
-
-    /**
-     * Event boot untuk menghitung skor otomatis
-     */
-    protected static function booted()
-    {
-        static::creating(function ($jawaban) {
-            $soal = SoalKuis::find($jawaban->id_soal);
-            if ($soal && $soal->isJawabanBenar($jawaban->jawaban)) {
-                $jawaban->skor = 1; // Atau sesuai bobot yang diinginkan
-            } else {
-                $jawaban->skor = 0;
-            }
-        });
     }
 
     /**

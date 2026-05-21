@@ -1,4 +1,5 @@
 <?php
+// backend/database/migrations/2026_04_06_111626_create_materi_mentors_table.php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -9,30 +10,30 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('materi_mentors', function (Blueprint $table) {
-            $table->id('id_materi'); // Primary key
-            $table->unsignedBigInteger('id_mentor'); // Foreign key ke mentor
-            $table->unsignedBigInteger('id_divisi')->nullable(); // Foreign key ke divisi (opsional)
-            $table->string('judul', 150); // Judul materi
-            $table->text('deskripsi')->nullable(); // Deskripsi materi
-            $table->string('file_materi', 255); // File materi
-            $table->timestamps(); // created_at dan updated_at
+            $table->id('id_materi');
+            $table->unsignedBigInteger('id_mentor');
+            $table->unsignedBigInteger('id_divisi')->nullable();
+            $table->string('judul', 255);
+            $table->text('deskripsi')->nullable();
+            $table->enum('tipe_materi', ['dokumen', 'video', 'link'])->default('dokumen');
+            $table->string('file_materi', 500)->nullable();
+            $table->string('link', 500)->nullable();
+            $table->integer('views')->default(0);
+            $table->timestamps();
             
-            // Foreign key ke tabel mentors
             $table->foreign('id_mentor')
                   ->references('id_mentor')
                   ->on('mentors')
                   ->onDelete('cascade');
             
-            // Foreign key ke tabel divisis
             $table->foreign('id_divisi')
                   ->references('id_divisi')
                   ->on('divisis')
                   ->onDelete('set null');
             
-            // Index untuk optimasi
             $table->index('id_mentor');
             $table->index('id_divisi');
-            $table->index('judul');
+            $table->index('tipe_materi');
             $table->index('created_at');
         });
     }

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use App\Services\NotifikasiService;
 
 class TugasController extends Controller
 {
@@ -23,7 +24,7 @@ class TugasController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if ($user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
@@ -32,7 +33,7 @@ class TugasController extends Controller
             }
 
             $mentor = Mentor::where('id_user', $user->id_user)->first();
-            
+
             if (!$mentor) {
                 return response()->json([
                     'success' => false,
@@ -62,12 +63,12 @@ class TugasController extends Controller
                 $pengumpulanList = PengumpulanTugas::with(['peserta.user'])
                     ->where('id_tugas', $item->id_tugas)
                     ->get();
-                
+
                 $submissions = [];
                 $totalSubmissions = $pengumpulanList->count();
                 $submittedCount = 0;
                 $pendingReview = 0;
-                
+
                 foreach ($pengumpulanList as $pengumpulan) {
                     $hasSubmitted = !is_null($pengumpulan->tanggal_kumpul);
                     if ($hasSubmitted) {
@@ -76,7 +77,7 @@ class TugasController extends Controller
                             $pendingReview++;
                         }
                     }
-                    
+
                     $submissions[] = [
                         'peserta_id' => $pengumpulan->id_peserta,
                         'peserta_nama' => $pengumpulan->peserta->user->nama ?? 'Unknown',
@@ -111,7 +112,6 @@ class TugasController extends Controller
                 'data' => $transformedTugas,
                 'total' => $tugas->count()
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -128,7 +128,7 @@ class TugasController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if ($user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
@@ -137,7 +137,7 @@ class TugasController extends Controller
             }
 
             $mentor = Mentor::where('id_user', $user->id_user)->first();
-            
+
             if (!$mentor) {
                 return response()->json([
                     'success' => false,
@@ -173,7 +173,6 @@ class TugasController extends Controller
                     'created_at' => $tugas->created_at,
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -190,7 +189,7 @@ class TugasController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if ($user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
@@ -199,7 +198,7 @@ class TugasController extends Controller
             }
 
             $mentor = Mentor::where('id_user', $user->id_user)->first();
-            
+
             if (!$mentor) {
                 return response()->json([
                     'success' => false,
@@ -232,9 +231,9 @@ class TugasController extends Controller
             } elseif (is_array($request->id_peserta)) {
                 $idPesertaList = $request->id_peserta;
             }
-            
+
             $idPesertaList = array_map('intval', $idPesertaList);
-            
+
             if (empty($idPesertaList)) {
                 return response()->json([
                     'success' => false,
@@ -258,7 +257,7 @@ class TugasController extends Controller
                 $path = $file->storeAs('tugas', $filename, 'public');
                 $data['file_tugas'] = $path;
             }
-            
+
             // Handle file link
             if ($request->has('file_link') && !empty($request->file_link)) {
                 $data['file_link'] = $request->file_link;
@@ -274,7 +273,7 @@ class TugasController extends Controller
                 $peserta = Peserta::where('id_peserta', $idPeserta)
                     ->where('id_mentor', $mentor->id_mentor)
                     ->first();
-                
+
                 if ($peserta) {
                     PengumpulanTugas::create([
                         'id_tugas' => $tugas->id_tugas,
@@ -288,6 +287,22 @@ class TugasController extends Controller
 
             DB::commit();
 
+            // TRIGGER 2: Kirim notifikasi tugas baru ke setiap peserta
+            foreach ($idPesertaList as $idPeserta) {
+                $peserta = Peserta::with('user')
+                    ->where('id_peserta', $idPeserta)
+                    ->where('id_mentor', $mentor->id_mentor)
+                    ->first();
+
+                if ($peserta && $peserta->user) {
+                    NotifikasiService::tugasBaru(
+                        idPeserta: $peserta->user->id_user,
+                        judulTugas: $tugas->judul_tugas,
+                        namaMentor: $user->nama
+                    );
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Tugas berhasil ditambahkan',
@@ -300,7 +315,6 @@ class TugasController extends Controller
                     'link_type' => $tugas->link_type,
                 ]
             ]);
-
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
             return response()->json([
@@ -326,7 +340,7 @@ class TugasController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if ($user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
@@ -335,7 +349,7 @@ class TugasController extends Controller
             }
 
             $mentor = Mentor::where('id_user', $user->id_user)->first();
-            
+
             if (!$mentor) {
                 return response()->json([
                     'success' => false,
@@ -379,22 +393,22 @@ class TugasController extends Controller
                 if ($tugas->file_tugas && Storage::disk('public')->exists($tugas->file_tugas)) {
                     Storage::disk('public')->delete($tugas->file_tugas);
                 }
-                
+
                 $file = $request->file('file_tugas');
                 $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
                 $path = $file->storeAs('tugas', $filename, 'public');
                 $data['file_tugas'] = $path;
-                
+
                 // Hapus link jika upload file baru
                 $data['file_link'] = null;
                 $data['link_type'] = null;
             }
-            
+
             // Handle file link update
             if ($request->has('file_link') && !empty($request->file_link)) {
                 $data['file_link'] = $request->file_link;
                 $data['link_type'] = $request->link_type ?? null;
-                
+
                 // Hapus file jika ada link baru
                 if ($tugas->file_tugas && Storage::disk('public')->exists($tugas->file_tugas)) {
                     Storage::disk('public')->delete($tugas->file_tugas);
@@ -410,7 +424,6 @@ class TugasController extends Controller
                 'success' => true,
                 'message' => 'Tugas berhasil diupdate'
             ]);
-
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
@@ -434,7 +447,7 @@ class TugasController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if ($user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
@@ -443,7 +456,7 @@ class TugasController extends Controller
             }
 
             $mentor = Mentor::where('id_user', $user->id_user)->first();
-            
+
             if (!$mentor) {
                 return response()->json([
                     'success' => false,
@@ -477,7 +490,6 @@ class TugasController extends Controller
                 'success' => true,
                 'message' => 'Tugas berhasil dihapus'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Tugas Destroy Error: ' . $e->getMessage());
             return response()->json([
@@ -489,8 +501,6 @@ class TugasController extends Controller
 
     /**
      * Send reminder for tugas
-        /**
-     * Send reminder for tugas
      * POST /api/mentor/tugas/reminder
      * POST /api/mentor/tugas/{id}/reminder
      */
@@ -498,7 +508,7 @@ class TugasController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if ($user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
@@ -507,7 +517,7 @@ class TugasController extends Controller
             }
 
             $mentor = Mentor::where('id_user', $user->id_user)->first();
-            
+
             if (!$mentor) {
                 return response()->json([
                     'success' => false,
@@ -517,35 +527,35 @@ class TugasController extends Controller
 
             // Ambil daftar tugas
             $query = Tugas::where('id_mentor', $mentor->id_mentor);
-            
+
             // Jika ada tugasId spesifik, filter berdasarkan id
             if ($tugasId) {
                 $query->where('id_tugas', $tugasId);
             }
-            
+
             $tugasList = $query->get();
-            
+
             if ($tugasList->isEmpty()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Tidak ada tugas yang ditemukan'
                 ], 404);
             }
-            
+
             $reminderDetails = [];
             $totalPeserta = 0;
-            
+
             foreach ($tugasList as $tugas) {
                 // Ambil peserta yang BELUM mengumpulkan tugas
                 $belumKumpul = PengumpulanTugas::where('id_tugas', $tugas->id_tugas)
                     ->whereNull('tanggal_kumpul')
                     ->with(['peserta.user'])
                     ->get();
-                
+
                 foreach ($belumKumpul as $pengumpulan) {
                     $peserta = $pengumpulan->peserta;
                     $userPeserta = $peserta->user ?? null;
-                    
+
                     $reminderDetails[] = [
                         'tugas_id' => $tugas->id_tugas,
                         'tugas_judul' => $tugas->judul_tugas,
@@ -554,7 +564,7 @@ class TugasController extends Controller
                         'peserta_email' => $userPeserta->email ?? '-',
                         'deadline' => $tugas->deadline->format('Y-m-d H:i:s'),
                     ];
-                    
+
                     $totalPeserta++;
                 }
             }
@@ -588,7 +598,6 @@ class TugasController extends Controller
                     'reminders' => $reminderDetails
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Send Reminder Error: ' . $e->getMessage());
             return response()->json([
@@ -606,7 +615,7 @@ class TugasController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if ($user->role !== 'mentor') {
                 return response()->json([
                     'success' => false,
@@ -615,7 +624,7 @@ class TugasController extends Controller
             }
 
             $mentor = Mentor::where('id_user', $user->id_user)->first();
-            
+
             if (!$mentor) {
                 return response()->json([
                     'success' => false,
@@ -640,15 +649,16 @@ class TugasController extends Controller
 
             $transformedSubmissions = $submissions->map(function ($item) {
                 return [
-                    'id_pengumpulan' => $item->id_pengumpulan,
-                    'id_peserta' => $item->id_peserta,
-                    'peserta_nama' => $item->peserta->user->nama ?? 'Unknown',
-                    'file_tugas' => $item->file_jawaban,
-                    'file_url' => $item->file_jawaban ? Storage::url($item->file_jawaban) : null,
-                    'status' => $item->status,
-                    'nilai' => $item->nilai,
-                    'catatan_mentor' => $item->catatan_mentor,
-                    'submitted_at' => $item->tanggal_kumpul ?? $item->created_at,
+                    'id_pengumpulan'  => $item->id_pengumpulan,
+                    'id_peserta'      => $item->id_peserta,
+                    'peserta_nama'    => $item->peserta->user->nama ?? 'Unknown',
+                    'file_tugas'      => $item->file_jawaban,
+                    'file_url'        => $item->file_jawaban ? Storage::url($item->file_jawaban) : null,
+                    'submission_link' => $item->link_jawaban ?? null,
+                    'status'          => $item->status,
+                    'nilai'           => $item->nilai,
+                    'catatan_mentor'  => $item->catatan_mentor,
+                    'submitted_at'    => $item->tanggal_kumpul ?? $item->created_at,
                 ];
             });
 
@@ -656,7 +666,6 @@ class TugasController extends Controller
                 'success' => true,
                 'data' => $transformedSubmissions
             ]);
-
         } catch (\Exception $e) {
             Log::error('Get Submissions Error: ' . $e->getMessage());
             return response()->json([
@@ -675,18 +684,18 @@ class TugasController extends Controller
         try {
             $user = Auth::user();
             $mentor = Mentor::where('id_user', $user->id_user)->first();
-            
+
             if (!$mentor) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Mentor not found'
                 ], 404);
             }
-            
+
             $peserta = Peserta::with('user')
                 ->where('id_mentor', $mentor->id_mentor)
                 ->get();
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $peserta
@@ -708,49 +717,304 @@ class TugasController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             if ($user->role !== 'mentor') {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            }
+
+            // Mentor hanya bisa ubah status validasi dan catatan
+            $request->validate([
+                'status'         => 'nullable|in:dikumpulkan,dinilai,selesai,terlambat,revisi',
+                'catatan_mentor' => 'nullable|string',
+            ]);
+
+            $submission = PengumpulanTugas::with(['peserta.user', 'tugas'])->find($submissionId);
+
+            if (!$submission) {
+                return response()->json(['success' => false, 'message' => 'Pengumpulan tidak ditemukan'], 404);
+            }
+
+            $statusLama = $submission->status;
+            $statusBaru = $request->status ?? $submission->status;
+
+            // Nilai tidak diubah mentor, hanya status dan catatan
+            $submission->update([
+                'status'         => $statusBaru,
+                'catatan_mentor' => $request->catatan_mentor,
+            ]);
+
+            $idUserPeserta = $submission->peserta->user->id_user ?? null;
+            $judulTugas    = $submission->tugas->judul_tugas ?? 'Tugas';
+
+            if ($idUserPeserta) {
+                // TRIGGER 3: Revisi
+                if ($statusBaru === 'revisi' && $statusLama !== 'revisi') {
+                    NotifikasiService::revisiTugas(
+                        idPeserta: $idUserPeserta,
+                        judulTugas: $judulTugas,
+                        catatanRevisi: $request->catatan_mentor ?? ''
+                    );
+                }
+
+                // TRIGGER 4: Selesai/dinilai
+                if (in_array($statusBaru, ['selesai', 'dinilai']) && !in_array($statusLama, ['selesai', 'dinilai'])) {
+                    NotifikasiService::tugasDiAcc(
+                        idPeserta: $idUserPeserta,
+                        judulTugas: $judulTugas,
+                        nilai: $submission->nilai // nilai otomatis yang sudah tersimpan
+                    );
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Validasi berhasil disimpan',
+                'data'    => $submission
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Update Submission Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Get tugas untuk peserta yang login
+     * GET /api/peserta/tugas
+     */
+    public function getTugasPeserta()
+    {
+        try {
+            $user = Auth::user();
+
+            if ($user->role !== 'peserta') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized'
                 ], 403);
             }
 
-            $request->validate([
-                'nilai' => 'nullable|integer|min:0|max:100',
-                'status' => 'nullable|in:dikumpulkan,dinilai,selesai,terlambat',
-                'catatan_mentor' => 'nullable|string',
-            ]);
+            $peserta = Peserta::where('id_user', $user->id_user)->first();
 
-            $submission = PengumpulanTugas::find($submissionId);
-            
-            if (!$submission) {
+            if (!$peserta) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Pengumpulan tidak ditemukan'
+                    'message' => 'Data peserta tidak ditemukan'
                 ], 404);
             }
 
-            $submission->update([
-                'nilai' => $request->nilai,
-                'status' => $request->status ?? $submission->status,
-                'catatan_mentor' => $request->catatan_mentor,
+            $tugas = PengumpulanTugas::with(['tugas'])
+                ->where('id_peserta', $peserta->id_peserta)
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data'    => $tugas,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Get Tugas Peserta Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get detail tugas peserta
+     * GET /api/peserta/tugas/{id}
+     */
+    public function getTugasDetail($id)
+    {
+        try {
+            $user = Auth::user();
+
+            if ($user->role !== 'peserta') {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            }
+
+            $peserta = Peserta::where('id_user', $user->id_user)->first();
+
+            if (!$peserta) {
+                return response()->json(['success' => false, 'message' => 'Data peserta tidak ditemukan'], 404);
+            }
+
+            $pengumpulan = PengumpulanTugas::with(['tugas'])
+                ->where('id_pengumpulan', $id)
+                ->where('id_peserta', $peserta->id_peserta)
+                ->first();
+
+            if (!$pengumpulan) {
+                return response()->json(['success' => false, 'message' => 'Tugas tidak ditemukan'], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id'             => $pengumpulan->id_pengumpulan,
+                    'id_tugas'       => $pengumpulan->id_tugas,
+                    'judul'          => $pengumpulan->tugas->judul_tugas ?? '-',
+                    'deskripsi'      => $pengumpulan->tugas->deskripsi ?? '-',
+                    'deadline'       => $pengumpulan->tugas->deadline ?? null,
+                    'status'         => $pengumpulan->status,
+                    'submitted_at'   => $pengumpulan->tanggal_kumpul,
+                    'nilai'          => $pengumpulan->nilai,
+                    'catatan'        => $pengumpulan->catatan_mentor,
+                    'file_url'       => $pengumpulan->file_jawaban
+                        ? Storage::url($pengumpulan->file_jawaban)
+                        : null,
+                    'file_name'      => $pengumpulan->file_jawaban
+                        ? basename($pengumpulan->file_jawaban)
+                        : null,
+                    'submission_link' => $pengumpulan->link_jawaban ?? null,
+                    'file_tugas_url' => $pengumpulan->tugas->file_tugas
+                        ? Storage::url($pengumpulan->tugas->file_tugas)
+                        : null,
+                    'file_link_tugas' => $pengumpulan->tugas->file_link ?? null,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Get Tugas Detail Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Submit tugas peserta
+     * POST /api/peserta/tugas/{id}/submit
+     */
+    public function submitTugas(Request $request, $id)
+    {
+        try {
+            $user = Auth::user();
+
+            if ($user->role !== 'peserta') {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            }
+
+            $peserta = Peserta::with('user')->where('id_user', $user->id_user)->first();
+
+            if (!$peserta) {
+                return response()->json(['success' => false, 'message' => 'Data peserta tidak ditemukan'], 404);
+            }
+
+            $pengumpulan = PengumpulanTugas::with('tugas')
+                ->where('id_pengumpulan', $id)
+                ->where('id_peserta', $peserta->id_peserta)
+                ->first();
+
+            if (!$pengumpulan) {
+                return response()->json(['success' => false, 'message' => 'Tugas tidak ditemukan'], 404);
+            }
+
+            // Hitung nilai otomatis berdasarkan deadline
+            $sekarang  = now();
+            $deadline  = $pengumpulan->tugas->deadline;
+            $nilaiOtomatis = $sekarang->lte($deadline) ? 100 : 50;
+            $statusOtomatis = $sekarang->lte($deadline) ? 'dikumpulkan' : 'terlambat';
+
+            $data = [
+                'status'         => $statusOtomatis,
+                'tanggal_kumpul' => $sekarang,
+                'nilai'          => $nilaiOtomatis,
+            ];
+
+            // Handle file upload
+            if ($request->hasFile('file_jawaban')) {
+                if ($pengumpulan->file_jawaban && Storage::disk('public')->exists($pengumpulan->file_jawaban)) {
+                    Storage::disk('public')->delete($pengumpulan->file_jawaban);
+                }
+                $file     = $request->file('file_jawaban');
+                $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+                $path     = $file->storeAs('jawaban_tugas', $filename, 'public');
+                $data['file_jawaban'] = $path;
+                $data['link_jawaban'] = null;
+            }
+
+            // Handle link submission
+            if ($request->has('link_jawaban') && !empty($request->link_jawaban)) {
+                $data['link_jawaban'] = $request->link_jawaban;
+                $data['file_jawaban'] = null;
+            }
+
+            $pengumpulan->update($data);
+
+            // Kirim notifikasi ke mentor
+            $mentor = Mentor::with('user')->where('id_mentor', $peserta->id_mentor)->first();
+            if ($mentor && $mentor->user) {
+                \App\Models\notifikasi::create([
+                    'id_user'     => $mentor->user->id_user,
+                    'judul'       => 'Tugas Dikumpulkan',
+                    'pesan'       => "Peserta {$user->nama} telah mengumpulkan tugas \"{$pengumpulan->tugas->judul_tugas}\"."
+                        . ($statusOtomatis === 'terlambat' ? " (Terlambat)" : " (Tepat waktu)"),
+                    'status_baca' => false,
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Tugas berhasil dikumpulkan',
+                'data'    => [
+                    'status'          => $pengumpulan->status,
+                    'submitted_at'    => $pengumpulan->tanggal_kumpul,
+                    'nilai'           => $pengumpulan->nilai,
+                    'file_url'        => $pengumpulan->file_jawaban
+                        ? Storage::url($pengumpulan->file_jawaban)
+                        : null,
+                    'file_name'       => $pengumpulan->file_jawaban
+                        ? basename($pengumpulan->file_jawaban)
+                        : null,
+                    'submission_link' => $pengumpulan->link_jawaban,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Submit Tugas Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Cancel submission tugas peserta
+     * POST /api/peserta/tugas/{id}/cancel
+     */
+    public function cancelSubmitTugas($id)
+    {
+        try {
+            $user = Auth::user();
+
+            $peserta = Peserta::where('id_user', $user->id_user)->first();
+
+            if (!$peserta) {
+                return response()->json(['success' => false, 'message' => 'Data peserta tidak ditemukan'], 404);
+            }
+
+            $pengumpulan = PengumpulanTugas::where('id_pengumpulan', $id)
+                ->where('id_peserta', $peserta->id_peserta)
+                ->first();
+
+            if (!$pengumpulan) {
+                return response()->json(['success' => false, 'message' => 'Tugas tidak ditemukan'], 404);
+            }
+
+            // Hapus file jika ada
+            if ($pengumpulan->file_jawaban && Storage::disk('public')->exists($pengumpulan->file_jawaban)) {
+                Storage::disk('public')->delete($pengumpulan->file_jawaban);
+            }
+
+            $pengumpulan->update([
+                'status'         => 'belum_dikumpulkan',
+                'tanggal_kumpul' => null,
+                'file_jawaban'   => null,
+                'link_jawaban'   => null,
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Nilai berhasil disimpan',
-                'data' => $submission
+                'message' => 'Pengumpulan tugas dibatalkan',
             ]);
-
         } catch (\Exception $e) {
-            Log::error('Update Submission Error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal menyimpan nilai: ' . $e->getMessage()
-            ], 500);
+            Log::error('Cancel Submit Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
-    
-    
 }

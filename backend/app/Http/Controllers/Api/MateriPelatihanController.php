@@ -79,6 +79,7 @@ class MateriPelatihanController extends Controller
                 'deskripsi' => 'nullable|string',
                 'divisi' => 'nullable|string|max:100',
                 'kategori' => 'nullable|string|max:50',
+                'urutan' => 'nullable|integer|min:1|max:100',
                 'file' => [
                     'required',
                     'file',
@@ -86,6 +87,7 @@ class MateriPelatihanController extends Controller
                     function ($attribute, $value, $fail) {
                         $allowedExtensions = ['pdf', 'mp4', 'ppt', 'pptx', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
                         $extension = strtolower($value->getClientOriginalExtension());
+
                         if (!in_array($extension, $allowedExtensions)) {
                             $fail('Format file harus PDF, MP4, PPT, PPTX, DOC, DOCX, JPG, JPEG, atau PNG.');
                         }
@@ -135,8 +137,8 @@ class MateriPelatihanController extends Controller
                 'deskripsi' => $request->deskripsi,
                 'divisi' => $request->divisi,
                 'kategori' => $request->kategori,
+                'urutan' => $request->urutan ?? 1,
                 'file_materi' => $filePath,
-                'views' => 0
             ]);
 
             $materi = $this->addFileUrl($materi);
@@ -322,7 +324,7 @@ class MateriPelatihanController extends Controller
 
             $fullPath = Storage::disk('public')->path($materi->file_materi);
             $filename = $materi->judul . '.' . pathinfo($fullPath, PATHINFO_EXTENSION);
-            
+
             return response()->download($fullPath, $filename, [
                 'Content-Type' => mime_content_type($fullPath),
                 'Access-Control-Allow-Origin' => '*',

@@ -20,7 +20,9 @@ use App\Http\Controllers\Api\LaporanAkhirController;
 use App\Http\Controllers\Api\NilaiController;
 use App\Http\Controllers\Api\PresensiController;
 use App\Http\Controllers\Api\ActivityLogController;
-use App\Http\Controllers\Api\LaporanController;     
+use App\Http\Controllers\Api\LaporanController;
+use App\Http\Controllers\Api\NotifikasiController;
+use App\Http\Controllers\Api\MateriKompetensiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -54,7 +56,7 @@ Route::get('/divisi/aktif', [DivisiController::class, 'getActiveDivisi']);
 |--------------------------------------------------------------------------
 */
 
-Route::get('/materi-file/{filename}', function ($filename) {
+Route::get('/materi-file/{filename}', function ($filename, Request $request) {
     // Daftar path yang akan dicari (prioritas dari spesifik ke umum)
     $paths = [
         storage_path('app/public/materi_mentor/documents/' . $filename),
@@ -65,7 +67,6 @@ Route::get('/materi-file/{filename}', function ($filename) {
     ];
 
     $filePath = null;
-
     foreach ($paths as $path) {
         if (file_exists($path)) {
             $filePath = $path;
@@ -77,23 +78,18 @@ Route::get('/materi-file/{filename}', function ($filename) {
         return response()->json([
             'error' => 'File not found',
             'file' => $filename,
-            'searched_paths' => [
-                'materi_mentor/documents/' . $filename,
-                'materi_mentor/videos/' . $filename,
-                'materi_mentor/' . $filename,
-                'materi/' . $filename,
-                $filename
-            ]
         ], 404);
     }
 
-    $mime = mime_content_type($filePath);
+    if ($request->query('download')) {
+        return response()->download($filePath, $filename);
+    }
 
+    // Jika tidak minta download, tampilkan inline
+    $mime = mime_content_type($filePath);
     $headers = [
         'Content-Type' => $mime,
         'Access-Control-Allow-Origin' => '*',
-        'Access-Control-Allow-Methods' => 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers' => '*',
         'Cache-Control' => 'public, max-age=86400',
     ];
 
@@ -111,25 +107,24 @@ Route::get('/materi-file/{filename}', function ($filename) {
 */
 
 Route::middleware('auth:sanctum')->group(function () {
-    
+
     // ==================== AUTH ROUTES ====================
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
-    
+
     // ==================== DIVISI ROUTES ====================
     Route::get('/divisi', [DivisiController::class, 'index']);
     Route::post('/divisi', [DivisiController::class, 'store']);
     Route::put('/divisi/{id}', [DivisiController::class, 'update']);
     Route::delete('/divisi/{id}', [DivisiController::class, 'destroy']);
-    
+
     // ==================== MENTOR ROUTES (CRUD - untuk Admin) ====================
     Route::get('/mentors', [MentorController::class, 'index']);
     Route::post('/mentors', [MentorController::class, 'store']);
     Route::put('/mentors/{id}', [MentorController::class, 'update']);
     Route::delete('/mentors/{id}', [MentorController::class, 'destroy']);
-
     Route::get('/mentor-list', [MentorController::class, 'getMentorList']);
 
     // ==================== PRESENSI ROUTES (untuk COO/Admin) ====================
@@ -139,25 +134,28 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/export', [PresensiController::class, 'export']);
         Route::get('/{id}', [PresensiController::class, 'show']);
     });
-    
+
     // ==================== PESERTA ROUTES (CRUD - untuk Admin/COO) ====================
     Route::get('/peserta', [PesertaController::class, 'index']);
     Route::post('/peserta', [PesertaController::class, 'store']);
     Route::put('/peserta/{id}', [PesertaController::class, 'update']);
     Route::delete('/peserta/{id}', [PesertaController::class, 'destroy']);
-    
+
     // ==================== PESERTA PROFILE ROUTES ====================
     Route::get('/peserta/profile', [PesertaController::class, 'getProfile']);
-    
+
+    // ==================== NILAI AKHIR PESERTA ROUTES ====================
+    Route::get('/peserta/nilai-akhir', [NilaiController::class, 'getNilaiAkhirPeserta']);
+
     // ==================== PESERTA PRESENSI ROUTES ====================
     Route::prefix('peserta')->group(function () {
         // Presensi routes
-        Route::get('/presensi', [PresensiController::class, 'getByPeserta']);
-        Route::get('/presensi/today', [PresensiController::class, 'getTodayPresensi']);
-        Route::post('/presensi/checkin', [PresensiController::class, 'checkIn']);
-        Route::post('/presensi/checkout', [PresensiController::class, 'checkOut']);
+        Route::get('/presensi/today', [\App\Http\Controllers\Api\PresensiController::class, 'getTodayPresensi']);
+        Route::get('/presensi', [\App\Http\Controllers\Api\PresensiController::class, 'getByPeserta']);
+        Route::post('/presensi/checkin', [\App\Http\Controllers\Api\PresensiController::class, 'checkIn']);
+        Route::post('/presensi/checkout', [\App\Http\Controllers\Api\PresensiController::class, 'checkOut']);
     });
-    
+
     // ==================== JAM KERJA ROUTES ====================
     Route::prefix('jam-kerja')->group(function () {
         Route::get('/', [JamKerjaController::class, 'index']);
@@ -173,7 +171,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [HariLiburController::class, 'update']);
         Route::delete('/{id}', [HariLiburController::class, 'destroy']);
     });
-    
+
     // ==================== MATERI PELATIHAN ROUTES (untuk COO/Admin) ====================
     Route::prefix('materi-pelatihan')->group(function () {
         Route::get('/', [MateriPelatihanController::class, 'index']);
@@ -184,24 +182,48 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/divisi/{divisi}', [MateriPelatihanController::class, 'getByDivisi']);
         Route::get('/{id}/download', [MateriPelatihanController::class, 'download']);
     });
-    
+
     // ==================== MATERI MENTOR ROUTES (untuk Mentor) ====================
-    Route::prefix('mentor/materi')->group(function () {
+    Route::prefix('mentor/materi')->middleware('auth:sanctum')->group(function () {
         Route::get('/', [MateriMentorController::class, 'index']);
+        Route::get('/mentor-info', [MateriMentorController::class, 'getMentorInfo']);
         Route::get('/divisi-list', [MateriMentorController::class, 'getDivisiList']);
         Route::post('/', [MateriMentorController::class, 'store']);
         Route::get('/{id}', [MateriMentorController::class, 'show']);
         Route::put('/{id}', [MateriMentorController::class, 'update']);
         Route::delete('/{id}', [MateriMentorController::class, 'destroy']);
     });
-    
-    // ==================== MATERI PESERTA ROUTES (untuk Peserta) ====================
+
+    // ==================== KUIS KOMPETENSI PESERTA ROUTES ====================
     Route::prefix('peserta')->group(function () {
-        Route::get('/materi', [MateriPesertaController::class, 'index']);
-        Route::get('/materi/{id}', [MateriPesertaController::class, 'show']);
-        Route::post('/materi/{id}/selesai', [MateriPesertaController::class, 'markAsSelesai']);
+        Route::get('/kuis-kompetensi', [QuizController::class, 'getDaftarKuisPeserta']);
+        Route::get('/kuis-kompetensi/{id}/soal', [QuizController::class, 'getSoalForPeserta']);
+        Route::post('/kuis-kompetensi/{id}/submit', [QuizController::class, 'submitKuisPeserta']);
     });
-    
+
+    // ==================== MATERI PESERTA ROUTES ====================
+    Route::prefix('peserta/materi')->group(function () {
+        Route::get('/', [MateriPesertaController::class, 'index']);
+        Route::get('/{id}', [MateriPesertaController::class, 'show']);
+        Route::post('/{id}/selesai', [MateriPesertaController::class, 'markAsSelesai']);
+    });
+
+    // ==================== TUGAS PESERTA ROUTES ====================
+    Route::prefix('peserta/tugas')->group(function () {
+        Route::get('/', [TugasController::class, 'getTugasPeserta']);
+        Route::get('/{id}', [TugasController::class, 'getTugasDetail']);
+        Route::post('/{id}/submit', [TugasController::class, 'submitTugas']);
+        Route::post('/{id}/cancel', [TugasController::class, 'cancelSubmitTugas']);
+    });
+
+    // ==================== MATERI KOMPETENSI PESERTA ROUTES ====================
+    Route::prefix('peserta/materi-kompetensi')->group(function () {
+        Route::get('/', [MateriKompetensiController::class, 'index']);
+        Route::get('/{id}', [MateriKompetensiController::class, 'show']);
+        Route::post('/{id}/akses', [MateriKompetensiController::class, 'markAsAccessed']);
+        Route::get('/{id}/download', [MateriKompetensiController::class, 'download']);
+    });
+
     // ==================== TUGAS MENTOR ROUTES ====================
     Route::prefix('mentor/tugas')->group(function () {
         Route::get('/', [TugasController::class, 'index']);
@@ -214,14 +236,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}/submissions', [TugasController::class, 'getSubmissions']);
         Route::put('/submissions/{id}', [TugasController::class, 'updateSubmission']);
     });
-    
+
+    Route::get('/mentor/peserta', [TugasController::class, 'getPesertaByMentor']);
+
     // ==================== LAPORAN AKHIR MENTOR ROUTES ====================
     Route::prefix('mentor/laporan-akhir')->group(function () {
         Route::get('/', [LaporanAkhirController::class, 'index']);
         Route::post('/{id}/review', [LaporanAkhirController::class, 'submitReview']);
         Route::get('/export', [LaporanAkhirController::class, 'export']);
     });
-    
+
     // ==================== NILAI MENTOR ROUTES (BARU) ====================
     Route::prefix('mentor/nilai')->group(function () {
         Route::get('/', [NilaiController::class, 'index']);
@@ -229,13 +253,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/finalize', [NilaiController::class, 'finalize']);
         Route::get('/export', [NilaiController::class, 'export']);
     });
-    
+
     // ==================== ACTIVITY LOGS ROUTES ====================
     Route::prefix('activity-logs')->group(function () {
         Route::get('/', [ActivityLogController::class, 'index']);
         Route::post('/', [ActivityLogController::class, 'store']);
     });
-    
+
     // ==================== QUIZ ROUTES ====================
     Route::prefix('quiz')->group(function () {
         Route::get('/', [QuizController::class, 'index']);
@@ -248,19 +272,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/import', [QuizController::class, 'import']);
         Route::get('/template/download', [QuizController::class, 'downloadTemplate']);
     });
-    
+
     // ==================== ROUTES UNTUK MENTOR (PESERTA BIMBINGAN) ====================
-    
+
     // Filter options untuk mentor
     Route::get('/mentor/filters', [MentorController::class, 'getFilters']);
-    
+
     // Daftar peserta bimbingan dengan filter
     Route::get('/mentor/peserta-list', [MentorController::class, 'getPesertaList']);
-    
+
     // Peserta bimbingan mentor (detail)
     Route::get('/mentor/pesertas', [MentorController::class, 'getMyPesertas']);
     Route::get('/mentor/pesertas/{id_peserta}', [MentorController::class, 'getDetailPeserta']);
-    
+
     // ==================== DAILY REPORT ROUTES ====================
     Route::prefix('daily-report')->group(function () {
         Route::get('/', [DailyReportController::class, 'getReports']);
@@ -268,26 +292,26 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{peserta_id}', [DailyReportController::class, 'getReportDetail']);
         Route::post('/{peserta_id}/feedback', [DailyReportController::class, 'submitFeedback']);
     });
-    
+
     // ==================== ROUTES DASHBOARD MENTOR ====================
-    
+
     Route::get('/mentor/dashboard', function (Request $request) {
         $user = $request->user();
-        
+
         if ($user->role !== 'mentor') {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized'
             ], 403);
         }
-        
+
         $mentor = \App\Models\Mentor::where('id_user', $user->id_user)->first();
         $totalMentees = 0;
-        
+
         if ($mentor) {
             $totalMentees = \App\Models\Peserta::where('id_mentor', $mentor->id_mentor)->count();
         }
-        
+
         return response()->json([
             'success' => true,
             'stats' => [
@@ -302,27 +326,27 @@ Route::middleware('auth:sanctum')->group(function () {
             'upcomingDeadlines' => []
         ]);
     });
-    
+
     Route::get('/mentor/notifications', function (Request $request) {
         $user = $request->user();
-        
+
         if ($user->role !== 'mentor') {
             return response()->json([], 403);
         }
-        
+
         return response()->json([]);
     });
-    
+
     Route::get('/mentor/profile', function (Request $request) {
         $user = $request->user();
-        
+
         if ($user->role !== 'mentor') {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized'
             ], 403);
         }
-        
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -336,34 +360,39 @@ Route::middleware('auth:sanctum')->group(function () {
             ]
         ]);
     });
-    
+
     // ==================== MENTOR PROFILE UPDATE ROUTE ====================
     Route::put('/mentor/profile', function (Request $request) {
         $user = $request->user();
-        
+
         if ($user->role !== 'mentor') {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized'
             ], 403);
         }
-        
+
         if ($request->has('nama')) {
             $user->nama = $request->nama;
         }
-        
+
         if ($request->has('no_telepon')) {
             $user->no_telepon = $request->no_telepon;
         }
-        
+
         $user->save();
-        
+
         return response()->json([
             'success' => true,
             'message' => 'Profil berhasil diupdate',
             'data' => $user
         ]);
     });
+    // ==================== NOTIFIKASI ROUTES ====================
+    Route::get('/notifikasi', [NotifikasiController::class, 'index']);
+    Route::patch('/notifikasi/read-all', [NotifikasiController::class, 'markAllAsRead']);
+    Route::patch('/notifikasi/{id}/read', [NotifikasiController::class, 'markAsRead']);
+    Route::delete('/notifikasi/{id}', [NotifikasiController::class, 'destroy']);
 });
 
 // ==================== FALLBACK ROUTE ====================

@@ -12,7 +12,7 @@ class Presensi extends Model
 
     protected $table = 'presensis';
     protected $primaryKey = 'id_presensi';
-    
+
     protected $fillable = [
         'id_peserta',
         'tanggal',
@@ -20,14 +20,21 @@ class Presensi extends Model
         'check_out',
         'foto_checkin',
         'lokasi',
+        'lokasi_koordinat',
         'status_kehadiran',
+        'jenis_kehadiran',
+        'alasan_izin',
         'daily_report',
     ];
 
+    /**
+     * PERBAIKAN: check_in dan check_out bertipe TIME di database,
+     * jangan di-cast sebagai 'datetime' — itu akan membuatnya menjadi
+     * Carbon dengan tanggal 1970-01-01 dan merusak logika perbandingan.
+     * Biarkan sebagai string (default), kita parse manual di controller.
+     */
     protected $casts = [
-        'tanggal' => 'date',
-        'check_in' => 'datetime',
-        'check_out' => 'datetime',
+        'tanggal' => 'date:Y-m-d',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -41,78 +48,67 @@ class Presensi extends Model
     }
 
     /**
-     * Accessor untuk status kehadiran dalam Bahasa Indonesia
+     * Cek apakah terlambat berdasarkan jam masuk
+     * @param string $jamMasuk format "HH:MM:SS"
+     * @param int $batasMenit
      */
-    public function getStatusKehadiranTextAttribute()
+    public function getIsTerlambatAttribute($jamMasuk = '08:00:00', $batasMenit = 15)
     {
-        $status = [
-            'hadir' => 'Hadir',
-            'izin' => 'Izin',
-            'sakit' => 'Sakit',
-            'alpha' => 'Alpha',
-        ];
-        
-        return $status[$this->status_kehadiran] ?? 'Tidak Diketahui';
+        if (!$this->check_in) return false;
+
+        $checkInSec  = strtotime($this->check_in);
+        $jamMasukSec = strtotime($jamMasuk);
+
+        return ($checkInSec - $jamMasukSec) / 60 > $batasMenit;
     }
 
     /**
-     * Cek apakah terlambat
-     */
-    public function getIsTerlambatAttribute()
-    {
-        $jamKerja = JamKerja::first();
-        if (!$jamKerja || !$this->check_in) {
-            return false;
-        }
-        
-        $batasTerlambat = Carbon::parse($jamKerja->batas_terlambat);
-        $checkIn = Carbon::parse($this->check_in);
-        
-        return $checkIn->gt($batasTerlambat);
-    }
-
-    /**
-     * Hitung durasi kerja
+     * Hitung durasi kerja dalam menit
      */
     public function getDurasiKerjaAttribute()
     {
-        if (!$this->check_in || !$this->check_out) {
-            return null;
-        }
-        
-        $checkIn = Carbon::parse($this->check_in);
-        $checkOut = Carbon::parse($this->check_out);
-        
-        return $checkIn->diffInHours($checkOut) . ' jam';
+        if (!$this->check_in || !$this->check_out) return null;
+
+        $durasi = round((strtotime($this->check_out) - strtotime($this->check_in)) / 60);
+        $jam    = intdiv($durasi, 60);
+        $menit  = $durasi % 60;
+
+        return $jam > 0 ? "{$jam} jam {$menit} menit" : "{$menit} menit";
     }
 
     /**
-     * Scope untuk presensi berdasarkan rentang tanggal
+     * Hitung keterlambatan dalam menit
      */
+    public function getKeterlambatanAttribute()
+    {
+        if (!$this->check_in) return 0;
+
+        $jamMasuk    = '08:00:00';
+        $checkInSec  = strtotime($this->check_in);
+        $jamMasukSec = strtotime($jamMasuk);
+
+        if ($checkInSec <= $jamMasukSec) return 0;
+
+        return round(($checkInSec - $jamMasukSec) / 60);
+    }
+
+    // ==================== SCOPES ====================
+
     public function scopeDateRange($query, $startDate, $endDate)
     {
         return $query->whereBetween('tanggal', [$startDate, $endDate]);
     }
 
-    /**
-     * Scope untuk presensi berdasarkan status
-     */
     public function scopeByStatus($query, $status)
     {
         return $query->where('status_kehadiran', $status);
     }
 
-    /**
-     * Scope untuk presensi hari ini
-     */
     public function scopeHariIni($query)
     {
         return $query->whereDate('tanggal', Carbon::today());
     }
 
-    /**
-     * Scope untuk presensi bulan ini
-     */
     public function scopeBulanIni($query)
     {
         return $query->whereMonth('tanggal', Carbon::now()->month)

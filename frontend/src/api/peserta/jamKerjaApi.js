@@ -1,42 +1,40 @@
 // frontend/src/api/peserta/jamKerjaApi.js
-import axiosInstance from "../axios"
+import axiosInstance from "../axios";
 
 const jamKerjaApi = {
-  // Get jam kerja
   getJamKerja: async () => {
     try {
-      const response = await axiosInstance.get('/jam-kerjas')
-      console.log('Jam kerja response:', response.data)
-      
+      // PERBAIKAN: route backend adalah /jam-kerja, bukan /jam-kerjas
+      const response = await axiosInstance.get("/jam-kerja");
+
       if (response.data && response.data.data) {
         return {
           success: true,
-          data: response.data.data
-        }
+          data: response.data.data,
+        };
       }
-      
-      // Jika data kosong, return default
-      return {
-        success: true,
-        data: {
-          jam_masuk: '08:00:00',
-          jam_pulang: '17:00:00',
-          batas_terlambat: 15
-        }
-      }
-    } catch (error) {
-      console.error('Error get jam kerja:', error)
-      // Return default jika API error
-      return {
-        success: true,
-        data: {
-          jam_masuk: '08:00:00',
-          jam_pulang: '17:00:00',
-          batas_terlambat: 15
-        }
-      }
-    }
-  }
-}
 
-export default jamKerjaApi
+      return {
+        success: true,
+        data: {
+          jam_masuk: "08:00:00",
+          jam_pulang: "17:00:00",
+          batas_terlambat: 15,
+        },
+      };
+    } catch (error) {
+      console.error("Error get jam kerja:", error);
+
+      return {
+        success: true,
+        data: {
+          jam_masuk: "08:00:00",
+          jam_pulang: "17:00:00",
+          batas_terlambat: 15,
+        },
+      };
+    }
+  },
+};
+
+export default jamKerjaApi;

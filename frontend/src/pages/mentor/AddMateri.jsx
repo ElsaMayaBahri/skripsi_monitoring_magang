@@ -1,9 +1,8 @@
 // src/pages/mentor/AddMateri.jsx
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   BookOpen,
-  ArrowLeft,
   Save,
   X,
   FileText,
@@ -15,18 +14,21 @@ import {
   Loader2,
   Eye,
   File,
-  Sparkles,
   Shield,
-  PlayCircle
+  PlayCircle,
+  Users,
+  Building2
 } from "lucide-react";
-import { createMentorMateri } from "../../api/mentor/materiMentorService";
+import { createMentorMateri, getMentorInfo } from "../../api/mentor/materiMentorService";
 
 function AddMateri() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [loadingMentorInfo, setLoadingMentorInfo] = useState(true);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [filePreview, setFilePreview] = useState(null);
+  const [mentorInfo, setMentorInfo] = useState(null);
   const fileInputRef = useRef(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
@@ -39,6 +41,27 @@ function AddMateri() {
     link: "",
   });
   const [errors, setErrors] = useState({});
+
+  // Fetch mentor info on component mount
+  useEffect(() => {
+    fetchMentorInfo();
+  }, []);
+
+  const fetchMentorInfo = async () => {
+    setLoadingMentorInfo(true);
+    try {
+      const response = await getMentorInfo();
+      if (response.success && response.data) {
+        setMentorInfo(response.data);
+      }
+    } catch (err) {
+      console.error("Error fetching mentor info:", err);
+      setErrorMessage("Gagal memuat informasi mentor");
+      setShowErrorModal(true);
+    } finally {
+      setLoadingMentorInfo(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -222,14 +245,13 @@ function AddMateri() {
   const currentTipe = getTipeIcon(formDataState.tipe_materi);
   const TipeIcon = currentTipe.icon;
 
-  // Modal Success Component
+  // Success Modal Component
   const SuccessModal = () => {
     if (!showSuccessModal) return null;
     
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in duration-300">
-          {/* Header Gradient */}
           <div className="relative h-24 bg-gradient-to-r from-emerald-500 to-teal-500">
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
@@ -238,12 +260,23 @@ function AddMateri() {
             </div>
           </div>
           
-          {/* Content */}
           <div className="px-6 pb-6 pt-10 text-center">
             <h3 className="text-xl font-bold text-slate-800 mb-2">Berhasil!</h3>
-            <p className="text-slate-500 text-sm mb-6">
+            <p className="text-slate-500 text-sm mb-4">
               Materi "{formDataState.judul}" berhasil ditambahkan
             </p>
+            {mentorInfo && (
+              <div className="bg-teal-50 rounded-xl p-3 mb-6">
+                <p className="text-xs text-teal-700">
+                  <Building2 className="inline w-3 h-3 mr-1" />
+                  Materi ini akan muncul untuk semua peserta bimbingan Anda di divisi: <strong>{mentorInfo.nama_divisi || "Belum ada divisi"}</strong>
+                </p>
+                <p className="text-xs text-teal-600 mt-1">
+                  <Users className="inline w-3 h-3 mr-1" />
+                  Total peserta: Menyesuaikan dengan peserta bimbingan Anda
+                </p>
+              </div>
+            )}
             
             <div className="flex gap-3">
               <button
@@ -271,14 +304,13 @@ function AddMateri() {
     );
   };
 
-  // Modal Error Component
+  // Error Modal Component
   const ErrorModal = () => {
     if (!showErrorModal) return null;
     
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in duration-300">
-          {/* Header Gradient */}
           <div className="relative h-24 bg-gradient-to-r from-red-500 to-rose-500">
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg">
@@ -287,7 +319,6 @@ function AddMateri() {
             </div>
           </div>
           
-          {/* Content */}
           <div className="px-6 pb-6 pt-10 text-center">
             <h3 className="text-xl font-bold text-slate-800 mb-2">Gagal!</h3>
             <p className="text-slate-500 text-sm mb-6">
@@ -306,9 +337,19 @@ function AddMateri() {
     );
   };
 
+  if (loadingMentorInfo) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-teal-500 mx-auto mb-4" />
+          <p className="text-slate-600">Memuat informasi mentor...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20">
-      {/* Modal */}
       <SuccessModal />
       <ErrorModal />
       
@@ -319,7 +360,7 @@ function AddMateri() {
       
       <div className="relative p-6 lg:p-8 max-w-[1000px] mx-auto">
         
-        {/* Header tanpa tombol kembali ke daftar materi */}
+        {/* Header */}
         <div className="mb-8">
           <div className="relative overflow-hidden rounded-2xl">
             <div className="absolute inset-0 bg-gradient-to-r from-teal-500/15 via-blue-500/10 to-teal-500/15 rounded-2xl"></div>
@@ -342,12 +383,33 @@ function AddMateri() {
           </div>
         </div>
 
+        {/* Mentor Info Banner */}
+        {mentorInfo && mentorInfo.nama_divisi && (
+          <div className="mb-6 bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl p-4 border border-teal-100">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-white rounded-lg shadow-sm">
+                <Building2 size={18} className="text-teal-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-teal-800">Informasi Divisi Anda</p>
+                <p className="text-sm text-slate-700">
+                  Anda adalah mentor untuk divisi <strong>{mentorInfo.nama_divisi}</strong>
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Materi yang Anda upload akan otomatis muncul untuk semua peserta bimbingan Anda di divisi ini
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
           <div className="relative">
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-teal-500 to-blue-600"></div>
           </div>
           
           <div className="p-8 space-y-7">
+            {/* Judul Field */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2.5 flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-teal-50">
@@ -370,6 +432,7 @@ function AddMateri() {
               {errors.judul && <p className="text-xs text-red-500 mt-2">{errors.judul}</p>}
             </div>
 
+            {/* Deskripsi Field */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2.5 flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-blue-50">
@@ -392,6 +455,7 @@ function AddMateri() {
               {errors.deskripsi && <p className="text-xs text-red-500 mt-2">{errors.deskripsi}</p>}
             </div>
 
+            {/* Tipe Materi Selection */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-purple-50">
@@ -439,6 +503,7 @@ function AddMateri() {
               </div>
             </div>
 
+            {/* File Upload Section */}
             {(formDataState.tipe_materi === "dokumen" || formDataState.tipe_materi === "video") && (
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2.5 flex items-center gap-2">
@@ -515,6 +580,7 @@ function AddMateri() {
               </div>
             )}
 
+            {/* Link URL Section */}
             {formDataState.tipe_materi === "link" && (
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2.5 flex items-center gap-2">
@@ -563,7 +629,7 @@ function AddMateri() {
               <Shield size={16} className="text-teal-500" />
             </div>
             <div>
-              <p className="text-sm font-bold text-teal-800">Informasi</p>
+              <p className="text-sm font-bold text-teal-800">Informasi Penting</p>
               <p className="text-xs text-teal-700 mt-1 leading-relaxed">
                 {formDataState.tipe_materi === "video" 
                   ? "Upload file video pelatihan langsung. Peserta dapat memutar video di platform. Format: MP4, MOV, AVI, WEBM (Max 50 MB)."
@@ -571,6 +637,11 @@ function AddMateri() {
                   ? "Upload file dokumen pembelajaran. Peserta dapat mengunduh dan membaca dokumen. Format: PDF, DOC, DOCX, PPT, PPTX (Max 10 MB)."
                   : "Masukkan link URL materi eksternal. Peserta akan diarahkan ke halaman tersebut."}
               </p>
+              {mentorInfo && mentorInfo.nama_divisi && (
+                <p className="text-xs text-teal-600 mt-2">
+                  <strong>Catatan:</strong> Materi yang diupload akan otomatis muncul untuk semua peserta bimbingan Anda di divisi <strong>{mentorInfo.nama_divisi}</strong>.
+                </p>
+              )}
             </div>
           </div>
         </div>

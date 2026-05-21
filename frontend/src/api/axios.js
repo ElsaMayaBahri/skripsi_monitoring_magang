@@ -19,15 +19,32 @@ axiosInstance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // TAMBAHKAN: Debug logging
+    console.log(`[API Request] ${config.method.toUpperCase()} ${config.url}`);
+    console.log("[API Request] Headers:", config.headers);
+    
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Interceptor untuk error 401
+// Interceptor untuk response
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // TAMBAHKAN: Debug logging untuk response
+    console.log(`[API Response] ${response.config.method.toUpperCase()} ${response.config.url}`);
+    console.log("[API Response] Status:", response.status);
+    console.log("[API Response] Data:", response.data);
+    
+    return response;
+  },
   (error) => {
+    // TAMBAHKAN: Debug logging untuk error
+    console.error("[API Error] Config:", error.config);
+    console.error("[API Error] Response:", error.response);
+    console.error("[API Error] Message:", error.message);
+    
     if (error.response?.status === 401 && !error.config?.url?.includes("/login")) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");

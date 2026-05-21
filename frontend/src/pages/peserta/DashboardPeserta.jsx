@@ -23,6 +23,7 @@ import {
   Gem,
   Crown
 } from "lucide-react"
+import { useNotifikasi } from "../../context/NotifikasiContext"
 
 function DashboardPeserta() {
   const [loading, setLoading] = useState(true)
@@ -43,7 +44,7 @@ function DashboardPeserta() {
   const [recentTasks, setRecentTasks] = useState([])
   const [upcomingDeadlines, setUpcomingDeadlines] = useState([])
   const [recentActivities, setRecentActivities] = useState([])
-  const [notifications, setNotifications] = useState([])
+  const { notifikasi: notifications, unreadCount, markAsRead } = useNotifikasi()
 
   useEffect(() => {
     const userData = localStorage.getItem("user")
@@ -103,9 +104,6 @@ function DashboardPeserta() {
         { id: 3, action: "Mendapat notifikasi revisi tugas", time: "kemarin", type: "notif" },
       ])
       
-      const storedNotif = JSON.parse(localStorage.getItem("notifications")) || []
-      setNotifications(storedNotif.filter(n => n.target === "peserta" || n.target === "all").slice(0, 3))
-      
       setLoading(false)
     }, 500)
   }
@@ -124,7 +122,6 @@ function DashboardPeserta() {
     return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`
   }
 
-  const unreadCount = notifications.filter(n => !n.is_read).length
 
   if (loading) {
     return (
@@ -369,13 +366,13 @@ function DashboardPeserta() {
                 </div>
               ) : (
                 notifications.map((notif, idx) => (
-                  <div key={idx} className={`p-3 rounded-xl transition-all duration-200 ${!notif.is_read ? 'bg-teal-50/50 border-l-2 border-teal-500' : 'hover:bg-gray-50'}`}>
+                  <div key={idx} className={`p-3 rounded-xl transition-all duration-200 ${!notif.status_baca ? 'bg-teal-50/50 border-l-2 border-teal-500' : 'hover:bg-gray-50'}`}>
                     <div className="flex items-start gap-2">
-                      <div className={`w-2 h-2 rounded-full mt-1.5 ${!notif.is_read ? 'bg-teal-500' : 'bg-gray-300'}`}></div>
+                      <div className={`w-2 h-2 rounded-full mt-1.5 ${!notif.status_baca ? 'bg-teal-500' : 'bg-gray-300'}`}></div>
                       <div className="flex-1">
                         <p className="text-xs font-semibold text-gray-800">{notif.judul}</p>
                         <p className="text-[11px] text-gray-500 mt-0.5">{notif.pesan}</p>
-                        <p className="text-[9px] text-gray-400 mt-1">{notif.created_at || "Baru saja"}</p>
+                        <p className="text-[9px] text-gray-400 mt-1">{notif.waktu || "Baru saja"}</p>
                       </div>
                     </div>
                   </div>

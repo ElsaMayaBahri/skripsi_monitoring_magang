@@ -60,68 +60,46 @@ function AddTugas() {
 
   // Fetch peserta from backend
   useEffect(() => {
-    const fetchPeserta = async () => {
-      try {
-        setFetchingPeserta(true);
-        let response = null;
-        
-        try {
-          response = await getMentorPesertaList({});
-          console.log("Peserta response from getMentorPesertaList:", response);
-        } catch (err) {
-          console.log("getMentorPesertaList failed, trying getMyPesertas...");
-          try {
-            response = await getMyPesertas();
-            console.log("Peserta response from getMyPesertas:", response);
-          } catch (err2) {
-            console.error("Both endpoints failed:", err2);
-            throw new Error("Gagal memuat data peserta");
-          }
-        }
-        
-        if (response && response.success && response.data) {
-          let pesertaData = response.data;
-          
-          if (Array.isArray(pesertaData)) {
-            const transformedPeserta = pesertaData.map(p => ({
-              id: p.id_peserta,
-              nama: p.nama || p.nama_peserta || p.user?.nama || "Unknown",
-              divisi: p.divisi || p.nama_divisi || p.divisi?.nama_divisi || "-",
-              email: p.email || p.user?.email || "-"
-            }));
-            setPesertaList(transformedPeserta);
-            setFilteredPeserta(transformedPeserta);
-          } else if (pesertaData.peserta && Array.isArray(pesertaData.peserta)) {
-            const transformedPeserta = pesertaData.peserta.map(p => ({
-              id: p.id_peserta,
-              nama: p.nama || p.nama_peserta || p.user?.nama || "Unknown",
-              divisi: p.divisi || p.nama_divisi || p.divisi?.nama_divisi || "-",
-              email: p.email || p.user?.email || "-"
-            }));
-            setPesertaList(transformedPeserta);
-            setFilteredPeserta(transformedPeserta);
-          } else if (pesertaData.items && Array.isArray(pesertaData.items)) {
-            const transformedPeserta = pesertaData.items.map(p => ({
-              id: p.id_peserta,
-              nama: p.nama || p.nama_peserta || p.user?.nama || "Unknown",
-              divisi: p.divisi || p.nama_divisi || p.divisi?.nama_divisi || "-",
-              email: p.email || p.user?.email || "-"
-            }));
-            setPesertaList(transformedPeserta);
-            setFilteredPeserta(transformedPeserta);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching peserta:", error);
-        setError("Gagal memuat data peserta: " + (error.message || "Unknown error"));
-        setPesertaList([]);
-        setFilteredPeserta([]);
-      } finally {
-        setFetchingPeserta(false);
-      }
-    };
-    fetchPeserta();
-  }, []);
+  const fetchPeserta = async () => {
+    try {
+      setFetchingPeserta(true)
+      const token = localStorage.getItem("token")
+
+      const res = await fetch("http://localhost:8000/api/mentor/pesertas", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      })
+
+      const data = await res.json()
+      console.log("Peserta data:", data)
+
+      if (data.success && Array.isArray(data.data)) {
+  const transformed = data.data.map(p => {
+    console.log("Struktur peserta:", p) // debug dulu
+    return {
+      id:     p.id_peserta,
+      nama:   p.user?.nama      || p.nama_lengkap || p.nama || "Unknown",
+      divisi: p.divisi?.nama_divisi || p.nama_divisi || "-",
+      email:  p.user?.email     || p.email || "-",
+    }
+  })
+  console.log("Transformed:", transformed)
+  setPesertaList(transformed)
+  setFilteredPeserta(transformed)
+} else {
+  setError("Tidak ada data peserta: " + (data.message || ""))
+}
+    } catch (err) {
+      console.error("Fetch peserta error:", err)
+      setError("Gagal memuat peserta: " + err.message)
+    } finally {
+      setFetchingPeserta(false)
+    }
+  }
+  fetchPeserta()
+}, [])
 
   // Filter peserta berdasarkan search
   useEffect(() => {

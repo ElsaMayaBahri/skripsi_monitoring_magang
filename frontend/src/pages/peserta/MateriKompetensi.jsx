@@ -1,6 +1,6 @@
 // src/pages/peserta/MateriKompetensi.jsx
-import React, { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   GraduationCap,
   BookOpen,
@@ -26,74 +26,85 @@ import {
   ExternalLink,
   Play,
   User,
-  Server
-} from "lucide-react"
-import { getMateriKompetensi, markMateriKompetensiAccessed } from "../../api/peserta/materiKompetensiService"
+  Server,
+} from "lucide-react";
+import {
+  getMateriKompetensi,
+  markMateriKompetensiAccessed,
+} from "../../api/peserta/materiKompetensiService";
+import axiosInstance from "../../api/axios";
 
 function MateriKompetensi() {
-  const navigate = useNavigate()
-  const [loading, setLoading] = useState(true)
-  const [materiList, setMateriList] = useState([])
-  const [filteredMateri, setFilteredMateri] = useState([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedType, setSelectedType] = useState("all")
-  const [currentPage, setCurrentPage] = useState(1)
-  const [backendError, setBackendError] = useState(false)
-  const [selectedMateri, setSelectedMateri] = useState(null)
-  const [showDetailModal, setShowDetailModal] = useState(false)
-  const itemsPerPage = 6
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [materiList, setMateriList] = useState([]);
+  const [filteredMateri, setFilteredMateri] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedType, setSelectedType] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [backendError, setBackendError] = useState(false);
+  const [selectedMateri, setSelectedMateri] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const itemsPerPage = 6;
 
   useEffect(() => {
-    loadMateriData()
-  }, [])
+    loadMateriData();
+  }, []);
 
   const loadMateriData = async () => {
-    setLoading(true)
-    setBackendError(false)
-    
+    setLoading(true);
+    setBackendError(false);
+
     try {
-      const response = await getMateriKompetensi()
-      
+      const response = await getMateriKompetensi();
+
       if (response.success && response.data && response.data.length > 0) {
-        const formattedData = response.data.map(item => ({
+        const formattedData = response.data.map((item) => ({
           id: item.id_materi || item.id,
           judul: item.judul,
           deskripsi: item.deskripsi,
           tipe: item.tipe || "pdf",
           durasi: item.durasi,
           file_size: item.file_size,
-          created_at: item.created_at ? item.created_at.split('T')[0] : "2025-01-01",
+          created_at: item.created_at
+            ? item.created_at.split("T")[0]
+            : "2025-01-01",
           coo: item.coo || "COO Kuanta Academy",
           is_accessed: item.is_accessed || false,
+          is_locked: item.is_locked || false,
+          can_access: item.can_access ?? true,
+          locked_message: item.locked_message || "",
+          urutan: item.urutan || 1,
           quiz_available: item.quiz_available || false,
           quiz_id: item.quiz_id,
           file_url: item.file_url,
           file_name: item.file_name,
-          konten: item.konten || ""
-        }))
-        
-        setMateriList(formattedData)
-        setFilteredMateri(formattedData)
+          konten: item.konten || "",
+        }));
+
+        setMateriList(formattedData);
+        setFilteredMateri(formattedData);
       } else {
-        console.log("Backend belum siap, menggunakan dummy data")
-        setBackendError(true)
-        loadDummyData()
+        console.log("Backend belum siap, menggunakan dummy data");
+        setBackendError(true);
+        loadDummyData();
       }
     } catch (err) {
-      console.error("Error load materi:", err)
-      setBackendError(true)
-      loadDummyData()
+      console.error("Error load materi:", err);
+      setBackendError(true);
+      loadDummyData();
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const loadDummyData = () => {
     const dummyMateri = [
       {
         id: 1,
         judul: "Fundamental JavaScript untuk Kompetensi",
-        deskripsi: "Mempelajari konsep dasar JavaScript yang akan diujikan dalam ujian kompetensi",
+        deskripsi:
+          "Mempelajari konsep dasar JavaScript yang akan diujikan dalam ujian kompetensi",
         tipe: "video",
         durasi: "60 menit",
         file_size: "120 MB",
@@ -104,7 +115,8 @@ function MateriKompetensi() {
         quiz_id: 1,
         file_url: "https://www.youtube.com/embed/SqcY0GlETPk",
         file_name: "javascript_fundamental.mp4",
-        konten: "JavaScript adalah bahasa pemrograman yang wajib dikuasai untuk ujian kompetensi..."
+        konten:
+          "JavaScript adalah bahasa pemrograman yang wajib dikuasai untuk ujian kompetensi...",
       },
       {
         id: 2,
@@ -118,9 +130,10 @@ function MateriKompetensi() {
         is_accessed: false,
         quiz_available: true,
         quiz_id: 2,
-        file_url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+        file_url:
+          "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
         file_name: "panduan_ujian_kompetensi.pdf",
-        konten: "Panduan lengkap ujian kompetensi..."
+        konten: "Panduan lengkap ujian kompetensi...",
       },
       {
         id: 3,
@@ -137,7 +150,7 @@ function MateriKompetensi() {
         file_url: "#",
         file_name: "template_laporan_ujian.docx",
         konten: "Template laporan ujian kompetensi",
-        is_download_only: true
+        is_download_only: true,
       },
       {
         id: 4,
@@ -153,7 +166,7 @@ function MateriKompetensi() {
         quiz_id: 4,
         file_url: "https://www.youtube.com/embed/CVpUuw9XSjY",
         file_name: "react_tutorial.mp4",
-        konten: "React JS adalah library untuk membangun UI..."
+        konten: "React JS adalah library untuk membangun UI...",
       },
       {
         id: 5,
@@ -167,9 +180,10 @@ function MateriKompetensi() {
         is_accessed: false,
         quiz_available: true,
         quiz_id: 5,
-        file_url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+        file_url:
+          "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
         file_name: "tailwind_kompetensi.pdf",
-        konten: "Tailwind CSS adalah framework CSS utility-first..."
+        konten: "Tailwind CSS adalah framework CSS utility-first...",
       },
       {
         id: 6,
@@ -186,135 +200,196 @@ function MateriKompetensi() {
         file_url: "https://docs.google.com/forms/d/e/1FAIpQLSdummy/viewform",
         file_name: null,
         konten: "Pendaftaran ujian kompetensi",
-        is_external_link: true
-      }
-    ]
-    
-    setMateriList(dummyMateri)
-    setFilteredMateri(dummyMateri)
-  }
+        is_external_link: true,
+      },
+    ];
+
+    setMateriList(dummyMateri);
+    setFilteredMateri(dummyMateri);
+  };
 
   useEffect(() => {
-    let filtered = [...materiList]
-    
+    let filtered = [...materiList];
+
     if (searchTerm) {
-      filtered = filtered.filter(m => 
-        m.judul.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        m.deskripsi.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+      filtered = filtered.filter(
+        (m) =>
+          m.judul.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          m.deskripsi.toLowerCase().includes(searchTerm.toLowerCase()),
+      );
     }
-    
+
     if (selectedType !== "all") {
-      filtered = filtered.filter(m => m.tipe === selectedType)
+      filtered = filtered.filter((m) => m.tipe === selectedType);
     }
-    
-    setFilteredMateri(filtered)
-    setCurrentPage(1)
-  }, [searchTerm, selectedType, materiList])
+
+    setFilteredMateri(filtered);
+    setCurrentPage(1);
+  }, [searchTerm, selectedType, materiList]);
 
   const getTypeIcon = (tipe) => {
-    switch(tipe) {
-      case "video": return <Video size="16" className="text-blue-500" />
-      case "pdf": return <FileText size="16" className="text-red-500" />
-      case "doc": return <FileText size="16" className="text-blue-600" />
-      case "excel": return <FileText size="16" className="text-green-600" />
-      case "ppt": return <FileText size="16" className="text-orange-600" />
-      case "link": return <LinkIcon size="16" className="text-purple-500" />
-      case "google_form": return <LinkIcon size="16" className="text-indigo-500" />
-      default: return <File size="16" className="text-gray-500" />
+    switch (tipe) {
+      case "video":
+        return <Video size="16" className="text-blue-500" />;
+      case "pdf":
+        return <FileText size="16" className="text-red-500" />;
+      case "doc":
+        return <FileText size="16" className="text-blue-600" />;
+      case "excel":
+        return <FileText size="16" className="text-green-600" />;
+      case "ppt":
+        return <FileText size="16" className="text-orange-600" />;
+      case "link":
+        return <LinkIcon size="16" className="text-purple-500" />;
+      case "google_form":
+        return <LinkIcon size="16" className="text-indigo-500" />;
+      default:
+        return <File size="16" className="text-gray-500" />;
     }
-  }
+  };
 
   const getTypeLabel = (tipe) => {
-    switch(tipe) {
-      case "video": return "Video"
-      case "pdf": return "PDF"
-      case "doc": return "Word"
-      case "excel": return "Excel"
-      case "ppt": return "PowerPoint"
-      case "link": return "Link"
-      case "google_form": return "Google Form"
-      default: return "Materi"
+    switch (tipe) {
+      case "video":
+        return "Video";
+      case "pdf":
+        return "PDF";
+      case "doc":
+        return "Word";
+      case "excel":
+        return "Excel";
+      case "ppt":
+        return "PowerPoint";
+      case "link":
+        return "Link";
+      case "google_form":
+        return "Google Form";
+      default:
+        return "Materi";
     }
-  }
+  };
 
   const getTypeColor = (tipe) => {
-    switch(tipe) {
-      case "video": return "from-blue-500 to-cyan-500"
-      case "pdf": return "from-red-500 to-orange-500"
-      case "doc": return "from-blue-600 to-indigo-600"
-      case "excel": return "from-green-500 to-emerald-500"
-      case "ppt": return "from-orange-500 to-red-500"
-      case "link": return "from-purple-500 to-pink-500"
-      case "google_form": return "from-indigo-500 to-purple-500"
-      default: return "from-teal-500 to-blue-600"
+    switch (tipe) {
+      case "video":
+        return "from-blue-500 to-cyan-500";
+      case "pdf":
+        return "from-red-500 to-orange-500";
+      case "doc":
+        return "from-blue-600 to-indigo-600";
+      case "excel":
+        return "from-green-500 to-emerald-500";
+      case "ppt":
+        return "from-orange-500 to-red-500";
+      case "link":
+        return "from-purple-500 to-pink-500";
+      case "google_form":
+        return "from-indigo-500 to-purple-500";
+      default:
+        return "from-teal-500 to-blue-600";
     }
-  }
+  };
 
   const handleAksesMateri = async (materi) => {
-    setSelectedMateri(materi)
-    setShowDetailModal(true)
-    
+    if (materi.is_locked) {
+      return;
+    }
+
+    setSelectedMateri(materi);
+    setShowDetailModal(true);
+
     if (!materi.is_accessed) {
-      setLoading(true)
       try {
-        const response = await markMateriKompetensiAccessed(materi.id)
+        const response = await markMateriKompetensiAccessed(materi.id);
+
         if (response.success) {
-          const updatedMateri = materiList.map(m => 
-            m.id === materi.id ? { ...m, is_accessed: true } : m
-          )
-          setMateriList(updatedMateri)
-          setFilteredMateri(updatedMateri.filter(m => 
-            searchTerm ? m.judul.toLowerCase().includes(searchTerm.toLowerCase()) : true
-          ))
-          setSelectedMateri({ ...materi, is_accessed: true })
+          setSelectedMateri({ ...materi, is_accessed: true });
+
+          // Ambil ulang data dari backend agar materi berikutnya otomatis terbuka
+          await loadMateriData();
+        } else {
+          alert(response.message || "Gagal menandai materi sebagai dibaca");
         }
       } catch (err) {
-        console.error("Error mark accessed:", err)
-      } finally {
-        setLoading(false)
+        console.error("Error mark accessed:", err);
+        alert("Gagal menandai materi sebagai dibaca");
       }
     }
-  }
+  };
 
-  const handleDownload = (materi) => {
-    alert(`📥 Download file: ${materi.file_name || materi.judul}\n\n(Pada implementasi real, file akan didownload dari server)`)
-  }
+  const handleDownload = async (materi) => {
+    if (!materi.file_url) {
+      alert("File tidak tersedia");
+      return;
+    }
 
-  const indexOfLastItem = currentPage * itemsPerPage
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage
-  const currentItems = filteredMateri.slice(indexOfFirstItem, indexOfLastItem)
-  const totalPages = Math.ceil(filteredMateri.length / itemsPerPage)
+    // Jika tipe doc/excel/ppt → panggil endpoint download agar file terunduh
+    if (["doc", "excel", "ppt"].includes(materi.tipe)) {
+      try {
+        // Asumsikan ada endpoint download: /api/peserta/materi-kompetensi/{id}/download
+        const response = await axiosInstance.get(
+          `/peserta/materi-kompetensi/${materi.id}/download`,
+          {
+            responseType: "blob",
+          },
+        );
 
-  const accessedCount = materiList.filter(m => m.is_accessed).length
-  const totalCount = materiList.length
-  const progress = totalCount > 0 ? Math.round((accessedCount / totalCount) * 100) : 0
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute(
+          "download",
+          materi.file_name || `materi_${materi.id}`,
+        );
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error("Download error:", err);
+        alert("Gagal mengunduh file");
+      }
+    } else {
+      // Untuk video/pdf/link, buka di tab baru
+      window.open(materi.file_url, "_blank");
+    }
+  };
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredMateri.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredMateri.length / itemsPerPage);
+
+  const accessedCount = materiList.filter((m) => m.is_accessed).length;
+  const totalCount = materiList.length;
+  const progress =
+    totalCount > 0 ? Math.round((accessedCount / totalCount) * 100) : 0;
 
   const getPageNumbers = () => {
-    const pages = []
-    const maxVisible = 5
-    
+    const pages = [];
+    const maxVisible = 5;
+
     if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i)
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
       if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) pages.push(i)
-        pages.push('...')
-        pages.push(totalPages)
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push("...");
+        pages.push(totalPages);
       } else if (currentPage >= totalPages - 2) {
-        pages.push(1)
-        pages.push('...')
-        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i)
+        pages.push(1);
+        pages.push("...");
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
       } else {
-        pages.push(1)
-        pages.push('...')
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i)
-        pages.push('...')
-        pages.push(totalPages)
+        pages.push(1);
+        pages.push("...");
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push("...");
+        pages.push(totalPages);
       }
     }
-    return pages
-  }
+    return pages;
+  };
 
   if (loading && materiList.length === 0) {
     return (
@@ -324,7 +399,7 @@ function MateriKompetensi() {
           <div className="relative w-10 h-10 border-2 border-teal-400/30 border-t-teal-500 rounded-full animate-spin"></div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -338,7 +413,9 @@ function MateriKompetensi() {
             </div>
             <div>
               <h1 className="text-base font-bold">Materi Kompetensi</h1>
-              <p className="text-white/80 text-xs mt-0.5">Materi pelatihan kompetensi dari COO</p>
+              <p className="text-white/80 text-xs mt-0.5">
+                Materi pelatihan kompetensi dari COO
+              </p>
             </div>
           </div>
         </div>
@@ -350,11 +427,17 @@ function MateriKompetensi() {
           <div className="flex items-start gap-3">
             <Server size="18" className="text-amber-500 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-amber-800">Mode Development - Data Dummy</p>
+              <p className="text-sm font-semibold text-amber-800">
+                Mode Development - Data Dummy
+              </p>
               <p className="text-xs text-amber-700 mt-1">
-                Backend API belum terhubung. Menampilkan data dummy untuk testing tampilan.
+                Backend API belum terhubung. Menampilkan data dummy untuk
+                testing tampilan.
                 <br />
-                API Endpoint: <span className="font-mono">GET /api/peserta/materi-kompetensi</span>
+                API Endpoint:{" "}
+                <span className="font-mono">
+                  GET /api/peserta/materi-kompetensi
+                </span>
               </p>
             </div>
           </div>
@@ -369,19 +452,28 @@ function MateriKompetensi() {
               <Target size="14" className="text-white" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-700">Progress Belajar Kompetensi</p>
+              <p className="text-xs font-semibold text-gray-700">
+                Progress Belajar Kompetensi
+              </p>
             </div>
           </div>
           <p className="text-lg font-bold text-teal-600">{progress}%</p>
         </div>
         <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-teal-500 to-blue-600 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
+          <div
+            className="h-full bg-gradient-to-r from-teal-500 to-blue-600 rounded-full transition-all duration-500"
+            style={{ width: `${progress}%` }}
+          ></div>
         </div>
-        <p className="text-[10px] text-gray-500 mt-1">{accessedCount} dari {totalCount} materi telah diakses</p>
+        <p className="text-[10px] text-gray-500 mt-1">
+          {accessedCount} dari {totalCount} materi telah diakses
+        </p>
         {progress === 100 && (
           <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 mt-2 w-fit">
             <Award size="12" className="text-emerald-600" />
-            <span className="text-xs font-medium text-emerald-600">Siap Uji Kompetensi!</span>
+            <span className="text-xs font-medium text-emerald-600">
+              Siap Uji Kompetensi!
+            </span>
           </div>
         )}
       </div>
@@ -400,11 +492,36 @@ function MateriKompetensi() {
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => setSelectedType("all")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${selectedType === "all" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Semua</button>
-            <button onClick={() => setSelectedType("video")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${selectedType === "video" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Video</button>
-            <button onClick={() => setSelectedType("pdf")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${selectedType === "pdf" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>PDF</button>
-            <button onClick={() => setSelectedType("doc")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${selectedType === "doc" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Word</button>
-            <button onClick={() => setSelectedType("google_form")} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${selectedType === "google_form" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Form</button>
+            <button
+              onClick={() => setSelectedType("all")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${selectedType === "all" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            >
+              Semua
+            </button>
+            <button
+              onClick={() => setSelectedType("video")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${selectedType === "video" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            >
+              Video
+            </button>
+            <button
+              onClick={() => setSelectedType("pdf")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${selectedType === "pdf" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            >
+              PDF
+            </button>
+            <button
+              onClick={() => setSelectedType("doc")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${selectedType === "doc" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            >
+              Word
+            </button>
+            <button
+              onClick={() => setSelectedType("google_form")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${selectedType === "google_form" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            >
+              Form
+            </button>
           </div>
         </div>
       </div>
@@ -412,61 +529,140 @@ function MateriKompetensi() {
       {/* Results Count */}
       <div className="mb-3">
         <p className="text-xs text-gray-500">
-          Menampilkan <span className="font-semibold text-gray-700">{currentItems.length}</span> dari{" "}
-          <span className="font-semibold text-gray-700">{filteredMateri.length}</span> materi kompetensi
+          Menampilkan{" "}
+          <span className="font-semibold text-gray-700">
+            {currentItems.length}
+          </span>{" "}
+          dari{" "}
+          <span className="font-semibold text-gray-700">
+            {filteredMateri.length}
+          </span>{" "}
+          materi kompetensi
         </p>
       </div>
 
       {/* Materi Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {currentItems.map((materi, idx) => (
-          <div 
-            key={materi.id} 
-            onClick={() => handleAksesMateri(materi)}
-            className="group relative bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
+          <div
+            key={materi.id}
+            onClick={() => {
+              if (!materi.is_locked) {
+                handleAksesMateri(materi);
+              }
+            }}
+            className={`group relative bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden transition-all duration-300 ${
+              materi.is_locked
+                ? "opacity-70 cursor-not-allowed"
+                : "hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
+            }`}
           >
-            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${getTypeColor(materi.tipe)}`}></div>
-            
+            <div
+              className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${getTypeColor(materi.tipe)}`}
+            ></div>
+
             <div className="p-4">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
                     {getTypeIcon(materi.tipe)}
                   </div>
-                  <span className="text-[10px] font-medium text-gray-500 uppercase">{getTypeLabel(materi.tipe)}</span>
+                  <span className="text-[10px] font-medium text-gray-500 uppercase">
+                    {getTypeLabel(materi.tipe)}
+                  </span>
                 </div>
-                {materi.is_accessed ? (
+                {materi.is_locked ? (
+                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-gray-100">
+                    <Lock size="8" className="text-gray-500" />
+                    <span className="text-[8px] font-medium text-gray-500">
+                      Terkunci
+                    </span>
+                  </div>
+                ) : materi.is_accessed ? (
                   <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100">
                     <CheckCircle size="8" className="text-emerald-600" />
-                    <span className="text-[8px] font-medium text-emerald-600">Sudah</span>
+                    <span className="text-[8px] font-medium text-emerald-600">
+                      Sudah
+                    </span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100">
-                    <Lock size="8" className="text-amber-600" />
-                    <span className="text-[8px] font-medium text-amber-600">Terkunci</span>
+                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-100">
+                    <Eye size="8" className="text-blue-600" />
+                    <span className="text-[8px] font-medium text-blue-600">
+                      Terbuka
+                    </span>
                   </div>
                 )}
               </div>
-              
-              <h3 className="font-bold text-gray-800 text-sm mb-1 line-clamp-1">{materi.judul}</h3>
-              <p className="text-xs text-gray-500 mb-3 line-clamp-2">{materi.deskripsi}</p>
-              
+
+              <h3 className="font-bold text-gray-800 text-sm mb-1 line-clamp-1">
+                {materi.judul}
+              </h3>
+              {materi.is_locked && (
+                <p className="mb-3 text-[11px] text-red-500">
+                  {materi.locked_message ||
+                    "Selesaikan materi sebelumnya terlebih dahulu."}
+                </p>
+              )}
+
               <div className="space-y-1 mb-3">
                 <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
                   <Calendar size="10" />
                   <span>{materi.created_at}</span>
-                  {materi.durasi && <><span className="w-0.5 h-0.5 rounded-full bg-gray-300"></span><Clock size="10" /><span>{materi.durasi}</span></>}
-                  {materi.file_size && <><span className="w-0.5 h-0.5 rounded-full bg-gray-300"></span><File size="10" /><span>{materi.file_size}</span></>}
+                  {materi.durasi && (
+                    <>
+                      <span className="w-0.5 h-0.5 rounded-full bg-gray-300"></span>
+                      <Clock size="10" />
+                      <span>{materi.durasi}</span>
+                    </>
+                  )}
+                  {materi.file_size && (
+                    <>
+                      <span className="w-0.5 h-0.5 rounded-full bg-gray-300"></span>
+                      <File size="10" />
+                      <span>{materi.file_size}</span>
+                    </>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
                   <User size="10" />
                   <span>{materi.coo}</span>
                 </div>
               </div>
-              
-              <button className="w-full py-1.5 text-xs font-medium rounded-lg bg-gradient-to-r from-teal-500 to-blue-600 text-white hover:shadow-md transition-all duration-200 flex items-center justify-center gap-1">
-                {materi.is_accessed ? <Eye size="12" /> : <Lock size="12" />}
-                {materi.is_accessed ? "Lihat Materi" : "Akses Materi"}
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+
+                  if (!materi.is_locked) {
+                    handleAksesMateri(materi);
+                  }
+                }}
+                disabled={materi.is_locked}
+                className={`w-full px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
+                  materi.is_locked
+                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    : materi.is_accessed
+                      ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                      : "bg-gradient-to-r from-teal-500 to-blue-600 text-white hover:shadow-md"
+                }`}
+              >
+                {materi.is_locked ? (
+                  <>
+                    <Lock size={14} />
+                    Terkunci
+                  </>
+                ) : materi.is_accessed ? (
+                  <>
+                    <CheckCircle size={14} />
+                    Sudah Dibaca
+                  </>
+                ) : (
+                  <>
+                    <Eye size={14} />
+                    Baca Materi
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -476,8 +672,12 @@ function MateriKompetensi() {
       {filteredMateri.length === 0 && (
         <div className="bg-white rounded-xl shadow-md border border-gray-100 py-10 text-center">
           <GraduationCap size="40" className="text-gray-300 mx-auto mb-2" />
-          <p className="text-gray-500 font-medium text-sm">Belum ada materi kompetensi</p>
-          <p className="text-xs text-gray-400 mt-1">Materi akan muncul sesuai jadwal dari COO</p>
+          <p className="text-gray-500 font-medium text-sm">
+            Belum ada materi kompetensi
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Materi akan muncul sesuai jadwal dari COO
+          </p>
         </div>
       )}
 
@@ -485,17 +685,22 @@ function MateriKompetensi() {
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 pt-4">
           <button
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
             className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
           >
             <ChevronLeft size="14" />
           </button>
-          
+
           <div className="flex gap-1">
-            {getPageNumbers().map((page, idx) => (
-              page === '...' ? (
-                <span key={idx} className="w-7 h-7 flex items-center justify-center text-gray-400 text-xs">...</span>
+            {getPageNumbers().map((page, idx) =>
+              page === "..." ? (
+                <span
+                  key={idx}
+                  className="w-7 h-7 flex items-center justify-center text-gray-400 text-xs"
+                >
+                  ...
+                </span>
               ) : (
                 <button
                   key={idx}
@@ -508,12 +713,14 @@ function MateriKompetensi() {
                 >
                   {page}
                 </button>
-              )
-            ))}
+              ),
+            )}
           </div>
-          
+
           <button
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+            }
             disabled={currentPage === totalPages}
             className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
           >
@@ -524,8 +731,14 @@ function MateriKompetensi() {
 
       {/* Modal Detail Materi */}
       {showDetailModal && selectedMateri && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowDetailModal(false)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setShowDetailModal(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal Header */}
             <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-teal-50/50 to-blue-50/50">
               <div className="flex items-center gap-3">
@@ -533,11 +746,18 @@ function MateriKompetensi() {
                   {getTypeIcon(selectedMateri.tipe)}
                 </div>
                 <div>
-                  <h2 className="font-bold text-gray-800 text-lg">{selectedMateri.judul}</h2>
-                  <p className="text-xs text-gray-500">Oleh: {selectedMateri.coo} • {selectedMateri.created_at}</p>
+                  <h2 className="font-bold text-gray-800 text-lg">
+                    {selectedMateri.judul}
+                  </h2>
+                  <p className="text-xs text-gray-500">
+                    Oleh: {selectedMateri.coo} • {selectedMateri.created_at}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setShowDetailModal(false)} className="p-2 rounded-lg hover:bg-white/50 transition">
+              <button
+                onClick={() => setShowDetailModal(false)}
+                className="p-2 rounded-lg hover:bg-white/50 transition"
+              >
                 <X size="20" className="text-gray-500" />
               </button>
             </div>
@@ -546,32 +766,53 @@ function MateriKompetensi() {
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
               {/* Deskripsi */}
               <div className="mb-6">
-                <h3 className="font-semibold text-gray-700 text-sm mb-2">Deskripsi Materi</h3>
-                <p className="text-gray-600 text-sm leading-relaxed">{selectedMateri.deskripsi}</p>
+                <h3 className="font-semibold text-gray-700 text-sm mb-2">
+                  Deskripsi Materi
+                </h3>
+                <p className="text-gray-600 text-sm leading-relaxed">
+                  {selectedMateri.deskripsi}
+                </p>
               </div>
 
               {/* Konten Materi */}
               <div className="mb-6">
-                <h3 className="font-semibold text-gray-700 text-sm mb-3">Konten Materi</h3>
-                
-                {selectedMateri.tipe === "video" && (
+                <h3 className="font-semibold text-gray-700 text-sm mb-3">
+                  Konten Materi
+                </h3>
+
+                {!selectedMateri.file_url && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                    <AlertTriangle
+                      size="24"
+                      className="text-yellow-500 mx-auto mb-2"
+                    />
+                    <p className="text-sm text-yellow-700">
+                      File materi tidak tersedia.
+                    </p>
+                    <p className="text-xs text-yellow-600">
+                      Silakan hubungi COO.
+                    </p>
+                  </div>
+                )}
+
+                {selectedMateri.tipe === "video" && selectedMateri.file_url && (
                   <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden">
-                    <iframe 
-                      src={selectedMateri.file_url} 
-                      className="w-full h-full" 
+                    <iframe
+                      src={selectedMateri.file_url}
+                      className="w-full h-full"
                       title={selectedMateri.judul}
-                      frameBorder="0" 
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen
                     />
                   </div>
                 )}
 
-                {selectedMateri.tipe === "pdf" && (
+                {selectedMateri.tipe === "pdf" && selectedMateri.file_url && (
                   <div className="h-[500px] border rounded-lg overflow-hidden">
-                    <iframe 
-                      src={`${selectedMateri.file_url}#toolbar=1`} 
-                      className="w-full h-full" 
+                    <iframe
+                      src={`${selectedMateri.file_url}#toolbar=1`}
+                      className="w-full h-full"
                       title={selectedMateri.judul}
                     />
                   </div>
@@ -582,9 +823,13 @@ function MateriKompetensi() {
                     <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
                       {getTypeIcon(selectedMateri.tipe)}
                     </div>
-                    <p className="text-gray-700 font-medium mb-1">{selectedMateri.file_name || selectedMateri.judul}</p>
-                    <p className="text-xs text-gray-400 mb-4">Ukuran file: {selectedMateri.file_size}</p>
-                    <button 
+                    <p className="text-gray-700 font-medium mb-1">
+                      {selectedMateri.file_name || selectedMateri.judul}
+                    </p>
+                    <p className="text-xs text-gray-400 mb-4">
+                      Ukuran file: {selectedMateri.file_size}
+                    </p>
+                    <button
                       onClick={() => handleDownload(selectedMateri)}
                       className="inline-flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all duration-200"
                     >
@@ -596,11 +841,16 @@ function MateriKompetensi() {
 
                 {selectedMateri.tipe === "google_form" && (
                   <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-6 text-center">
-                    <LinkIcon size="48" className="text-purple-400 mx-auto mb-3" />
-                    <p className="text-gray-600 mb-4">Materi berupa Google Form untuk pendaftaran/asesmen</p>
-                    <a 
-                      href={selectedMateri.file_url} 
-                      target="_blank" 
+                    <LinkIcon
+                      size="48"
+                      className="text-purple-400 mx-auto mb-3"
+                    />
+                    <p className="text-gray-600 mb-4">
+                      Materi berupa Google Form untuk pendaftaran/asesmen
+                    </p>
+                    <a
+                      href={selectedMateri.file_url}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all duration-200"
                     >
@@ -614,30 +864,39 @@ function MateriKompetensi() {
 
             {/* Modal Footer */}
             <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-100 bg-gray-50">
-              {selectedMateri.file_url && selectedMateri.file_url !== "#" && !["link", "google_form"].includes(selectedMateri.tipe) && (
-                <button 
-                  onClick={() => handleDownload(selectedMateri)}
-                  className="px-4 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-100 transition flex items-center gap-1"
-                >
-                  <Download size="14" />
-                  Download
-                </button>
-              )}
-              
-              {selectedMateri.is_accessed && selectedMateri.quiz_available && selectedMateri.quiz_id && (
-                <button
-                  onClick={() => {
-                    setShowDetailModal(false)
-                    navigate(`/peserta/kuis-kompetensi/${selectedMateri.quiz_id}`)
-                  }}
-                  className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:shadow-md flex items-center gap-1"
-                >
-                  <Zap size="14" />
-                  Ikuti Kuis
-                </button>
-              )}
-              
-              <button onClick={() => setShowDetailModal(false)} className="px-4 py-1.5 rounded-lg bg-gray-200 text-gray-700 text-sm hover:bg-gray-300 transition">
+              {selectedMateri.file_url &&
+                selectedMateri.file_url !== "#" &&
+                !["link", "google_form"].includes(selectedMateri.tipe) && (
+                  <button
+                    onClick={() => handleDownload(selectedMateri)}
+                    className="px-4 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-100 transition flex items-center gap-1"
+                  >
+                    <Download size="14" />
+                    Download
+                  </button>
+                )}
+
+              {selectedMateri.is_accessed &&
+                selectedMateri.quiz_available &&
+                selectedMateri.quiz_id && (
+                  <button
+                    onClick={() => {
+                      setShowDetailModal(false);
+                      navigate(
+                        `/peserta/kuis-kompetensi/${selectedMateri.quiz_id}`,
+                      );
+                    }}
+                    className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:shadow-md flex items-center gap-1"
+                  >
+                    <Zap size="14" />
+                    Ikuti Kuis
+                  </button>
+                )}
+
+              <button
+                onClick={() => setShowDetailModal(false)}
+                className="px-4 py-1.5 rounded-lg bg-gray-200 text-gray-700 text-sm hover:bg-gray-300 transition"
+              >
                 Tutup
               </button>
             </div>
@@ -645,7 +904,7 @@ function MateriKompetensi() {
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export default MateriKompetensi
+export default MateriKompetensi;

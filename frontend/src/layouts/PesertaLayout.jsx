@@ -36,6 +36,7 @@ import {
   Power,
   TrendingUp
 } from "lucide-react"
+import { useNotifikasi } from "../context/NotifikasiContext"
 
 function PesertaLayout() {
   const location = useLocation()
@@ -52,19 +53,13 @@ function PesertaLayout() {
   const [pembelajaranMentorOpen, setPembelajaranMentorOpen] = useState(false)
   const [pelatihanKompetensiOpen, setPelatihanKompetensiOpen] = useState(false)
   const [penilaianOpen, setPenilaianOpen] = useState(false)
-  
-  const [notifications, setNotifications] = useState([])
 
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}")
   const userInitial = currentUser.nama ? currentUser.nama.charAt(0).toUpperCase() : "P"
   const userFullName = currentUser.nama || "Peserta Magang"
   const userEmail = currentUser.email || "peserta@kuantaacademy.com"
 
-  useEffect(() => {
-    const storedNotif = JSON.parse(localStorage.getItem("notifications")) || []
-    const filteredNotif = storedNotif.filter(n => n.target === "peserta" || n.target === "all")
-    setNotifications(filteredNotif)
-  }, [])
+  const { notifikasi: notifications, unreadCount, markAsRead, markAllAsRead } = useNotifikasi()
 
   useEffect(() => {
     const interval = setInterval(() => setTime(new Date()), 60000)
@@ -144,7 +139,6 @@ function PesertaLayout() {
     setLogoutConfirmOpen(false)
   }
 
-  const unreadCount = notifications.filter(n => !n.is_read).length
 
   const handleProfile = () => {
     setProfileOpen(false)
@@ -470,50 +464,91 @@ function PesertaLayout() {
               </div>
 
               {/* NOTIFICATION BELL */}
-              <div className="relative">
-                <button 
-                  onClick={() => setNotifOpen(!notifOpen)}
-                  className="relative p-2 hover:bg-gray-100 rounded-lg transition-all duration-200"
-                >
-                  <Bell size={18} className="text-gray-500" />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white animate-pulse"></span>
-                  )}
-                </button>
+<div className="relative">
+  <button 
+    onClick={() => setNotifOpen(!notifOpen)}
+    className="relative p-2 hover:bg-gray-100 rounded-lg transition-all duration-200"
+  >
+    <Bell size={18} className="text-gray-500" />
+    {unreadCount > 0 && (
+      <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center ring-2 ring-white">
+        {unreadCount > 99 ? "99+" : unreadCount}
+      </span>
+    )}
+  </button>
 
-                {notifOpen && (
-                  <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 z-[100] overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-teal-50/50 to-blue-50/50">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="font-bold text-gray-800">Notifikasi</h3>
-                          <p className="text-xs text-gray-500 mt-0.5">Update terbaru</p>
-                        </div>
-                        <button onClick={() => setNotifOpen(false)} className="text-gray-400 hover:text-gray-600">
-                          <X size={16} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="p-8 text-center">
-                          <Bell size={32} className="text-gray-300 mx-auto mb-2" />
-                          <p className="text-gray-500 text-sm">Belum ada notifikasi</p>
-                        </div>
-                      ) : (
-                        notifications.map((notif, idx) => (
-                          <div key={idx} className="px-5 py-3 border-b border-gray-100 hover:bg-gray-50 transition cursor-pointer">
-                            <p className="text-sm font-medium text-gray-800">{notif.judul || "Notifikasi"}</p>
-                            <p className="text-xs text-gray-500 mt-1">{notif.pesan}</p>
-                            <p className="text-xs text-gray-400 mt-2">{notif.created_at || "Baru saja"}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
+  {notifOpen && (
+    <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 z-[100] overflow-hidden">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-teal-50/50 to-blue-50/50">
+        <div className="flex justify-between items-center">
+          <div>
+            <h3 className="font-bold text-gray-800">Notifikasi</h3>
+            {unreadCount > 0 && (
+              <p className="text-xs text-gray-500 mt-0.5">{unreadCount} belum dibaca</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllAsRead}
+                className="text-[10px] text-teal-600 hover:text-teal-700 font-medium"
+              >
+                Tandai semua dibaca
+              </button>
+            )}
+            <button onClick={() => setNotifOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+        {notifications.length === 0 ? (
+          <div className="p-8 text-center">
+            <Bell size={32} className="text-gray-300 mx-auto mb-2" />
+            <p className="text-gray-500 text-sm">Belum ada notifikasi</p>
+          </div>
+        ) : (
+          notifications.map((notif) => (
+            <div
+              key={notif.id_notifikasi}
+              onClick={() => !notif.status_baca && markAsRead(notif.id_notifikasi)}
+              className={`px-5 py-3 hover:bg-gray-50 transition cursor-pointer ${
+                !notif.status_baca ? "bg-teal-50/40 border-l-2 border-teal-500" : ""
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${!notif.status_baca ? "bg-teal-500" : "bg-gray-300"}`}></div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium text-gray-800 ${!notif.status_baca ? "text-teal-800" : ""}`}>
+                    {notif.judul}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notif.pesan}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">{notif.waktu}</p>
+                </div>
               </div>
+            </div>
+          ))
+        )}
+      </div>
 
+      {/* Footer */}
+      {notifications.length > 0 && (
+        <div className="px-5 py-3 border-t border-gray-100 text-center">
+          <button
+            onClick={() => setNotifOpen(false)}
+            className="text-xs text-teal-600 hover:text-teal-700 font-medium"
+          >
+            Tutup
+          </button>
+        </div>
+      )}
+    </div>
+  )}
+</div>
               {/* PROFILE DROPDOWN */}
               <div className="relative">
                 <button

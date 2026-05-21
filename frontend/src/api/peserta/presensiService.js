@@ -4,7 +4,9 @@ import axiosInstance from "../axios"
 // Get peserta attendance history
 export const getPesertaPresensi = async (params = {}) => {
   const queryString = new URLSearchParams(params).toString()
-  const response = await axiosInstance.get(`/peserta/presensi${queryString ? `?${queryString}` : ''}`)
+  const response = await axiosInstance.get(
+    `/peserta/presensi${queryString ? `?${queryString}` : ""}`
+  )
   return response.data
 }
 
@@ -12,8 +14,8 @@ export const getPesertaPresensi = async (params = {}) => {
 export const postPesertaCheckin = async (data) => {
   const response = await axiosInstance.post("/peserta/presensi/checkin", data, {
     headers: {
-      'Content-Type': 'multipart/form-data'
-    }
+      "Content-Type": "multipart/form-data",
+    },
   })
   return response.data
 }

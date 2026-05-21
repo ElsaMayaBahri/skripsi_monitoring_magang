@@ -13,7 +13,7 @@ class User extends Authenticatable
 
     protected $table = 'users';
     protected $primaryKey = 'id_user';
-    
+
     protected $fillable = [
         'id_peserta',
         'id_mentor',
@@ -41,7 +41,7 @@ class User extends Authenticatable
     // Relasi
     public function peserta()
     {
-        return $this->belongsTo(Peserta::class, 'id_peserta', 'id_peserta');
+    return $this->hasOne(Peserta::class, 'id_user', 'id_user');
     }
 
     public function mentor()

@@ -1,6 +1,6 @@
 // src/pages/peserta/DetailTugas.jsx
-import React, { useState, useEffect } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   FileText,
   Calendar,
@@ -23,261 +23,238 @@ import {
   Timer,
   AlertTriangle,
   Trash2,
-  X
-} from "lucide-react"
+  X,
+} from "lucide-react";
 
 function DetailTugas() {
-  const { id } = useParams()
-  const navigate = useNavigate()
-  const [loading, setLoading] = useState(true)
-  const [tugas, setTugas] = useState(null)
-  const [uploading, setUploading] = useState(false)
-  const [cancelling, setCancelling] = useState(false)
-  const [selectedFile, setSelectedFile] = useState(null)
-  const [submissionLink, setSubmissionLink] = useState("")
-  const [submissionType, setSubmissionType] = useState("file")
-  const [uploadSuccess, setUploadSuccess] = useState(false)
-  const [cancelSuccess, setCancelSuccess] = useState(false)
-  const [timeLeft, setTimeLeft] = useState(null)
-  const [showCancelModal, setShowCancelModal] = useState(false)
-
-  // FLAG: Ubah ke true jika backend sudah siap
-  const USE_REAL_API = false
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [tugas, setTugas] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [submissionLink, setSubmissionLink] = useState("");
+  const [submissionType, setSubmissionType] = useState("file");
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [cancelSuccess, setCancelSuccess] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   useEffect(() => {
-    loadTugasDetail()
-  }, [id])
+    loadTugasDetail();
+  }, [id]);
 
   // Countdown timer effect
   useEffect(() => {
-    if (!tugas || tugas?.status === "selesai") return
+    if (!tugas || tugas?.status === "selesai") return;
 
     const calculateTimeLeft = () => {
-      const now = new Date()
-      const deadlineDate = new Date(tugas.deadline)
-      const diffMs = deadlineDate - now
-      
+      const now = new Date();
+      const deadlineDate = new Date(tugas.deadline);
+      const diffMs = deadlineDate - now;
+
       if (diffMs <= 0) {
-        const lateMs = Math.abs(diffMs)
-        const lateDays = Math.floor(lateMs / (1000 * 60 * 60 * 24))
-        const lateHours = Math.floor((lateMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-        
+        const lateMs = Math.abs(diffMs);
+        const lateDays = Math.floor(lateMs / (1000 * 60 * 60 * 24));
+        const lateHours = Math.floor(
+          (lateMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60),
+        );
+
         if (lateDays > 0) {
-          return { isLate: true, text: `Terlambat ${lateDays} hari ${lateHours} jam`, hours: lateDays * 24 + lateHours }
+          return {
+            isLate: true,
+            text: `Terlambat ${lateDays} hari ${lateHours} jam`,
+            hours: lateDays * 24 + lateHours,
+          };
         } else if (lateHours > 0) {
-          return { isLate: true, text: `Terlambat ${lateHours} jam`, hours: lateHours }
+          return {
+            isLate: true,
+            text: `Terlambat ${lateHours} jam`,
+            hours: lateHours,
+          };
         } else {
-          return { isLate: true, text: `Terlambat < 1 jam`, hours: 0 }
+          return { isLate: true, text: `Terlambat < 1 jam`, hours: 0 };
         }
       } else {
-        const days = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-        const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-        
+        const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const hours = Math.floor(
+          (diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60),
+        );
+
         if (days > 0) {
-          return { isLate: false, text: `${days} hari ${hours} jam`, hours: days * 24 + hours }
+          return {
+            isLate: false,
+            text: `${days} hari ${hours} jam`,
+            hours: days * 24 + hours,
+          };
         } else if (hours > 0) {
-          return { isLate: false, text: `${hours} jam`, hours: hours }
+          return { isLate: false, text: `${hours} jam`, hours: hours };
         } else {
-          const minutes = Math.floor(diffMs / (1000 * 60))
-          return { isLate: false, text: `${minutes} menit`, hours: 0 }
+          const minutes = Math.floor(diffMs / (1000 * 60));
+          return { isLate: false, text: `${minutes} menit`, hours: 0 };
         }
       }
-    }
+    };
 
     const updateTimer = () => {
-      const result = calculateTimeLeft()
-      setTimeLeft(result)
+      const result = calculateTimeLeft();
+      setTimeLeft(result);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 60000);
+    return () => clearInterval(interval);
+  }, [tugas]);
+
+  const loadTugasDetail = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:8000/api/peserta/tugas/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      const data = await res.json();
+      console.log("Detail tugas:", data);
+
+      if (data.success) {
+        setTugas(data.data);
+      } else {
+        console.error("Gagal memuat detail tugas:", data.message);
+      }
+    } catch (err) {
+      console.error("Error:", err);
+    } finally {
+      setLoading(false);
     }
-
-    updateTimer()
-    const interval = setInterval(updateTimer, 60000)
-    return () => clearInterval(interval)
-  }, [tugas])
-
-  const loadTugasDetail = () => {
-    setLoading(true)
-    
-    if (USE_REAL_API) {
-      setTimeout(() => {
-        setLoading(false)
-      }, 500)
-    } else {
-      setTimeout(() => {
-        const dummyDataById = {
-          1: {
-            id: 1,
-            judul: "Frontend Development - Week 3",
-            deskripsi: "Buat halaman dashboard dengan React JS yang menampilkan data user secara real-time menggunakan API.",
-            deadline: "2025-01-20T23:59:59",
-            status: "pending",
-            submitted_at: null,
-            nilai: null,
-            catatan: null,
-            file_url: null,
-            file_name: null,
-            submission_link: null,
-          },
-          2: {
-            id: 2,
-            judul: "Backend API Integration",
-            deskripsi: "Buat API endpoint untuk CRUD user dengan Laravel.",
-            deadline: "2025-01-25T23:59:59",
-            status: "pending",
-            submitted_at: null,
-            nilai: null,
-            catatan: null,
-            file_url: null,
-            file_name: null,
-            submission_link: null,
-          },
-          3: {
-            id: 3,
-            judul: "Database Design",
-            deskripsi: "Buat ERD dan implementasi database untuk sistem magang.",
-            deadline: "2024-12-30T23:59:59",
-            status: "revisi",
-            submitted_at: "2024-12-28T10:30:00",
-            nilai: 70,
-            catatan: "Perbaiki relasi tabel dan tambahkan indeks.",
-            file_url: "#",
-            file_name: "database_design.pdf",
-            submission_link: null,
-          },
-          4: {
-            id: 4,
-            judul: "UI/UX Design Prototype",
-            deskripsi: "Buat prototype aplikasi mobile dengan Figma.",
-            deadline: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 hari lalu
-            status: "selesai",
-            submitted_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-            nilai: 88,
-            catatan: "Bagus, pertahankan!",
-            file_url: "#",
-            file_name: "ui_ux_prototype.fig",
-            submission_link: null,
-          },
-          5: {
-            id: 5,
-            judul: "Testing & Debugging (Deadline 2 jam)",
-            deskripsi: "Buat unit test untuk aplikasi menggunakan Jest.",
-            deadline: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-            status: "pending",
-            submitted_at: null,
-            nilai: null,
-            catatan: null,
-            file_url: null,
-            file_name: null,
-            submission_link: null,
-          },
-          6: {
-            id: 6,
-            judul: "Deployment Guide (Terlambat 3 hari)",
-            deskripsi: "Buat dokumentasi deployment aplikasi.",
-            deadline: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-            status: "revisi",
-            submitted_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-            nilai: 65,
-            catatan: "Tambahkan bagian tentang backup database.",
-            file_url: "#",
-            file_name: "deployment_guide.pdf",
-            submission_link: null,
-          },
-          7: {
-            id: 7,
-            judul: "Project Documentation (Sudah Submit)",
-            deskripsi: "Buat dokumentasi lengkap project magang.",
-            deadline: "2025-01-10T23:59:59",
-            status: "pending",
-            submitted_at: "2025-01-05T10:00:00",
-            nilai: null,
-            catatan: null,
-            file_url: "#",
-            file_name: "project_documentation.pdf",
-            submission_link: null,
-          }
-        }
-
-        const selectedTugas = dummyDataById[id] || dummyDataById[1]
-        setTugas(selectedTugas)
-        setLoading(false)
-      }, 500)
-    }
-  }
+  };
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0]
+    const file = e.target.files[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
-        alert("Ukuran file maksimal 10 MB")
-        return
+        alert("Ukuran file maksimal 10 MB");
+        return;
       }
-      setSelectedFile(file)
+      setSelectedFile(file);
     }
-  }
+  };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (submissionType === "file" && !selectedFile) {
-      alert("Pilih file terlebih dahulu")
-      return
+      alert("Pilih file terlebih dahulu");
+      return;
     }
     if (submissionType === "link" && !submissionLink.trim()) {
-      alert("Masukkan link tugas terlebih dahulu")
-      return
+      alert("Masukkan link tugas terlebih dahulu");
+      return;
     }
 
-    setUploading(true)
-    
-    setTimeout(() => {
-      const now = new Date()
-      const updatedTugas = {
-        ...tugas,
-        status: "pending",
-        submitted_at: now.toISOString(),
-        file_name: selectedFile?.name,
-        file_url: selectedFile ? URL.createObjectURL(selectedFile) : null,
-        submission_link: submissionLink || null,
-      }
-      
-      setTugas(updatedTugas)
-      setUploadSuccess(true)
-      setUploading(false)
-      setSelectedFile(null)
-      setSubmissionLink("")
-      setTimeout(() => setUploadSuccess(false), 3000)
-    }, 1500)
-  }
+    setUploading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
 
-  const handleCancelSubmission = () => {
-    setCancelling(true)
-    setTimeout(() => {
-      const updatedTugas = {
-        ...tugas,
-        status: "pending",
-        submitted_at: null,
-        file_name: null,
-        file_url: null,
-        submission_link: null,
+      if (submissionType === "file" && selectedFile) {
+        formData.append("file_jawaban", selectedFile);
       }
-      setTugas(updatedTugas)
-      setCancelling(false)
-      setShowCancelModal(false)
-      setCancelSuccess(true)
-      setTimeout(() => setCancelSuccess(false), 3000)
-    }, 500)
-  }
+      if (submissionType === "link" && submissionLink) {
+        formData.append("link_jawaban", submissionLink);
+      }
+
+      const res = await fetch(
+        `http://localhost:8000/api/peserta/tugas/${id}/submit`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          body: formData,
+        },
+      );
+
+      const data = await res.json();
+
+      if (data.success) {
+        setTugas((prev) => ({
+          ...prev,
+          status: data.data.status,
+          submitted_at: data.data.submitted_at,
+          file_url: data.data.file_url,
+          file_name: data.data.file_name,
+          submission_link: data.data.submission_link,
+        }));
+        setUploadSuccess(true);
+        setSelectedFile(null);
+        setSubmissionLink("");
+        setTimeout(() => setUploadSuccess(false), 3000);
+      } else {
+        alert("Gagal mengumpulkan tugas: " + data.message);
+      }
+    } catch (err) {
+      console.error("Submit error:", err);
+      alert("Terjadi kesalahan saat mengumpulkan tugas");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleCancelSubmission = async () => {
+    setCancelling(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(
+        `http://localhost:8000/api/peserta/tugas/${id}/cancel`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        },
+      );
+
+      const data = await res.json();
+
+      if (data.success) {
+        setTugas((prev) => ({
+          ...prev,
+          status: "belum_dikumpulkan",
+          submitted_at: null,
+          file_url: null,
+          file_name: null,
+          submission_link: null,
+        }));
+        setShowCancelModal(false);
+        setCancelSuccess(true);
+        setTimeout(() => setCancelSuccess(false), 3000);
+      } else {
+        alert("Gagal membatalkan: " + data.message);
+      }
+    } catch (err) {
+      console.error("Cancel error:", err);
+      alert("Terjadi kesalahan");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const getDeadlineColor = () => {
-    if (!tugas) return "text-gray-500"
-    const now = new Date()
-    const deadlineDate = new Date(tugas.deadline)
-    const isLate = now > deadlineDate
-    if (isLate) return "text-red-600"
-    const diffMs = deadlineDate - now
-    const diffHours = diffMs / (1000 * 60 * 60)
-    if (diffHours <= 24) return "text-red-500"
-    if (diffHours <= 72) return "text-amber-600"
-    return "text-green-600"
-  }
+    if (!tugas) return "text-gray-500";
+    const now = new Date();
+    const deadlineDate = new Date(tugas.deadline);
+    const isLate = now > deadlineDate;
+    if (isLate) return "text-red-600";
+    const diffMs = deadlineDate - now;
+    const diffHours = diffMs / (1000 * 60 * 60);
+    if (diffHours <= 24) return "text-red-500";
+    if (diffHours <= 72) return "text-amber-600";
+    return "text-green-600";
+  };
 
   if (loading) {
     return (
@@ -289,57 +266,17 @@ function DetailTugas() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
-  const isSubmitted = tugas?.submitted_at !== null
-  const isCompleted = tugas?.status === "selesai"
-  const isRevision = tugas?.status === "revisi"
-  const hasSubmitted = isSubmitted && !isCompleted
-  const deadlineColor = getDeadlineColor()
+  const isSubmitted = tugas?.submitted_at !== null;
+  const isCompleted = tugas?.status === "selesai";
+  const isRevision = tugas?.status === "revisi";
+  const hasSubmitted = isSubmitted && !isCompleted;
+  const deadlineColor = getDeadlineColor();
 
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-6 py-5 space-y-5 pb-10 min-h-screen">
-      {/* NOTE UNTUK BACKEND DEVELOPER */}
-      {!USE_REAL_API && (
-        <div className="bg-gradient-to-r from-amber-50/90 to-orange-50/90 border-l-4 border-amber-500 rounded-2xl p-5 shadow-lg backdrop-blur-sm">
-          <div className="flex items-start gap-4">
-            <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center shadow-md">
-                <Server size="18" className="text-white" />
-              </div>
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-amber-800 text-sm flex items-center gap-2">
-                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
-                Catatan untuk Backend Developer
-              </h3>
-              <div className="mt-2 text-xs text-amber-700 space-y-1">
-                <p>Halaman ini menggunakan DATA DUMMY. Backend perlu membuat endpoint:</p>
-                <div className="bg-amber-100/80 rounded-xl p-3 mt-2 font-mono text-xs space-y-1">
-                  <p className="flex items-center gap-2"><span className="text-green-600">GET</span> /api/peserta/tugas/{`{id}`}</p>
-                  <p className="flex items-center gap-2"><span className="text-blue-600">POST</span> /api/peserta/tugas/{`{id}`}/submit</p>
-                  <p className="flex items-center gap-2"><span className="text-red-600">POST</span> /api/peserta/tugas/{`{id}`}/cancel</p>
-                </div>
-              </div>
-            </div>
-            <button 
-              className="px-3 py-1.5 bg-white/80 backdrop-blur-sm rounded-xl text-xs font-medium text-amber-700 hover:bg-amber-100 transition-all duration-200 shadow-sm"
-              onClick={() => {
-                navigator.clipboard.writeText(`
-ENDPOINT API:
-GET    /api/peserta/tugas/{id}
-POST   /api/peserta/tugas/{id}/submit
-POST   /api/peserta/tugas/{id}/cancel
-                `)
-                alert("Catatan disalin!")
-              }}
-            >
-              Salin
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Upload Success Alert */}
       {uploadSuccess && (
@@ -347,7 +284,9 @@ POST   /api/peserta/tugas/{id}/cancel
           <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg">
             <CheckCircle size="16" className="text-white" />
           </div>
-          <p className="text-sm text-emerald-700 font-medium">Tugas berhasil dikumpulkan!</p>
+          <p className="text-sm text-emerald-700 font-medium">
+            Tugas berhasil dikumpulkan!
+          </p>
         </div>
       )}
 
@@ -357,7 +296,9 @@ POST   /api/peserta/tugas/{id}/cancel
           <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-lg">
             <XCircle size="16" className="text-white" />
           </div>
-          <p className="text-sm text-amber-700 font-medium">Pengumpulan tugas dibatalkan. Anda dapat mengupload ulang.</p>
+          <p className="text-sm text-amber-700 font-medium">
+            Pengumpulan tugas dibatalkan. Anda dapat mengupload ulang.
+          </p>
         </div>
       )}
 
@@ -378,16 +319,27 @@ POST   /api/peserta/tugas/{id}/cancel
               <p className="text-sm text-gray-500 mt-0.5">{tugas?.judul}</p>
             </div>
           </div>
-          
-          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl backdrop-blur-sm shadow-sm ${
-            isCompleted ? "bg-emerald-100/80 text-emerald-700" :
-            isRevision ? "bg-amber-100/80 text-amber-700" : "bg-gray-100/80 text-gray-600"
-          }`}>
+
+          <div
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl backdrop-blur-sm shadow-sm ${
+              isCompleted
+                ? "bg-emerald-100/80 text-emerald-700"
+                : isRevision
+                  ? "bg-amber-100/80 text-amber-700"
+                  : "bg-gray-100/80 text-gray-600"
+            }`}
+          >
             {isCompleted && <CheckCircle size="14" />}
             {isRevision && <AlertCircle size="14" />}
             {!isCompleted && !isRevision && <Clock size="14" />}
             <span className="text-sm font-medium">
-              {isCompleted ? "Selesai" : isRevision ? "Perlu Revisi" : hasSubmitted ? "Menunggu Penilaian" : "Belum Dikumpulkan"}
+              {isCompleted
+                ? "Selesai"
+                : isRevision
+                  ? "Perlu Revisi"
+                  : hasSubmitted
+                    ? "Menunggu Penilaian"
+                    : "Belum Dikumpulkan"}
             </span>
           </div>
         </div>
@@ -406,7 +358,9 @@ POST   /api/peserta/tugas/{id}/cancel
                 </div>
                 <h3 className="font-semibold text-gray-800">Deskripsi Tugas</h3>
               </div>
-              <p className="text-gray-600 leading-relaxed">{tugas?.deskripsi}</p>
+              <p className="text-gray-600 leading-relaxed">
+                {tugas?.deskripsi}
+              </p>
             </div>
           </div>
 
@@ -416,9 +370,13 @@ POST   /api/peserta/tugas/{id}/cancel
               <div className="relative h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
               <div className="p-6">
                 <h3 className="font-semibold text-gray-800 mb-5">
-                  {hasSubmitted ? (isRevision ? "Unggah Revisi" : "Tugas Terkirim") : "Kumpulkan Tugas"}
+                  {hasSubmitted
+                    ? isRevision
+                      ? "Unggah Revisi"
+                      : "Tugas Terkirim"
+                    : "Kumpulkan Tugas"}
                 </h3>
-                
+
                 {hasSubmitted && !isRevision ? (
                   <div className="space-y-5">
                     <div className="flex items-center gap-4 p-5 rounded-xl bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200/50 backdrop-blur-sm">
@@ -426,38 +384,60 @@ POST   /api/peserta/tugas/{id}/cancel
                         <CheckCircle size="18" className="text-white" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-blue-800">Tugas Sudah Terkirim</p>
+                        <p className="text-sm font-semibold text-blue-800">
+                          Tugas Sudah Terkirim
+                        </p>
                         <p className="text-xs text-blue-600 mt-1">
-                          {new Date(tugas.submitted_at).toLocaleDateString("id-ID", {
-                            day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit"
-                          })}
+                          {new Date(tugas.submitted_at).toLocaleDateString(
+                            "id-ID",
+                            {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            },
+                          )}
                         </p>
                       </div>
                     </div>
-                    
+
                     {tugas?.file_url && (
                       <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100/50 border border-gray-200/50">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
                             <FileText size="14" className="text-teal-600" />
                           </div>
-                          <span className="text-sm text-gray-700 font-medium">{tugas.file_name}</span>
+                          <span className="text-sm text-gray-700 font-medium">
+                            {tugas.file_name}
+                          </span>
                         </div>
-                        <a href={tugas.file_url} download className="p-2 rounded-xl bg-teal-500/10 text-teal-600 hover:bg-teal-500/20 transition-all duration-200">
+                        <a
+                          href={tugas.file_url}
+                          download
+                          className="p-2 rounded-xl bg-teal-500/10 text-teal-600 hover:bg-teal-500/20 transition-all duration-200"
+                        >
                           <Download size="16" />
                         </a>
                       </div>
                     )}
-                    
+
                     {tugas?.submission_link && (
                       <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100/50 border border-gray-200/50">
                         <div className="flex items-center gap-3 flex-1">
                           <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
                             <LinkIcon size="14" className="text-purple-600" />
                           </div>
-                          <span className="text-sm text-gray-700 truncate max-w-[200px] font-mono">{tugas.submission_link}</span>
+                          <span className="text-sm text-gray-700 truncate max-w-[200px] font-mono">
+                            {tugas.submission_link}
+                          </span>
                         </div>
-                        <a href={tugas.submission_link} target="_blank" rel="noopener noreferrer" className="p-2 rounded-xl bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 transition-all duration-200">
+                        <a
+                          href={tugas.submission_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 rounded-xl bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 transition-all duration-200"
+                        >
                           <ExternalLink size="16" />
                         </a>
                       </div>
@@ -468,7 +448,11 @@ POST   /api/peserta/tugas/{id}/cancel
                       disabled={cancelling}
                       className="w-full py-3 bg-gradient-to-r from-red-500 to-rose-500 text-white rounded-xl font-semibold text-sm hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      {cancelling ? <Loader2 size="16" className="animate-spin" /> : <Trash2 size="16" />}
+                      {cancelling ? (
+                        <Loader2 size="16" className="animate-spin" />
+                      ) : (
+                        <Trash2 size="16" />
+                      )}
                       Batalkan Kirim
                     </button>
                   </div>
@@ -506,8 +490,12 @@ POST   /api/peserta/tugas/{id}/cancel
                         <div className="w-16 h-16 bg-gradient-to-br from-teal-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                           <Upload size="24" className="text-teal-600" />
                         </div>
-                        <p className="text-sm text-gray-600 font-medium">Klik atau drag file ke sini</p>
-                        <p className="text-xs text-gray-400 mt-1">PDF, DOC, DOCX, ZIP (Max 10MB)</p>
+                        <p className="text-sm text-gray-600 font-medium">
+                          Klik atau drag file ke sini
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          PDF, DOC, DOCX, ZIP (Max 10MB)
+                        </p>
                         <input
                           type="file"
                           onChange={handleFileChange}
@@ -530,7 +518,9 @@ POST   /api/peserta/tugas/{id}/cancel
                           onChange={(e) => setSubmissionLink(e.target.value)}
                           className="w-full px-4 py-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all"
                         />
-                        <p className="text-xs text-gray-400">Masukkan link ke file tugas Anda</p>
+                        <p className="text-xs text-gray-400">
+                          Masukkan link ke file tugas Anda
+                        </p>
                       </div>
                     )}
 
@@ -542,12 +532,22 @@ POST   /api/peserta/tugas/{id}/cancel
                             <FileText size="14" className="text-white" />
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-gray-700">{selectedFile.name}</p>
-                            <p className="text-xs text-gray-400">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                            <p className="text-sm font-medium text-gray-700">
+                              {selectedFile.name}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
                           </div>
                         </div>
-                        <button onClick={() => setSelectedFile(null)} className="p-1 rounded-lg hover:bg-white/50 transition">
-                          <X size="14" className="text-gray-400 hover:text-red-500" />
+                        <button
+                          onClick={() => setSelectedFile(null)}
+                          className="p-1 rounded-lg hover:bg-white/50 transition"
+                        >
+                          <X
+                            size="14"
+                            className="text-gray-400 hover:text-red-500"
+                          />
                         </button>
                       </div>
                     )}
@@ -559,21 +559,41 @@ POST   /api/peserta/tugas/{id}/cancel
                           <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
                             <LinkIcon size="14" className="text-white" />
                           </div>
-                          <span className="text-sm text-gray-700 truncate font-mono">{submissionLink}</span>
+                          <span className="text-sm text-gray-700 truncate font-mono">
+                            {submissionLink}
+                          </span>
                         </div>
-                        <button onClick={() => setSubmissionLink("")} className="p-1 rounded-lg hover:bg-white/50 transition">
-                          <X size="14" className="text-gray-400 hover:text-red-500" />
+                        <button
+                          onClick={() => setSubmissionLink("")}
+                          className="p-1 rounded-lg hover:bg-white/50 transition"
+                        >
+                          <X
+                            size="14"
+                            className="text-gray-400 hover:text-red-500"
+                          />
                         </button>
                       </div>
                     )}
 
                     <button
                       onClick={handleSubmit}
-                      disabled={uploading || (submissionType === "file" && !selectedFile) || (submissionType === "link" && !submissionLink.trim())}
+                      disabled={
+                        uploading ||
+                        (submissionType === "file" && !selectedFile) ||
+                        (submissionType === "link" && !submissionLink.trim())
+                      }
                       className="w-full py-3.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold text-sm hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
-                      {uploading ? <Loader2 size="18" className="animate-spin" /> : <Send size="18" />}
-                      {uploading ? "Mengirim..." : (isRevision ? "Kirim Revisi" : "Kumpulkan Tugas")}
+                      {uploading ? (
+                        <Loader2 size="18" className="animate-spin" />
+                      ) : (
+                        <Send size="18" />
+                      )}
+                      {uploading
+                        ? "Mengirim..."
+                        : isRevision
+                          ? "Kirim Revisi"
+                          : "Kumpulkan Tugas"}
                     </button>
                   </div>
                 )}
@@ -585,7 +605,9 @@ POST   /api/peserta/tugas/{id}/cancel
                       <div className="w-6 h-6 bg-amber-500 rounded-lg flex items-center justify-center">
                         <MessageSquare size="12" className="text-white" />
                       </div>
-                      <span className="text-sm font-semibold text-amber-800">Catatan Revisi dari Mentor</span>
+                      <span className="text-sm font-semibold text-amber-800">
+                        Catatan Revisi dari Mentor
+                      </span>
                     </div>
                     <p className="text-sm text-amber-700">{tugas.catatan}</p>
                   </div>
@@ -603,15 +625,21 @@ POST   /api/peserta/tugas/{id}/cancel
                   <div className="w-6 h-6 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center">
                     <Target size="12" className="text-white" />
                   </div>
-                  <h3 className="font-semibold text-gray-800">Hasil Penilaian</h3>
+                  <h3 className="font-semibold text-gray-800">
+                    Hasil Penilaian
+                  </h3>
                 </div>
                 <div className="grid grid-cols-2 gap-5 mb-5">
                   <div className="text-center p-5 rounded-xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10">
-                    <div className="text-4xl font-bold text-emerald-600">{tugas.nilai}</div>
+                    <div className="text-4xl font-bold text-emerald-600">
+                      {tugas.nilai}
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">Nilai Akhir</p>
                   </div>
                   <div className="text-center p-5 rounded-xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10">
-                    <div className="text-xl font-semibold text-blue-600">{tugas.nilai}%</div>
+                    <div className="text-xl font-semibold text-blue-600">
+                      {tugas.nilai}%
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">Persentase</p>
                   </div>
                 </div>
@@ -619,7 +647,9 @@ POST   /api/peserta/tugas/{id}/cancel
                   <div className="p-5 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100/50 border border-gray-200/50">
                     <div className="flex items-center gap-2 mb-2">
                       <MessageSquare size="14" className="text-gray-500" />
-                      <span className="text-sm font-medium text-gray-700">Catatan Mentor</span>
+                      <span className="text-sm font-medium text-gray-700">
+                        Catatan Mentor
+                      </span>
                     </div>
                     <p className="text-sm text-gray-600">{tugas.catatan}</p>
                   </div>
@@ -634,66 +664,108 @@ POST   /api/peserta/tugas/{id}/cancel
           <div className="sticky top-24 space-y-6">
             {/* Card Deadline */}
             <div className="bg-white/70 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 overflow-hidden">
-              <div className={`relative h-1 bg-gradient-to-r ${
-                timeLeft?.isLate ? "from-red-500 to-rose-500" : 
-                timeLeft?.hours <= 24 ? "from-red-500 to-orange-500" : 
-                timeLeft?.hours <= 72 ? "from-amber-500 to-orange-500" : 
-                "from-teal-500 to-blue-600"
-              }`}></div>
+              <div
+                className={`relative h-1 bg-gradient-to-r ${
+                  timeLeft?.isLate
+                    ? "from-red-500 to-rose-500"
+                    : timeLeft?.hours <= 24
+                      ? "from-red-500 to-orange-500"
+                      : timeLeft?.hours <= 72
+                        ? "from-amber-500 to-orange-500"
+                        : "from-teal-500 to-blue-600"
+                }`}
+              ></div>
               <div className="p-5 space-y-4">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-5 h-5 bg-gradient-to-br from-gray-500 to-gray-600 rounded-lg flex items-center justify-center">
                       <Flag size="10" className="text-white" />
                     </div>
-                    <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">DEADLINE</p>
+                    <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      DEADLINE
+                    </p>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className={`text-base font-bold ${deadlineColor}`}>
                       {new Date(tugas?.deadline).toLocaleDateString("id-ID", {
-                        day: "numeric", month: "long", year: "numeric"
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
                       })}
                     </span>
-                    <div className={`px-2 py-0.5 rounded-lg text-[10px] font-medium ${
-                      timeLeft?.isLate ? "bg-red-100 text-red-700" : 
-                      timeLeft?.hours <= 24 ? "bg-red-100 text-red-700" : 
-                      timeLeft?.hours <= 72 ? "bg-amber-100 text-amber-700" : 
-                      "bg-green-100 text-green-700"
-                    }`}>
-                      {timeLeft?.isLate ? "Terlambat" : 
-                       timeLeft?.hours <= 24 ? "H-1" : 
-                       timeLeft?.hours <= 72 ? "Mendekat" : "Aman"}
+                    <div
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-medium ${
+                        timeLeft?.isLate
+                          ? "bg-red-100 text-red-700"
+                          : timeLeft?.hours <= 24
+                            ? "bg-red-100 text-red-700"
+                            : timeLeft?.hours <= 72
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-green-100 text-green-700"
+                      }`}
+                    >
+                      {timeLeft?.isLate
+                        ? "Terlambat"
+                        : timeLeft?.hours <= 24
+                          ? "H-1"
+                          : timeLeft?.hours <= 72
+                            ? "Mendekat"
+                            : "Aman"}
                     </div>
                   </div>
                 </div>
 
                 {/* Countdown Timer */}
                 {!isCompleted && timeLeft && (
-                  <div className={`p-3 rounded-xl ${
-                    timeLeft.isLate ? "bg-gradient-to-r from-red-500/10 to-rose-500/10" :
-                    timeLeft.hours <= 24 ? "bg-gradient-to-r from-red-500/10 to-orange-500/10" :
-                    timeLeft.hours <= 72 ? "bg-gradient-to-r from-amber-500/10 to-orange-500/10" :
-                    "bg-gradient-to-r from-teal-500/10 to-blue-500/10"
-                  }`}>
+                  <div
+                    className={`p-3 rounded-xl ${
+                      timeLeft.isLate
+                        ? "bg-gradient-to-r from-red-500/10 to-rose-500/10"
+                        : timeLeft.hours <= 24
+                          ? "bg-gradient-to-r from-red-500/10 to-orange-500/10"
+                          : timeLeft.hours <= 72
+                            ? "bg-gradient-to-r from-amber-500/10 to-orange-500/10"
+                            : "bg-gradient-to-r from-teal-500/10 to-blue-500/10"
+                    }`}
+                  >
                     <div className="flex items-center gap-2">
-                      <Timer size={14} className={
-                        timeLeft.isLate ? "text-red-500" :
-                        timeLeft.hours <= 24 ? "text-red-500" :
-                        timeLeft.hours <= 72 ? "text-amber-500" : "text-teal-500"
-                      } />
-                      <p className={`text-[10px] font-medium ${
-                        timeLeft.isLate ? "text-red-700" :
-                        timeLeft.hours <= 24 ? "text-red-700" :
-                        timeLeft.hours <= 72 ? "text-amber-700" : "text-teal-700"
-                      }`}>
+                      <Timer
+                        size={14}
+                        className={
+                          timeLeft.isLate
+                            ? "text-red-500"
+                            : timeLeft.hours <= 24
+                              ? "text-red-500"
+                              : timeLeft.hours <= 72
+                                ? "text-amber-500"
+                                : "text-teal-500"
+                        }
+                      />
+                      <p
+                        className={`text-[10px] font-medium ${
+                          timeLeft.isLate
+                            ? "text-red-700"
+                            : timeLeft.hours <= 24
+                              ? "text-red-700"
+                              : timeLeft.hours <= 72
+                                ? "text-amber-700"
+                                : "text-teal-700"
+                        }`}
+                      >
                         {timeLeft.isLate ? "Terlambat" : "Sisa Waktu"}
                       </p>
                     </div>
-                    <p className={`text-xs font-bold mt-1 ${
-                      timeLeft.isLate ? "text-red-700" :
-                      timeLeft.hours <= 24 ? "text-red-700" :
-                      timeLeft.hours <= 72 ? "text-amber-700" : "text-teal-700"
-                    }`}>
+                    <p
+                      className={`text-xs font-bold mt-1 ${
+                        timeLeft.isLate
+                          ? "text-red-700"
+                          : timeLeft.hours <= 24
+                            ? "text-red-700"
+                            : timeLeft.hours <= 72
+                              ? "text-amber-700"
+                              : "text-teal-700"
+                      }`}
+                    >
                       {timeLeft.text}
                     </p>
                   </div>
@@ -704,18 +776,30 @@ POST   /api/peserta/tugas/{id}/cancel
                     <div className="w-5 h-5 bg-gradient-to-br from-gray-500 to-gray-600 rounded-lg flex items-center justify-center">
                       <Clock size="10" className="text-white" />
                     </div>
-                    <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">STATUS</p>
+                    <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      STATUS
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${
-                      isCompleted ? "bg-emerald-500" :
-                      isRevision ? "bg-amber-500" :
-                      hasSubmitted ? "bg-blue-500" : "bg-gray-400"
-                    }`}></div>
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        isCompleted
+                          ? "bg-emerald-500"
+                          : isRevision
+                            ? "bg-amber-500"
+                            : hasSubmitted
+                              ? "bg-blue-500"
+                              : "bg-gray-400"
+                      }`}
+                    ></div>
                     <span className="text-xs font-medium text-gray-700">
-                      {isCompleted ? "Tugas Selesai" :
-                       isRevision ? "Perlu Revisi" :
-                       hasSubmitted ? "Menunggu Penilaian" : "Belum Dikumpulkan"}
+                      {isCompleted
+                        ? "Tugas Selesai"
+                        : isRevision
+                          ? "Perlu Revisi"
+                          : hasSubmitted
+                            ? "Menunggu Penilaian"
+                            : "Belum Dikumpulkan"}
                     </span>
                   </div>
                 </div>
@@ -726,35 +810,24 @@ POST   /api/peserta/tugas/{id}/cancel
                       <div className="w-5 h-5 bg-gradient-to-br from-gray-500 to-gray-600 rounded-lg flex items-center justify-center">
                         <Calendar size="10" className="text-white" />
                       </div>
-                      <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">TANGGAL KUMPUL</p>
+                      <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                        TANGGAL KUMPUL
+                      </p>
                     </div>
                     <p className="text-xs text-gray-700 font-medium">
-                      {new Date(tugas.submitted_at).toLocaleDateString("id-ID", {
-                        day: "numeric", month: "long", year: "numeric"
-                      })}
+                      {new Date(tugas.submitted_at).toLocaleDateString(
+                        "id-ID",
+                        {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        },
+                      )}
                     </p>
                   </div>
                 )}
               </div>
             </div>
-
-            {/* Info Backend */}
-            {!USE_REAL_API && (
-              <div className="bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-2xl p-4 border border-blue-200/50 backdrop-blur-sm">
-                <div className="flex items-start gap-2">
-                  <Info size="12" className="text-blue-500 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-[10px] font-semibold text-blue-800">Backend Developer</p>
-                    <p className="text-[10px] text-blue-700 mt-1">Data masih DUMMY. Endpoint:</p>
-                    <div className="mt-1 space-y-0.5 font-mono text-[9px] text-blue-600">
-                      <p>GET /api/peserta/tugas/{id}</p>
-                      <p>POST /api/peserta/tugas/{id}/submit</p>
-                      <p>POST /api/peserta/tugas/{id}/cancel</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -765,7 +838,10 @@ POST   /api/peserta/tugas/{id}/cancel
           onClick={() => navigate("/peserta/tugas")}
           className="group inline-flex items-center gap-2 px-5 py-2.5 bg-white/80 backdrop-blur-md border border-gray-200 rounded-xl text-gray-600 hover:text-teal-600 hover:border-teal-200 transition-all duration-200 shadow-sm hover:shadow-md"
         >
-          <ChevronLeft size="14" className="group-hover:-translate-x-0.5 transition-transform" />
+          <ChevronLeft
+            size="14"
+            className="group-hover:-translate-x-0.5 transition-transform"
+          />
           <span className="text-sm font-medium">Kembali ke Daftar Tugas</span>
         </button>
       </div>
@@ -781,12 +857,17 @@ POST   /api/peserta/tugas/{id}/cancel
                   <AlertTriangle size="20" className="text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-800">Batalkan Pengumpulan</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">Tindakan ini tidak dapat dibatalkan</p>
+                  <h3 className="text-lg font-bold text-gray-800">
+                    Batalkan Pengumpulan
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Tindakan ini tidak dapat dibatalkan
+                  </p>
                 </div>
               </div>
               <p className="text-gray-600 text-sm mb-4">
-                Apakah Anda yakin ingin membatalkan pengumpulan tugas? File yang sudah diupload akan dihapus.
+                Apakah Anda yakin ingin membatalkan pengumpulan tugas? File yang
+                sudah diupload akan dihapus.
               </p>
               <div className="flex gap-3 mt-6">
                 <button
@@ -806,17 +887,8 @@ POST   /api/peserta/tugas/{id}/cancel
           </div>
         </div>
       )}
-
-      {/* Demo Navigasi */}
-      {!USE_REAL_API && (
-        <div className="bg-gradient-to-r from-gray-50/80 to-gray-100/50 rounded-xl p-2.5 text-center border border-gray-200/50">
-          <p className="text-[10px] text-gray-500">
-            Demo: ID 1-2 (Aman) | ID 5 (Deadline 2 jam) | ID 6 (Terlambat 3 hari) | ID 7 (Sudah Submit) | ID 3 (Revisi) | ID 4 (Selesai)
-          </p>
-        </div>
-      )}
     </div>
-  )
+  );
 }
 
-export default DetailTugas
+export default DetailTugas;

@@ -4,7 +4,7 @@ import axiosInstance from "../axios"
 // Get all mentor's peserta list
 export const getMentorPesertaList = async (params = {}) => {
   const queryString = new URLSearchParams(params).toString()
-  const response = await axiosInstance.get(`/mentor/pesertas${queryString ? `?${queryString}` : ''}`)
+  const response = await axiosInstance.get(`/mentor/peserta-list${queryString ? `?${queryString}` : ''}`)
   return response.data
 }
 

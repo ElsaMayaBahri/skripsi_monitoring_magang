@@ -12,14 +12,15 @@ class MateriPelatihan extends Model
 
     protected $table = 'materi_pelatihans';
     protected $primaryKey = 'id_materi_pelatihan';
-    
+
     protected $fillable = [
         'judul',
         'deskripsi',
         'divisi',
         'kategori',
         'file_materi',
-        'views'
+        'views',
+        'urutan',
     ];
 
     protected $casts = [
@@ -30,14 +31,16 @@ class MateriPelatihan extends Model
 
     protected $appends = ['file_url']; // Tambahkan ini
 
-public function getFileUrlAttribute()
-{
-    if ($this->file_materi) {
-        return asset('storage/' . $this->file_materi);
+    public function getFileUrlAttribute()
+    {
+        if ($this->file_materi) {
+            // Ambil nama file dari path (misal: materi/file.pdf → file.pdf)
+            $filename = basename($this->file_materi);
+            return url('/api/materi-file/' . $filename);
+        }
+        return null;
     }
-    return null;
-}
-    
+
     /**
      * Get file size in human readable format
      */
@@ -55,7 +58,7 @@ public function getFileUrlAttribute()
         }
         return '0 B';
     }
-    
+
     /**
      * Get file type
      */
@@ -75,7 +78,7 @@ public function getFileUrlAttribute()
     {
         return $query->where('judul', 'like', '%' . $judul . '%');
     }
-    
+
     /**
      * Scope untuk filter divisi
      */
@@ -83,7 +86,7 @@ public function getFileUrlAttribute()
     {
         return $query->where('divisi', $divisi);
     }
-    
+
     /**
      * Scope untuk filter kategori
      */

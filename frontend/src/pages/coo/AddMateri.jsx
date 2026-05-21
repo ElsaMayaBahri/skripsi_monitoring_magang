@@ -61,11 +61,12 @@ const KATEGORI_FILE_CONFIG = {
 function AddMateri() {
   const navigate = useNavigate();
 
-  const [form, setForm] = useState({ 
-    judul: "", 
-    deskripsi: "", 
-    divisi: "", 
-    kategori: "" 
+  const [form, setForm] = useState({
+    judul: "",
+    deskripsi: "",
+    divisi: "",
+    kategori: "",
+    urutan: 1,
   });
   const [file, setFile] = useState(null);
   const [fileInfo, setFileInfo] = useState(null);
@@ -77,7 +78,7 @@ function AddMateri() {
   const [loadingDivisi, setLoadingDivisi] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successData, setSuccessData] = useState(null);
-  
+
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedDivisi, setSelectedDivisi] = useState("all");
   const [selectedKategori, setSelectedKategori] = useState("all");
@@ -89,8 +90,8 @@ function AddMateri() {
   }, []);
 
   useEffect(() => {
-    return () => { 
-      if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl); 
+    return () => {
+      if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl);
     };
   }, [filePreviewUrl]);
 
@@ -107,16 +108,20 @@ function AddMateri() {
     setLoadingDivisi(true);
     try {
       const response = await axiosInstance.get("/divisi/aktif");
-      
+
       let divisiData = [];
       if (response.data && response.data.success && response.data.data) {
         divisiData = response.data.data;
       } else if (response.data && Array.isArray(response.data)) {
         divisiData = response.data;
-      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+      } else if (
+        response.data &&
+        response.data.data &&
+        Array.isArray(response.data.data)
+      ) {
         divisiData = response.data.data;
       }
-      
+
       setDivisiList(divisiData);
     } catch (err) {
       console.error("Error fetching divisi:", err);
@@ -132,7 +137,9 @@ function AddMateri() {
     setSuccess(null);
   };
 
-  const activeConfig = form.kategori ? KATEGORI_FILE_CONFIG[form.kategori] : null;
+  const activeConfig = form.kategori
+    ? KATEGORI_FILE_CONFIG[form.kategori]
+    : null;
   const acceptAttr = activeConfig ? activeConfig.accept : "";
 
   const handleFile = (e) => {
@@ -140,7 +147,9 @@ function AddMateri() {
     if (!selectedFile) return;
 
     if (!form.kategori) {
-      setError("Silakan pilih kategori terlebih dahulu sebelum mengunggah file");
+      setError(
+        "Silakan pilih kategori terlebih dahulu sebelum mengunggah file",
+      );
       e.target.value = "";
       return;
     }
@@ -151,30 +160,37 @@ function AddMateri() {
       return;
     }
 
-    const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase();
+    const fileExtension = selectedFile.name.split(".").pop()?.toLowerCase();
     const allowedExtensions = {
-      PDF: ['pdf'],
-      Video: ['mp4'],
-      Presentasi: ['ppt', 'pptx'],
-      Dokumen: ['doc', 'docx']
+      PDF: ["pdf"],
+      Video: ["mp4"],
+      Presentasi: ["ppt", "pptx"],
+      Dokumen: ["doc", "docx"],
     };
-    
+
     const currentAllowed = allowedExtensions[form.kategori];
     if (!currentAllowed || !currentAllowed.includes(fileExtension)) {
-      setError(`Kategori "${form.kategori}" hanya menerima file ${activeConfig?.label}. Silakan pilih file yang sesuai.`);
+      setError(
+        `Kategori "${form.kategori}" hanya menerima file ${activeConfig?.label}. Silakan pilih file yang sesuai.`,
+      );
       e.target.value = "";
       return;
     }
 
     if (activeConfig && !activeConfig.mimeTypes.includes(selectedFile.type)) {
-      setError(`Format file tidak sesuai dengan kategori "${form.kategori}". Harus ${activeConfig.label}`);
+      setError(
+        `Format file tidak sesuai dengan kategori "${form.kategori}". Harus ${activeConfig.label}`,
+      );
       e.target.value = "";
       return;
     }
 
     if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl);
-    
-    if (selectedFile.type === "application/pdf" || selectedFile.type.includes("video")) {
+
+    if (
+      selectedFile.type === "application/pdf" ||
+      selectedFile.type.includes("video")
+    ) {
       setFilePreviewUrl(URL.createObjectURL(selectedFile));
     } else {
       setFilePreviewUrl(null);
@@ -187,7 +203,7 @@ function AddMateri() {
       size: (selectedFile.size / 1024 / 1024).toFixed(2) + " MB",
       type: selectedFile.type,
     });
-    
+
     e.target.value = "";
   };
 
@@ -199,9 +215,12 @@ function AddMateri() {
   };
 
   const getFileIcon = (type) => {
-    if (!type) return { icon: File, color: "text-slate-500", bg: "bg-slate-50" };
-    if (type.includes("pdf")) return { icon: FileText, color: "text-red-500", bg: "bg-red-50" };
-    if (type.includes("video")) return { icon: Video, color: "text-blue-500", bg: "bg-blue-50" };
+    if (!type)
+      return { icon: File, color: "text-slate-500", bg: "bg-slate-50" };
+    if (type.includes("pdf"))
+      return { icon: FileText, color: "text-red-500", bg: "bg-red-50" };
+    if (type.includes("video"))
+      return { icon: Video, color: "text-blue-500", bg: "bg-blue-50" };
     if (type.includes("powerpoint") || type.includes("presentation"))
       return { icon: File, color: "text-orange-500", bg: "bg-orange-50" };
     return { icon: File, color: "text-emerald-500", bg: "bg-emerald-50" };
@@ -209,21 +228,21 @@ function AddMateri() {
 
   // Fungsi submit menggunakan axiosInstance
   const handleSubmit = async () => {
-    if (!form.judul.trim()) { 
-      setError("Judul materi wajib diisi"); 
-      return; 
+    if (!form.judul.trim()) {
+      setError("Judul materi wajib diisi");
+      return;
     }
-    if (!form.divisi) { 
-      setError("Divisi wajib dipilih"); 
-      return; 
+    if (!form.divisi) {
+      setError("Divisi wajib dipilih");
+      return;
     }
-    if (!form.kategori) { 
-      setError("Kategori wajib dipilih"); 
-      return; 
+    if (!form.kategori) {
+      setError("Kategori wajib dipilih");
+      return;
     }
-    if (!file) { 
-      setError("File materi wajib diunggah"); 
-      return; 
+    if (!file) {
+      setError("File materi wajib diunggah");
+      return;
     }
 
     setIsSubmitting(true);
@@ -237,13 +256,14 @@ function AddMateri() {
       formData.append("divisi", form.divisi);
       formData.append("kategori", form.kategori);
       formData.append("file", file);
+      formData.append("urutan", form.urutan);
 
       const response = await axiosInstance.post("/materi-pelatihan", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       });
-      
+
       if (response.data && response.data.success) {
         // Simpan data untuk popup modal
         setSuccessData({
@@ -253,7 +273,7 @@ function AddMateri() {
           file_name: file.name,
         });
         setShowSuccessModal(true);
-        
+
         // Reset form setelah sukses
         setTimeout(() => {
           setForm({ judul: "", deskripsi: "", divisi: "", kategori: "" });
@@ -264,7 +284,11 @@ function AddMateri() {
       }
     } catch (err) {
       console.error("Error adding materi:", err);
-      setError(err.response?.data?.message || err.message || "Terjadi kesalahan saat menambahkan materi");
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Terjadi kesalahan saat menambahkan materi",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -286,14 +310,15 @@ function AddMateri() {
 
   const getDivisiName = (divisiValue) => {
     if (!divisiValue) return "";
-    const divisi = divisiList.find(d => d.id_divisi == divisiValue || d.nama_divisi === divisiValue);
-    return divisi ? (divisi.nama_divisi || divisi) : divisiValue;
+    const divisi = divisiList.find(
+      (d) => d.id_divisi == divisiValue || d.nama_divisi === divisiValue,
+    );
+    return divisi ? divisi.nama_divisi || divisi : divisiValue;
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-[1400px] mx-auto">
-
         {/* HEADER - Tanpa tombol Kembali */}
         <div className="mb-8">
           <div className="flex items-center gap-2">
@@ -320,7 +345,10 @@ function AddMateri() {
               <p className="text-sm font-medium text-red-800">Error</p>
               <p className="text-xs text-red-600 mt-1">{error}</p>
             </div>
-            <button onClick={() => setError(null)} className="text-red-600 hover:text-red-800">
+            <button
+              onClick={() => setError(null)}
+              className="text-red-600 hover:text-red-800"
+            >
               <X size={16} />
             </button>
           </div>
@@ -328,7 +356,6 @@ function AddMateri() {
 
         {/* FORM - Layout 2 Kolom */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
           {/* LEFT PANEL - Metadata */}
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -339,8 +366,12 @@ function AddMateri() {
                     <BookOpen className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-800">Detail Metadata</h3>
-                    <p className="text-xs text-slate-400">Informasi dasar materi pelatihan</p>
+                    <h3 className="font-bold text-slate-800">
+                      Detail Metadata
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Informasi dasar materi pelatihan
+                    </p>
                   </div>
                 </div>
 
@@ -386,24 +417,35 @@ function AddMateri() {
                           className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all bg-white disabled:opacity-60"
                         >
                           <option value="">
-                            {loadingDivisi ? "Memuat divisi..." : "Pilih Divisi"}
+                            {loadingDivisi
+                              ? "Memuat divisi..."
+                              : "Pilih Divisi"}
                           </option>
-                          {!loadingDivisi && divisiList.map((divisi) => (
-                            <option key={divisi.id_divisi} value={divisi.nama_divisi}>
-                              {divisi.nama_divisi}
-                            </option>
-                          ))}
+                          {!loadingDivisi &&
+                            divisiList.map((divisi) => (
+                              <option
+                                key={divisi.id_divisi}
+                                value={divisi.nama_divisi}
+                              >
+                                {divisi.nama_divisi}
+                              </option>
+                            ))}
                         </select>
                         {loadingDivisi && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                            <Loader2 size={14} className="animate-spin text-slate-400" />
+                            <Loader2
+                              size={14}
+                              className="animate-spin text-slate-400"
+                            />
                           </div>
                         )}
                       </div>
                       {!loadingDivisi && divisiList.length === 0 && (
                         <p className="mt-1.5 text-[10px] text-amber-600 flex items-center gap-1">
                           <AlertCircle size={10} />
-                          <span>Tidak ada divisi aktif. Periksa kembali data divisi.</span>
+                          <span>
+                            Tidak ada divisi aktif. Periksa kembali data divisi.
+                          </span>
                         </p>
                       )}
                     </div>
@@ -435,9 +477,32 @@ function AddMateri() {
                       {activeConfig && (
                         <p className="mt-1.5 text-[10px] text-emerald-600 flex items-center gap-1">
                           <CheckCircle size={10} className="text-emerald-500" />
-                          Menerima: <span className="font-semibold">{activeConfig.label}</span>
+                          Menerima:{" "}
+                          <span className="font-semibold">
+                            {activeConfig.label}
+                          </span>
                         </p>
                       )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">
+                        Urutan Materi
+                      </label>
+
+                      <input
+                        type="number"
+                        name="urutan"
+                        min="1"
+                        value={form.urutan}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
+                        placeholder="Contoh: 1"
+                      />
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        Urutan digunakan untuk mengunci materi berikutnya sampai
+                        materi sebelumnya selesai dibaca.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -451,7 +516,9 @@ function AddMateri() {
                   <Shield className="w-4 h-4 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-blue-800">Informasi Penting</p>
+                  <p className="text-xs font-semibold text-blue-800">
+                    Informasi Penting
+                  </p>
                   <div className="mt-1.5 space-y-1">
                     <p className="text-[11px] text-blue-700 flex items-start gap-1.5">
                       <span className="text-blue-500">•</span>
@@ -459,7 +526,8 @@ function AddMateri() {
                     </p>
                     <p className="text-[11px] text-blue-700 flex items-start gap-1.5">
                       <span className="text-blue-500">•</span>
-                      Setelah diterbitkan, materi akan langsung tersedia untuk semua peserta
+                      Setelah diterbitkan, materi akan langsung tersedia untuk
+                      semua peserta
                     </p>
                     <p className="text-[11px] text-blue-700 flex items-start gap-1.5">
                       <span className="text-blue-500">•</span>
@@ -495,8 +563,8 @@ function AddMateri() {
                   <label
                     className={`group block border-2 border-dashed rounded-xl p-8 transition-all cursor-pointer ${
                       !form.kategori
-                        ? 'border-slate-200 bg-slate-50/20 cursor-not-allowed opacity-60'
-                        : 'border-slate-200 hover:border-blue-400 hover:bg-blue-50/30'
+                        ? "border-slate-200 bg-slate-50/20 cursor-not-allowed opacity-60"
+                        : "border-slate-200 hover:border-blue-400 hover:bg-blue-50/30"
                     }`}
                   >
                     <input
@@ -507,23 +575,36 @@ function AddMateri() {
                       disabled={!form.kategori}
                     />
                     <div className="flex flex-col items-center text-center">
-                      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-3 transition-transform ${
-                        !form.kategori 
-                          ? 'bg-slate-100' 
-                          : 'bg-blue-50 group-hover:scale-110'
-                      }`}>
-                        <UploadCloud className={`${!form.kategori ? 'text-slate-400' : 'text-blue-500'}`} size={32} />
+                      <div
+                        className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-3 transition-transform ${
+                          !form.kategori
+                            ? "bg-slate-100"
+                            : "bg-blue-50 group-hover:scale-110"
+                        }`}
+                      >
+                        <UploadCloud
+                          className={`${!form.kategori ? "text-slate-400" : "text-blue-500"}`}
+                          size={32}
+                        />
                       </div>
-                      
+
                       {!form.kategori ? (
                         <>
-                          <p className="text-sm font-medium text-slate-500">Pilih kategori terlebih dahulu</p>
-                          <p className="text-xs text-slate-400 mt-1">Kategori wajib dipilih sebelum mengunggah file</p>
+                          <p className="text-sm font-medium text-slate-500">
+                            Pilih kategori terlebih dahulu
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Kategori wajib dipilih sebelum mengunggah file
+                          </p>
                         </>
                       ) : (
                         <>
-                          <p className="text-sm font-medium text-slate-700">Seret & letakkan file di sini</p>
-                          <p className="text-xs text-blue-500 mt-1">Atau klik untuk memilih dari komputer</p>
+                          <p className="text-sm font-medium text-slate-700">
+                            Seret & letakkan file di sini
+                          </p>
+                          <p className="text-xs text-blue-500 mt-1">
+                            Atau klik untuk memilih dari komputer
+                          </p>
                         </>
                       )}
 
@@ -543,21 +624,39 @@ function AddMateri() {
                 ) : (
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-medium text-slate-600">File Terunggah</span>
-                      <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">1 file</span>
+                      <span className="text-xs font-medium text-slate-600">
+                        File Terunggah
+                      </span>
+                      <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                        1 file
+                      </span>
                     </div>
 
                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 ${fileIconData?.bg} rounded-xl flex items-center justify-center`}>
-                          {FileIconComponent && <FileIconComponent size={18} className={fileIconData?.color} />}
+                        <div
+                          className={`w-10 h-10 ${fileIconData?.bg} rounded-xl flex items-center justify-center`}
+                        >
+                          {FileIconComponent && (
+                            <FileIconComponent
+                              size={18}
+                              className={fileIconData?.color}
+                            />
+                          )}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-slate-700">{fileInfo.name}</p>
-                          <p className="text-[10px] text-slate-400">{fileInfo.size}</p>
+                          <p className="text-sm font-medium text-slate-700">
+                            {fileInfo.name}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {fileInfo.size}
+                          </p>
                         </div>
                       </div>
-                      <button onClick={removeFile} className="p-1.5 hover:bg-red-100 rounded-lg transition">
+                      <button
+                        onClick={removeFile}
+                        className="p-1.5 hover:bg-red-100 rounded-lg transition"
+                      >
                         <X size={14} className="text-red-500" />
                       </button>
                     </div>
@@ -565,13 +664,23 @@ function AddMateri() {
                     {filePreviewUrl && (
                       <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
                         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-                          <span className="text-xs font-medium text-slate-600">Preview File</span>
+                          <span className="text-xs font-medium text-slate-600">
+                            Preview File
+                          </span>
                         </div>
                         <div className="bg-white" style={{ height: 300 }}>
                           {fileInfo.type === "application/pdf" ? (
-                            <iframe src={filePreviewUrl} className="w-full h-full" title="PDF Preview" />
+                            <iframe
+                              src={filePreviewUrl}
+                              className="w-full h-full"
+                              title="PDF Preview"
+                            />
                           ) : fileInfo.type.includes("video") ? (
-                            <video src={filePreviewUrl} controls className="w-full h-full" />
+                            <video
+                              src={filePreviewUrl}
+                              controls
+                              className="w-full h-full"
+                            />
                           ) : null}
                         </div>
                       </div>
@@ -588,7 +697,9 @@ function AddMateri() {
                   <Lightbulb className="w-4 h-4 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-emerald-800">Tips Membuat Materi Berkualitas</p>
+                  <p className="text-xs font-semibold text-emerald-800">
+                    Tips Membuat Materi Berkualitas
+                  </p>
                   <div className="mt-1.5 space-y-1">
                     <p className="text-[11px] text-emerald-700 flex items-start gap-1.5">
                       <span className="text-emerald-500">•</span>
@@ -596,7 +707,8 @@ function AddMateri() {
                     </p>
                     <p className="text-[11px] text-emerald-700 flex items-start gap-1.5">
                       <span className="text-emerald-500">•</span>
-                      Pastikan file yang diunggah sesuai dengan kategori yang dipilih
+                      Pastikan file yang diunggah sesuai dengan kategori yang
+                      dipilih
                     </p>
                     <p className="text-[11px] text-emerald-700 flex items-start gap-1.5">
                       <span className="text-emerald-500">•</span>
@@ -620,13 +732,24 @@ function AddMateri() {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || !form.judul || !file || !form.divisi || !form.kategori}
+            disabled={
+              isSubmitting ||
+              !form.judul ||
+              !file ||
+              !form.divisi ||
+              !form.kategori
+            }
             className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-50 disabled:hover:scale-100"
           >
-            {isSubmitting
-              ? <><Loader2 size={16} className="animate-spin" /> Memproses...</>
-              : <><Save size={16} /> Terbitkan Materi <ArrowRight size={14} /></>
-            }
+            {isSubmitting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Memproses...
+              </>
+            ) : (
+              <>
+                <Save size={16} /> Terbitkan Materi <ArrowRight size={14} />
+              </>
+            )}
           </button>
         </div>
 
@@ -635,7 +758,9 @@ function AddMateri() {
           <div className="mt-6 p-4 bg-slate-50/50 rounded-xl border border-slate-200">
             <div className="flex items-center gap-2 mb-3">
               <CheckCircle size={14} className="text-emerald-500" />
-              <span className="text-xs font-medium text-slate-600">Preview Materi</span>
+              <span className="text-xs font-medium text-slate-600">
+                Preview Materi
+              </span>
             </div>
             <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
               <span className="flex items-center gap-1">
@@ -657,7 +782,6 @@ function AddMateri() {
             </div>
           </div>
         )}
-
       </div>
 
       {/* SUCCESS MODAL POPUP PREMIUM */}
@@ -672,11 +796,15 @@ function AddMateri() {
                 <div className="w-16 h-16 mx-auto bg-white/20 rounded-full flex items-center justify-center mb-3">
                   <PartyPopper className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="text-white text-xl font-bold">Materi Berhasil Ditambahkan!</h3>
-                <p className="text-emerald-100 text-sm mt-1">Materi telah diterbitkan dan tersedia untuk peserta</p>
+                <h3 className="text-white text-xl font-bold">
+                  Materi Berhasil Ditambahkan!
+                </h3>
+                <p className="text-emerald-100 text-sm mt-1">
+                  Materi telah diterbitkan dan tersedia untuk peserta
+                </p>
               </div>
             </div>
-            
+
             {/* Body Modal */}
             <div className="p-6">
               <div className="bg-emerald-50 rounded-xl p-4 mb-5">
@@ -685,29 +813,36 @@ function AddMateri() {
                     <CheckCircle className="w-4 h-4 text-emerald-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-emerald-800">Detail Materi</p>
+                    <p className="text-sm font-semibold text-emerald-800">
+                      Detail Materi
+                    </p>
                     <div className="mt-2 space-y-1.5">
                       <p className="text-xs text-emerald-700">
-                        <span className="font-medium">Judul:</span> {successData.judul}
+                        <span className="font-medium">Judul:</span>{" "}
+                        {successData.judul}
                       </p>
                       <p className="text-xs text-emerald-700">
-                        <span className="font-medium">Divisi:</span> {successData.divisi}
+                        <span className="font-medium">Divisi:</span>{" "}
+                        {successData.divisi}
                       </p>
                       <p className="text-xs text-emerald-700">
-                        <span className="font-medium">Kategori:</span> {successData.kategori}
+                        <span className="font-medium">Kategori:</span>{" "}
+                        {successData.kategori}
                       </p>
                       <p className="text-xs text-emerald-700">
-                        <span className="font-medium">File:</span> {successData.file_name}
+                        <span className="font-medium">File:</span>{" "}
+                        {successData.file_name}
                       </p>
                     </div>
                   </div>
                 </div>
               </div>
-              
+
               <p className="text-xs text-slate-500 text-center mb-5">
-                Materi sudah dapat diakses oleh semua peserta pelatihan di halaman materi.
+                Materi sudah dapat diakses oleh semua peserta pelatihan di
+                halaman materi.
               </p>
-              
+
               {/* Tombol Aksi */}
               <div className="flex gap-3">
                 <button
