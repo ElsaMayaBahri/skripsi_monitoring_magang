@@ -9,6 +9,8 @@ use App\Models\Peserta;
 use App\Models\Presensi;
 use App\Models\PengumpulanTugas;
 use App\Models\JawabanKuis;
+use App\Models\Tugas;
+use App\Models\Kuis;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -525,6 +527,10 @@ class NilaiController extends Controller
 
     /**
      * Hitung kehadiran peserta (persentase)
+     * Aturan:
+     * - Hadir = 100
+     * - Terlambat = 50
+     * - Tidak Hadir / Izin / Sakit / Alpha = 0
      */
     private function hitungKehadiran($idPeserta)
     {
@@ -532,6 +538,7 @@ class NilaiController extends Controller
             $presensi = Presensi::where('id_peserta', $idPeserta)->get();
 
             if ($presensi->isEmpty()) {
+                Log::info("hitungKehadiran: Tidak ada data presensi untuk peserta {$idPeserta}");
                 return 0;
             }
 
@@ -545,14 +552,6 @@ class NilaiController extends Controller
                     $totalNilai += 100;
                 } elseif ($status === 'terlambat') {
                     $totalNilai += 50;
-                } elseif (
-                    $status === 'tidak hadir' ||
-                    $status === 'tidak_hadir' ||
-                    $status === 'alpha' ||
-                    $status === 'izin' ||
-                    $status === 'sakit'
-                ) {
-                    $totalNilai += 0;
                 } else {
                     $totalNilai += 0;
                 }
@@ -560,67 +559,130 @@ class NilaiController extends Controller
                 $count++;
             }
 
-            return $count > 0 ? round($totalNilai / $count, 2) : 0;
+            $hasil = $count > 0 ? round($totalNilai / $count, 2) : 0;
+            
+            Log::info("hitungKehadiran: peserta {$idPeserta}, total data={$count}, total nilai={$totalNilai}, hasil={$hasil}");
+            
+            return $hasil;
         } catch (\Exception $e) {
-            Log::warning('Hitung kehadiran error: ' . $e->getMessage());
+            Log::error('Hitung kehadiran error: ' . $e->getMessage());
             return 0;
         }
     }
 
     /**
      * Hitung nilai tugas
+     * Aturan BERDASARKAN TANGGAL KUMPUL vs DEADLINE:
+     * - Dikumpulkan sebelum atau tepat deadline = 100
+     * - Dikumpulkan setelah deadline = 50
+     * - Tidak dikumpulkan = 0
+     * 
+     * PERBAIKAN: Menggunakan tanggal_kumpul dan deadline, BUKAN status
+     * Karena status bisa berubah setelah mentor review
      */
     private function hitungNilaiTugas($idPeserta)
     {
         try {
-            $pengumpulan = PengumpulanTugas::where('id_peserta', $idPeserta)->get();
-
+            // Ambil SEMUA pengumpulan tugas untuk peserta ini
+            $pengumpulan = PengumpulanTugas::with('tugas')
+                ->where('id_peserta', $idPeserta)
+                ->get();
+            
             if ($pengumpulan->isEmpty()) {
+                Log::info("hitungNilaiTugas: Tidak ada tugas untuk peserta {$idPeserta}");
                 return 0;
             }
-
+            
             $totalNilai = 0;
-            $count = 0;
-
+            $totalTugas = $pengumpulan->count();
+            
             foreach ($pengumpulan as $item) {
-                if ($item->nilai !== null) {
-                    $totalNilai += (int) $item->nilai;
-                } elseif ($item->status === 'selesai') {
-                    $totalNilai += 100;
-                } elseif ($item->status === 'terlambat') {
-                    $totalNilai += 50;
+                $nilaiTugas = 0;
+                
+                // Cek apakah tugas sudah dikumpulkan
+                if ($item->tanggal_kumpul !== null) {
+                    // Gunakan deadline dari relasi tugas
+                    $deadline = $item->tugas ? $item->tugas->deadline : null;
+                    
+                    if ($deadline) {
+                        // Bandingkan tanggal_kumpul dengan deadline
+                        $tanggalKumpul = Carbon::parse($item->tanggal_kumpul);
+                        $deadlineDate = Carbon::parse($deadline);
+                        
+                        if ($tanggalKumpul->lte($deadlineDate)) {
+                            $nilaiTugas = 100; // Tepat waktu atau sebelum deadline
+                        } else {
+                            $nilaiTugas = 50;  // Terlambat
+                        }
+                    } else {
+                        // Jika tidak ada deadline, anggap tepat waktu
+                        $nilaiTugas = 100;
+                    }
                 } else {
-                    $totalNilai += 0;
+                    // Belum dikumpulkan = 0
+                    $nilaiTugas = 0;
                 }
-
-                $count++;
+                
+                $totalNilai += $nilaiTugas;
+                
+                Log::info("hitungNilaiTugas: Tugas ID {$item->id_tugas}, tanggal_kumpul={$item->tanggal_kumpul}, deadline=" . ($item->tugas->deadline ?? 'null') . ", nilai={$nilaiTugas}");
             }
-
-            return $count > 0 ? round($totalNilai / $count, 2) : 0;
+            
+            $hasil = $totalTugas > 0 ? round($totalNilai / $totalTugas, 2) : 0;
+            
+            Log::info("hitungNilaiTugas: peserta {$idPeserta}, total tugas={$totalTugas}, total nilai={$totalNilai}, hasil={$hasil}");
+            
+            return $hasil;
         } catch (\Exception $e) {
-            Log::warning('Hitung nilai tugas error: ' . $e->getMessage());
+            Log::error('Hitung nilai tugas error: ' . $e->getMessage());
             return 0;
         }
     }
 
     /**
-     * Hitung nilai kuis
+     * Hitung nilai kuis (rata-rata dari kuis yang SUDAH DIKERJAKAN peserta)
+     * Aturan:
+     * - Hanya menghitung kuis yang sudah dikerjakan peserta
+     * - Rata-rata dari skor tertinggi per kuis yang sudah dikerjakan
+     * 
+     * PERBAIKAN: Menghitung dari kuis yang SUDAH DIKERJAKAN, BUKAN semua kuis aktif
      */
     private function hitungNilaiKuis($idUser)
     {
         try {
+            // Ambil semua jawaban kuis peserta yang sudah memiliki skor
             $jawaban = JawabanKuis::where('id_user', $idUser)
                 ->whereNotNull('skor')
                 ->get();
-
-            if ($jawaban->isNotEmpty()) {
-                $totalNilai = $jawaban->sum('skor');
-                return round($totalNilai / $jawaban->count(), 2);
+            
+            if ($jawaban->isEmpty()) {
+                Log::info("hitungNilaiKuis: Tidak ada jawaban kuis untuk user {$idUser}");
+                return 0;
             }
-
-            return 0;
+            
+            // Kelompokkan berdasarkan id_kuis, ambil skor tertinggi per kuis
+            $skorPerKuis = [];
+            foreach ($jawaban as $item) {
+                $idKuis = $item->id_kuis;
+                $skor = (float) $item->skor;
+                
+                if (!isset($skorPerKuis[$idKuis]) || $skor > $skorPerKuis[$idKuis]) {
+                    $skorPerKuis[$idKuis] = $skor;
+                }
+            }
+            
+            // Hitung rata-rata dari skor tertinggi per kuis yang sudah dikerjakan
+            $totalSkor = array_sum($skorPerKuis);
+            $totalKuisDikerjakan = count($skorPerKuis);
+            
+            $rataRata = $totalKuisDikerjakan > 0 ? round($totalSkor / $totalKuisDikerjakan, 2) : 0;
+            
+            Log::info("hitungNilaiKuis: user {$idUser}, total kuis dikerjakan={$totalKuisDikerjakan}, total skor={$totalSkor}, rata-rata={$rataRata}");
+            Log::info("Detail skor per kuis: " . json_encode($skorPerKuis));
+            
+            return $rataRata;
         } catch (\Exception $e) {
-            Log::warning('Hitung nilai kuis error: ' . $e->getMessage());
+            Log::error('Hitung nilai kuis error: ' . $e->getMessage());
             return 0;
         }
     }

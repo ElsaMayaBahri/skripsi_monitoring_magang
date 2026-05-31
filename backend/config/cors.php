@@ -1,7 +1,17 @@
 <?php
 
 return [
-    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout', 'register', 'me', 'materi-file/*'],
+    'paths' => [
+        'api/*', 
+        'sanctum/csrf-cookie', 
+        'login', 
+        'logout', 
+        'register', 
+        'me', 
+        'materi-file/*',
+        'storage/*',  // 🔥 TAMBAHKAN INI untuk akses file storage
+        'laporan/download/*',  // 🔥 TAMBAHKAN untuk download laporan
+    ],
 
     'allowed_methods' => ['*'],
 

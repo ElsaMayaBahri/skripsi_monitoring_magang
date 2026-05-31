@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
 import {
   Users as UsersIcon,
@@ -8,24 +8,19 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  Shield,
-  Sparkles,
   Building2,
   AlertCircle,
   Calendar,
   Layers,
   Eye,
-  RefreshCw,
   Loader2,
-  ChevronDown,
-  TrendingUp,
-  Clock,
-  Filter
+  ChevronRight as ChevronRightIcon
 } from "lucide-react";
 
 function DataManagement() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("peserta"); // peserta, mentor, divisi
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState("peserta");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [divisiFilter, setDivisiFilter] = useState("all");
@@ -34,64 +29,85 @@ function DataManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Data state
   const [pesertaList, setPesertaList] = useState([]);
   const [mentorList, setMentorList] = useState([]);
   const [divisiList, setDivisiList] = useState([]);
+  const [activeDivisiList, setActiveDivisiList] = useState([]); // STATE UNTUK DIVISI AKTIF
   const [dataLoaded, setDataLoaded] = useState(false);
   
   const itemsPerPage = 10;
 
-  // Ambil semua data dari API
   const loadAllData = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      console.log("Loading data for COO DataManagement...");
-      
       const [divisiRes, mentorRes, pesertaRes] = await Promise.all([
         getDivisi(),
         getMentors(),
         getPeserta()
       ]);
       
-      console.log("API getDivisi response:", divisiRes);
-      console.log("API getMentors response:", mentorRes);
-      console.log("API getPeserta response:", pesertaRes);
-      
-      // Parse Divisi
       let divisiData = [];
       if (divisiRes && divisiRes.success && Array.isArray(divisiRes.data)) {
         divisiData = divisiRes.data;
+      } else if (divisiRes?.data?.data && Array.isArray(divisiRes.data.data)) {
+        divisiData = divisiRes.data.data;
       } else if (Array.isArray(divisiRes)) {
         divisiData = divisiRes;
-      } else if (divisiRes && Array.isArray(divisiRes.data)) {
-        divisiData = divisiRes.data;
       }
       
-      // Parse Mentor
+      // FILTER DIVISI AKTIF UNTUK DROPDOWN
+      const activeDivisi = divisiData.filter(divisi => {
+        const status = divisi.status || divisi.status_akun || divisi.is_active;
+        // Jika status undefined/null, anggap sebagai aktif
+        if (status === undefined || status === null) return true;
+        // Hanya tampilkan yang statusnya aktif
+        return status === "aktif" || status === "active" || status === true;
+      });
+      
       let mentors = [];
       if (mentorRes && mentorRes.success && Array.isArray(mentorRes.data)) {
         mentors = mentorRes.data;
+      } else if (mentorRes?.data?.data && Array.isArray(mentorRes.data.data)) {
+        mentors = mentorRes.data.data;
       } else if (Array.isArray(mentorRes)) {
         mentors = mentorRes;
-      } else if (mentorRes && Array.isArray(mentorRes.data)) {
-        mentors = mentorRes.data;
       }
       
-      // Parse Peserta
       let peserta = [];
       if (pesertaRes && pesertaRes.success && Array.isArray(pesertaRes.data)) {
         peserta = pesertaRes.data;
+      } else if (pesertaRes?.data?.data && Array.isArray(pesertaRes.data.data)) {
+        peserta = pesertaRes.data.data;
       } else if (Array.isArray(pesertaRes)) {
         peserta = pesertaRes;
-      } else if (pesertaRes && Array.isArray(pesertaRes.data)) {
-        peserta = pesertaRes.data;
       }
       
-      setDivisiList(divisiData);
-      setMentorList(mentors);
+      // Hapus duplikasi
+      const uniqueMentors = [];
+      const mentorIds = new Set();
+      for (const mentor of mentors) {
+        const mentorId = mentor.id_mentor || mentor.id_user || mentor.id;
+        if (!mentorIds.has(mentorId)) {
+          mentorIds.add(mentorId);
+          uniqueMentors.push(mentor);
+        }
+      }
+      
+      const uniqueDivisi = [];
+      const divisiIds = new Set();
+      for (const divisi of activeDivisi) {
+        const divisiId = divisi.id_divisi || divisi.id;
+        if (!divisiIds.has(divisiId)) {
+          divisiIds.add(divisiId);
+          uniqueDivisi.push(divisi);
+        }
+      }
+      
+      setDivisiList(uniqueDivisi);
+      setActiveDivisiList(activeDivisi); // SIMPAN DIVISI AKTIF
+      setMentorList(uniqueMentors);
       setPesertaList(peserta);
       setDataLoaded(true);
       
@@ -106,8 +122,18 @@ function DataManagement() {
   useEffect(() => {
     loadAllData();
   }, []);
+  
+  useEffect(() => {
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+      setCurrentPage(1);
+      setSearch("");
+      setDivisiFilter("all");
+      setStatusFilter("all");
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
-  // Format data untuk ditampilkan
   const getInitials = (name) => {
     if (!name || name === "No Name" || name === "-") return "?";
     const parts = name.trim().split(" ");
@@ -116,36 +142,26 @@ function DataManagement() {
   };
 
   const getUserStatus = (userData, itemData) => {
-    // Cek dari user object
     if (userData?.status_akun) {
       if (userData.status_akun === "aktif" || userData.status_akun === "active") return "aktif";
       if (userData.status_akun === "non_aktif" || userData.status_akun === "inactive" || userData.status_akun === "nonaktif") return "non_aktif";
     }
-    
-    // Cek dari userData status
     if (userData?.status !== undefined && userData?.status !== null) {
       if (userData.status === "aktif" || userData.status === "active" || userData.status === true) return "aktif";
       if (userData.status === "non_aktif" || userData.status === "inactive" || userData.status === false) return "non_aktif";
     }
-    
-    // Cek dari itemData status_akun
     if (itemData?.status_akun) {
       if (itemData.status_akun === "aktif" || itemData.status_akun === "active") return "aktif";
       if (itemData.status_akun === "non_aktif" || itemData.status_akun === "inactive") return "non_aktif";
     }
-    
-    // Cek dari itemData.user
     if (itemData?.user?.status_akun) {
       if (itemData.user.status_akun === "aktif" || itemData.user.status_akun === "active") return "aktif";
       if (itemData.user.status_akun === "non_aktif" || itemData.user.status_akun === "inactive") return "non_aktif";
     }
-    
-    // Cek dari itemData status
     if (itemData?.status !== undefined && itemData?.status !== null) {
       if (itemData.status === "aktif" || itemData.status === "active" || itemData.status === true) return "aktif";
       if (itemData.status === "non_aktif" || itemData.status === "inactive" || itemData.status === false) return "non_aktif";
     }
-    
     return "non_aktif";
   };
 
@@ -164,11 +180,8 @@ function DataManagement() {
     }
   };
 
-  // Format data peserta
   const formattedPeserta = pesertaList.map((item) => {
     let divisiName = "-";
-    
-    // Cek dari item.divisi (object)
     if (item.divisi) {
       if (typeof item.divisi === 'object' && item.divisi !== null) {
         divisiName = item.divisi.nama_divisi || item.divisi.nama || "-";
@@ -176,57 +189,56 @@ function DataManagement() {
         divisiName = item.divisi;
       }
     }
-    
-    // Cek dari id_divisi
     if (divisiName === "-" && item.id_divisi) {
       const foundDivisi = divisiList.find(d => (d.id_divisi || d.id) == item.id_divisi);
       if (foundDivisi) divisiName = foundDivisi.nama_divisi || foundDivisi.nama || "-";
     }
     
     let mentorName = "-";
-    
-    // Cek dari item.mentor
+    let mentorId = null;
     if (item.mentor) {
       if (typeof item.mentor === 'object') {
         mentorName = item.mentor.user?.nama || item.mentor.nama || item.mentor.name || "-";
+        mentorId = item.mentor.id_mentor || item.mentor.id;
       } else if (typeof item.mentor === 'string') {
         mentorName = item.mentor;
       }
     }
-    
-    // Cek dari id_mentor
-    if (mentorName === "-" && item.id_mentor) {
+    if ((mentorName === "-" || !mentorId) && item.id_mentor) {
       const foundMentor = mentorList.find(m => (m.id_mentor || m.id_user || m.id) == item.id_mentor);
-      if (foundMentor) mentorName = foundMentor.user?.nama || foundMentor.nama || foundMentor.name || "-";
+      if (foundMentor) {
+        mentorName = foundMentor.user?.nama || foundMentor.nama || foundMentor.name || "-";
+        mentorId = foundMentor.id_mentor || foundMentor.id_user || foundMentor.id;
+      }
     }
     
     const status = getUserStatus(item.user, item);
     const fullName = item.user?.nama || item.nama || item.name || "No Name";
-    
-    // Hitung progress dari tugas yang sudah dikerjakan
-    const progress = item.progress || 0;
-    const kehadiran = item.kehadiran_persen || item.kehadiran || 0;
+    const pesertaId = item.id_peserta || item.id;
     
     return {
-      id: item.id_peserta || item.id,
+      id: pesertaId,
       name: fullName,
       email: item.user?.email || item.email || "-",
       divisi: divisiName,
       status: status,
       mentor: mentorName,
+      mentorId: mentorId,
       initials: getInitials(fullName),
       tanggalMulai: formatDate(item.tanggal_mulai || item.start_date),
       tanggalSelesai: formatDate(item.tanggal_selesai || item.end_date),
-      progress: progress,
-      kehadiran: kehadiran
     };
   });
 
-  // Format data mentor
-  const formattedMentor = mentorList.map((item) => {
-    let divisiName = "-";
+  const formattedMentor = [];
+  const mentorIdsProcessed = new Set();
+  
+  for (const item of mentorList) {
+    const mentorId = item.id_mentor || item.id_user || item.id;
+    if (mentorIdsProcessed.has(mentorId)) continue;
+    mentorIdsProcessed.add(mentorId);
     
-    // Cek dari item.divisi
+    let divisiName = "-";
     if (item.divisi) {
       if (typeof item.divisi === 'object' && item.divisi !== null) {
         divisiName = item.divisi.nama_divisi || item.divisi.nama || "-";
@@ -234,8 +246,6 @@ function DataManagement() {
         divisiName = item.divisi;
       }
     }
-    
-    // Cek dari id_divisi
     if (divisiName === "-" && item.id_divisi) {
       const foundDivisi = divisiList.find(d => (d.id_divisi || d.id) == item.id_divisi);
       if (foundDivisi) divisiName = foundDivisi.nama_divisi || foundDivisi.nama || "-";
@@ -243,12 +253,13 @@ function DataManagement() {
     
     const status = getUserStatus(item.user, item);
     const fullName = item.user?.nama || item.name || item.nama || "No Name";
-    const mentorId = item.id_mentor || item.id_user || item.id;
     
-    // Hitung jumlah bimbingan
-    const jumlahBimbingan = pesertaList.filter(p => p.id_mentor == mentorId).length;
+    const jumlahBimbingan = pesertaList.filter(p => {
+      const pMentorId = p.id_mentor || p.mentor?.id_mentor || p.mentor?.id;
+      return pMentorId == mentorId;
+    }).length;
     
-    return {
+    formattedMentor.push({
       id: mentorId,
       name: fullName,
       email: item.user?.email || item.email || "-",
@@ -257,16 +268,20 @@ function DataManagement() {
       initials: getInitials(fullName),
       jumlahBimbingan: jumlahBimbingan,
       jabatan: item.jabatan || "-"
-    };
-  });
+    });
+  }
 
-  // Format data divisi
-  const formattedDivisi = divisiList.map((divisi) => {
+  const formattedDivisi = [];
+  const divisiIdsProcessed = new Set();
+  
+  for (const divisi of divisiList) {
     const divisiId = divisi.id_divisi || divisi.id;
+    if (divisiIdsProcessed.has(divisiId)) continue;
+    divisiIdsProcessed.add(divisiId);
+    
     const divisiName = divisi.nama_divisi || divisi.nama || "-";
     const status = divisi.status === "aktif" || divisi.status === 1 || divisi.status === true ? "aktif" : "non_aktif";
     
-    // Hitung jumlah anggota
     const jumlahPeserta = pesertaList.filter(p => {
       const pDivisi = p.divisi?.nama_divisi || p.divisi || p.nama_divisi;
       const pDivisiId = p.id_divisi;
@@ -279,7 +294,7 @@ function DataManagement() {
       return mDivisi === divisiName || mDivisiId == divisiId;
     }).length;
     
-    return {
+    formattedDivisi.push({
       id: divisiId,
       name: divisiName,
       status: status,
@@ -287,10 +302,9 @@ function DataManagement() {
       jumlahMentor: jumlahMentor,
       totalAnggota: jumlahPeserta + jumlahMentor,
       deskripsi: divisi.deskripsi || "-"
-    };
-  });
+    });
+  }
 
-  // Filter data berdasarkan tab
   const getFilteredData = () => {
     let data = [];
     let filterByDivisi = false;
@@ -315,7 +329,6 @@ function DataManagement() {
         data = [];
     }
     
-    // Filter search
     if (search) {
       data = data.filter(d => 
         d.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -323,12 +336,10 @@ function DataManagement() {
       );
     }
     
-    // Filter divisi (khusus peserta & mentor)
     if (filterByDivisi && divisiFilter !== "all") {
       data = data.filter(d => d.divisi === divisiFilter);
     }
     
-    // Filter status
     if (filterByStatus && statusFilter !== "all") {
       data = data.filter(d => d.status === statusFilter);
     }
@@ -343,7 +354,6 @@ function DataManagement() {
     currentPage * itemsPerPage
   );
 
-  // Handle tab change
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     setCurrentPage(1);
@@ -352,46 +362,25 @@ function DataManagement() {
     setStatusFilter("all");
   };
 
-  // Handle refresh
-  const handleRefresh = () => {
-    loadAllData();
-  };
-
-  // Handle detail peserta - navigasi ke halaman detail peserta
   const handleDetailPeserta = (pesertaId) => {
-    navigate(`/coo/peserta/${pesertaId}/detail`);
+    if (pesertaId) {
+      navigate(`/coo/peserta/${pesertaId}/detail`);
+    }
   };
 
-  // Handle detail mentor - navigasi ke halaman detail mentor
   const handleDetailMentor = (mentorId) => {
-    navigate(`/coo/mentor/${mentorId}/detail`);
+    if (mentorId) {
+      navigate(`/coo/mentor/${mentorId}/detail`);
+    }
   };
 
-  // Handle detail divisi
-  const handleDetailDivisi = (divisiId) => {
-    navigate(`/coo/divisi/${divisiId}/detail`);
-  };
-
-  // Get statistik untuk setiap tab
   const getStats = () => {
     if (activeTab === "peserta") {
       const total = formattedPeserta.length;
       const aktif = formattedPeserta.filter(d => d.status === "aktif").length;
       const nonAktif = total - aktif;
-      
-      // Rata-rata PROGRESS tugas
-      const rataProgress = total > 0 
-        ? Math.round(formattedPeserta.reduce((sum, d) => sum + (d.progress || 0), 0) / total)
-        : 0;
-      
-      // Rata-rata PRESENSI / kehadiran
-      const rataKehadiran = total > 0 
-        ? Math.round(formattedPeserta.reduce((sum, d) => sum + (d.kehadiran || 0), 0) / total)
-        : 0;
-      
-      return { total, aktif, nonAktif, rataProgress, rataKehadiran };
+      return { total, aktif, nonAktif };
     }
-    
     if (activeTab === "mentor") {
       const total = formattedMentor.length;
       const aktif = formattedMentor.filter(d => d.status === "aktif").length;
@@ -399,7 +388,6 @@ function DataManagement() {
       const totalBimbingan = formattedMentor.reduce((sum, d) => sum + (d.jumlahBimbingan || 0), 0);
       return { total, aktif, nonAktif, totalBimbingan };
     }
-    
     if (activeTab === "divisi") {
       const total = formattedDivisi.length;
       const aktif = formattedDivisi.filter(d => d.status === "aktif").length;
@@ -407,8 +395,7 @@ function DataManagement() {
       const totalAnggota = formattedDivisi.reduce((sum, d) => sum + (d.totalAnggota || 0), 0);
       return { total, aktif, nonAktif, totalAnggota };
     }
-    
-    return { total: 0, aktif: 0, nonAktif: 0, rataProgress: 0, rataKehadiran: 0 };
+    return { total: 0, aktif: 0, nonAktif: 0 };
   };
 
   const stats = getStats();
@@ -447,16 +434,6 @@ function DataManagement() {
                 </div>
               </div>
             </div>
-            
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleRefresh}
-                className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition shadow-sm"
-                title="Refresh data"
-              >
-                <RefreshCw size={16} className="text-slate-500" />
-              </button>
-            </div>
           </div>
         </div>
 
@@ -464,8 +441,8 @@ function DataManagement() {
         {error && (
           <div className="mb-6 flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
             <AlertCircle size={16} />
-            {error}
-            <button onClick={handleRefresh} className="ml-auto underline text-red-600 hover:text-red-800">
+            <span>{error}</span>
+            <button onClick={() => loadAllData()} className="ml-auto underline text-red-600 hover:text-red-800">
               Coba lagi
             </button>
           </div>
@@ -474,10 +451,11 @@ function DataManagement() {
         {/* STATS CARDS */}
         <div className={`grid gap-4 mb-6 ${
           activeTab === "peserta" 
-            ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-5" 
+            ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3" 
+            : activeTab === "mentor"
+            ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-4"
             : "grid-cols-1 sm:grid-cols-2 md:grid-cols-4"
         }`}>
-          {/* Card Total */}
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
@@ -490,7 +468,6 @@ function DataManagement() {
             </div>
           </div>
 
-          {/* Card Aktif */}
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
@@ -503,7 +480,6 @@ function DataManagement() {
             </div>
           </div>
 
-          {/* Card Nonaktif */}
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
@@ -516,37 +492,6 @@ function DataManagement() {
             </div>
           </div>
 
-          {/* Card Rata-rata Progress - ONLY untuk tab peserta */}
-          {activeTab === "peserta" && (
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-2xl font-bold text-white">{stats.rataProgress}%</p>
-                  <p className="text-xs text-white/80 mt-0.5">Rata-rata Progress Tugas</p>
-                </div>
-                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                  <TrendingUp className="w-5 h-5 text-white" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Card Rata-rata Kehadiran - ONLY untuk tab peserta */}
-          {activeTab === "peserta" && (
-            <div className="bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-2xl font-bold text-white">{stats.rataKehadiran}%</p>
-                  <p className="text-xs text-white/80 mt-0.5">Rata-rata Kehadiran</p>
-                </div>
-                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                  <Calendar className="w-5 h-5 text-white" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Card untuk tab mentor */}
           {activeTab === "mentor" && (
             <div className="bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl p-4 shadow-sm">
               <div className="flex items-center justify-between">
@@ -561,7 +506,6 @@ function DataManagement() {
             </div>
           )}
 
-          {/* Card untuk tab divisi */}
           {activeTab === "divisi" && (
             <div className="bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl p-4 shadow-sm">
               <div className="flex items-center justify-between">
@@ -643,11 +587,18 @@ function DataManagement() {
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
                 >
                   <option value="all">Semua Divisi</option>
-                  {divisiList.map((divisi) => (
-                    <option key={divisi.id_divisi || divisi.id} value={divisi.nama_divisi || divisi.nama}>
-                      {divisi.nama_divisi || divisi.nama}
-                    </option>
-                  ))}
+                  {/* HANYA TAMPILKAN DIVISI YANG AKTIF */}
+                  {activeDivisiList
+                    .filter(divisi => {
+                      const status = divisi.status || divisi.status_akun || divisi.is_active;
+                      if (status === undefined || status === null) return true;
+                      return status === "aktif" || status === "active" || status === true;
+                    })
+                    .map((divisi) => (
+                      <option key={divisi.id_divisi || divisi.id} value={divisi.nama_divisi || divisi.nama}>
+                        {divisi.nama_divisi || divisi.nama}
+                      </option>
+                    ))}
                 </select>
               </div>
             )}
@@ -673,23 +624,18 @@ function DataManagement() {
               <thead>
                 <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
                   <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nama</th>
-                  
                   {activeTab !== "divisi" && (
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
                   )}
-                  
                   {(activeTab === "peserta" || activeTab === "mentor") && (
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Divisi</th>
                   )}
-                  
                   {activeTab === "peserta" && (
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mentor</th>
                   )}
-                  
                   {activeTab === "mentor" && (
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Bimbingan</th>
                   )}
-                  
                   {activeTab === "divisi" && (
                     <>
                       <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Peserta</th>
@@ -697,13 +643,10 @@ function DataManagement() {
                       <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Total</th>
                     </>
                   )}
-                  
                   {activeTab === "peserta" && (
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Periode</th>
                   )}
-                  
                   <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  
                   {activeTab !== "divisi" && (
                     <th className="text-center px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Aksi</th>
                   )}
@@ -712,7 +655,7 @@ function DataManagement() {
               <tbody>
                 {paginatedData.length === 0 ? (
                   <tr>
-                    <td colSpan={activeTab === "peserta" ? 8 : activeTab === "mentor" ? 7 : 8} className="px-5 py-12 text-center">
+                    <td colSpan={activeTab === "peserta" ? 7 : activeTab === "mentor" ? 6 : 6} className="px-5 py-12 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <div className="w-16 h-16 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl flex items-center justify-center">
                           <UsersIcon size="28" className="text-slate-400" />
@@ -740,36 +683,42 @@ function DataManagement() {
                       {(activeTab === "peserta" || activeTab === "mentor") && (
                         <td className="px-5 py-3">
                           {item.divisi && item.divisi !== "-" ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-full font-medium">
-                              <Building2 size={10} />
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded-full font-medium">
+                              <Building2 size={10} className="text-slate-500" />
                               {item.divisi}
                             </span>
                           ) : (
-                            <span className="text-slate-400 text-sm">-</span>
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-slate-50 text-slate-400 rounded-full font-medium">
+                              <Building2 size={10} className="text-slate-400" />
+                              Tidak Ada Divisi
+                            </span>
                           )}
-                         </td>
+                        </td>
                       )}
                       
                       {activeTab === "peserta" && (
                         <td className="px-5 py-3">
                           {item.mentor && item.mentor !== "-" ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-purple-50 text-purple-600 rounded-full font-medium">
-                              <UserCheck size={10} />
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded-full font-medium">
+                              <UserCheck size={10} className="text-slate-500" />
                               {item.mentor}
                             </span>
                           ) : (
-                            <span className="text-slate-400 text-sm">-</span>
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-slate-50 text-slate-400 rounded-full font-medium">
+                              <UserCheck size={10} className="text-slate-400" />
+                              Belum Ada Mentor
+                            </span>
                           )}
-                         </td>
+                        </td>
                       )}
                       
                       {activeTab === "mentor" && (
                         <td className="px-5 py-3">
-                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 rounded-full font-medium">
-                            <UsersIcon size={10} />
+                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded-full font-medium">
+                            <UsersIcon size={10} className="text-slate-500" />
                             {item.jumlahBimbingan} Peserta
                           </span>
-                         </td>
+                        </td>
                       )}
                       
                       {activeTab === "divisi" && (
@@ -777,7 +726,7 @@ function DataManagement() {
                           <td className="px-5 py-3 text-sm text-slate-600">{item.jumlahPeserta}</td>
                           <td className="px-5 py-3 text-sm text-slate-600">{item.jumlahMentor}</td>
                           <td className="px-5 py-3">
-                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-full font-medium">
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-slate-100 text-slate-600 rounded-full font-medium">
                               <UsersIcon size={10} />
                               {item.totalAnggota}
                             </span>
@@ -795,7 +744,7 @@ function DataManagement() {
                           ) : (
                             <span className="text-slate-400 text-sm">-</span>
                           )}
-                         </td>
+                        </td>
                       )}
                       
                       <td className="px-5 py-3">
@@ -820,8 +769,6 @@ function DataManagement() {
                                 handleDetailPeserta(item.id);
                               } else if (activeTab === "mentor") {
                                 handleDetailMentor(item.id);
-                              } else {
-                                handleDetailDivisi(item.id);
                               }
                             }}
                             className="p-1.5 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition"
@@ -884,16 +831,6 @@ function DataManagement() {
               </div>
             </div>
           )}
-        </div>
-
-        {/* INFO BANNER */}
-        <div className="mt-6 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 rounded-xl p-3 border border-teal-100">
-          <div className="flex items-center gap-2">
-            <Shield size={14} className="text-teal-500" />
-            <p className="text-xs text-teal-700">
-              <strong className="font-semibold">Informasi:</strong> Klik icon <Eye size={12} className="inline" /> pada kolom aksi untuk melihat detail lengkap peserta, mentor, atau divisi.
-            </p>
-          </div>
         </div>
       </div>
     </div>

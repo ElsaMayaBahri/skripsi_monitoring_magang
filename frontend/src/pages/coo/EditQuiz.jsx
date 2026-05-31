@@ -168,7 +168,21 @@ function EditQuiz() {
       } else if (response && response.data && Array.isArray(response.data)) {
         divisiData = response.data
       }
-      setDivisiList(divisiData)
+      
+      // Filter hanya divisi yang statusnya aktif
+      const activeDivisiList = divisiData.filter(divisi => {
+        const status = divisi.status || divisi.status_divisi || divisi.is_active || divisi.aktif
+        if (typeof status === 'string') {
+          return status.toLowerCase() === 'aktif'
+        }
+        if (typeof status === 'boolean') {
+          return status === true
+        }
+        return true
+      })
+      
+      setDivisiList(activeDivisiList)
+      console.log("Active divisi list loaded:", activeDivisiList)
     } catch (err) {
       console.error("Error fetching divisi:", err)
     } finally {
@@ -585,12 +599,22 @@ function EditQuiz() {
                       className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 bg-white"
                     >
                       <option value="">Pilih Divisi</option>
-                      {divisiList.map((div) => (
-                        <option key={div.id_divisi || div.id} value={div.nama_divisi || div.nama}>
-                          {div.nama_divisi || div.nama}
-                        </option>
-                      ))}
+                      {divisiList.map((div) => {
+                        const divisiId = div.id_divisi || div.id
+                        const divisiName = div.nama_divisi || div.nama
+                        return (
+                          <option key={divisiId} value={divisiName}>
+                            {divisiName}
+                          </option>
+                        )
+                      })}
                     </select>
+                  )}
+                  {!loadingDivisi && divisiList.length === 0 && (
+                    <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      Tidak ada divisi aktif yang tersedia
+                    </p>
                   )}
                 </div>
 
@@ -627,7 +651,7 @@ function EditQuiz() {
                   </div>
                 </div>
 
-                {/* TOGGLE STATUS - FITUR BARU */}
+                {/* TOGGLE STATUS */}
                 <div className="pt-2">
                   <label className="block text-xs font-medium text-slate-600 mb-2">
                     Status Kuis
@@ -839,17 +863,8 @@ function EditQuiz() {
           </div>
         </div>
 
-        {/* INFO BANNER */}
-        <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Shield size={14} className="text-blue-600" />
-            </div>
-            <p className="text-xs text-blue-700">
-              <strong className="font-semibold">Tips:</strong> Gunakan toggle di samping untuk mengaktifkan atau menonaktifkan kuis. Kuis yang Nonaktif tidak akan terlihat oleh peserta.
-            </p>
-          </div>
-        </div>
+        {/* INFO BANNER - TELAH DIHAPUS */}
+        
       </div>
 
       {/* MODAL TAMBAH/EDIT SOAL */}

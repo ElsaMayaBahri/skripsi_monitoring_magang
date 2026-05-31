@@ -1,4 +1,3 @@
-// src/api/coo/dashboardService.js
 import axiosInstance from "../axios"
 
 // Ambil semua peserta
@@ -104,7 +103,7 @@ export const getAttendanceStatistics = async () => {
         data: {
           hadir: data.hadir || data.total_hadir || 0,
           terlambat: data.terlambat || data.total_terlambat || 0,
-          absen: data.absen || data.total_absen || 0,
+          absen: data.tidakHadir || data.absen || data.total_absen || 0,
           persentase: data.persenKehadiran || data.persentase || 0
         }
       }
@@ -189,3 +188,30 @@ export const getAllQuizResults = async () => {
     }
   }
 }
+
+// ========== TAMBAHKAN INI ==========
+// Ambil peserta yang belum absen hari ini
+export const getBelumAbsenHariIni = async () => {
+  try {
+    const response = await axiosInstance.get("/presensi/belum-absen");
+
+    if (response.data && response.data.success === true) {
+      return {
+        success: true,
+        data: response.data.data || []
+      };
+    }
+
+    return {
+      success: true,
+      data: []
+    };
+  } catch (error) {
+    console.error("Error get belum absen:", error);
+
+    return {
+      success: true,
+      data: []
+    };
+  }
+};

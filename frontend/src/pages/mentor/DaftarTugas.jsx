@@ -1,6 +1,7 @@
 // src/pages/mentor/DaftarTugas.jsx
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import ReactDOM from "react-dom";
 import {
   ClipboardList,
   Plus,
@@ -19,13 +20,10 @@ import {
   FileText,
   Users,
   Bell,
-  Send,
   RefreshCw,
   MessageSquare,
   Award,
-  TrendingUp,
   FolderOpen,
-  Sparkles,
   Shield,
   Zap,
   Target,
@@ -36,41 +34,168 @@ import {
   FileArchive,
   Link as LinkIcon,
   Globe,
-  Copy
+  Copy,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import * as api from "../../api/mentor/tugasService";
+import axiosInstance from "../../api/axios";
 
 function DaftarTugas() {
   const [loading, setLoading] = useState(false);
   const [tugas, setTugas] = useState([]);
   const [filteredTugas, setFilteredTugas] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterDeadline, setFilterDeadline] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all"); // all, active, expired
+  const [filterDeadline, setFilterDeadline] = useState("all"); // all, urgent, upcoming, passed
+  const [filterValidation, setFilterValidation] = useState("all"); // all, need_review, all_reviewed
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(8);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedTugas, setSelectedTugas] = useState(null);
-  const [showReminderModal, setShowReminderModal] = useState(false);
   const [sendingReminder, setSendingReminder] = useState(false);
   const [hoveredCard, setHoveredCard] = useState(null);
-  const [selectedFilter, setSelectedFilter] = useState("all");
   const [deleting, setDeleting] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewFileUrl, setPreviewFileUrl] = useState("");
   const [previewFileName, setPreviewFileName] = useState("");
   const [previewFileType, setPreviewFileType] = useState("");
   const [copySuccess, setCopySuccess] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // State untuk toast notification
+  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
 
-  // Helper function untuk mendapatkan URL file yang benar
-  const getFileUrl = (filePath) => {
-    if (!filePath) return null;
-    if (filePath.startsWith('http')) return filePath;
-    if (filePath.startsWith('/storage')) return `http://localhost:8000${filePath}`;
-    if (filePath.startsWith('tugas/')) return `http://localhost:8000/storage/${filePath}`;
-    if (filePath.startsWith('storage/')) return `http://localhost:8000/${filePath}`;
-    return `http://localhost:8000/storage/${filePath}`;
+  const showToast = (message, type = "success") => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: "", type: "success" }), 4000);
   };
+
+  // Helper function untuk mendapatkan URL lengkap backend
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  
+  const getBackendUrl = (path) => {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    const cleanPath = path.replace(/^\/storage\//, '');
+    return `${API_BASE_URL}/storage/${cleanPath}`;
+  };
+
+  // Helper function untuk parsing deadline dengan benar
+  const parseDeadline = (deadlineStr) => {
+    if (!deadlineStr) return null;
+    const [datePart, timePart] = deadlineStr.split(' ');
+    if (!datePart || !timePart) return null;
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour, minute, second] = timePart.split(':').map(Number);
+    const date = new Date(year, month - 1, day, hour, minute, second);
+    return date;
+  };
+
+  // Fungsi cek apakah tugas masih aktif (belum melewati deadline)
+  const isTugasActive = (deadline) => {
+    const deadlineDate = parseDeadline(deadline);
+    if (!deadlineDate) return false;
+    const now = new Date();
+    return now <= deadlineDate;
+  };
+
+  // Fungsi cek apakah tugas perlu direview (ada submission yang pending)
+  const needsReview = (item) => {
+    return (item.pending_review || 0) > 0;
+  };
+
+  // Download file
+  const handleDownload = async (downloadUrl, fileName) => {
+    if (!downloadUrl) {
+      showToast("URL download tidak ditemukan", "error");
+      return;
+    }
+
+    try {
+      const response = await axiosInstance.get(downloadUrl, {
+        responseType: "blob"
+      });
+      
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName || "download";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      showToast("Download dimulai", "success");
+    } catch (error) {
+      console.error("Download error:", error);
+      showToast("Gagal mendownload file", "error");
+    }
+  };
+
+  // Preview file
+  const openPreview = (previewUrl, fileName) => {
+    if (!previewUrl) {
+      showToast("URL preview tidak ditemukan", "error");
+      return;
+    }
+
+    const ext = fileName?.split('.').pop()?.toLowerCase() || '';
+    let fileType = '';
+
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) {
+      fileType = 'image';
+    } else if (ext === 'pdf') {
+      fileType = 'pdf';
+    } else {
+      fileType = 'other';
+    }
+
+    setPreviewFileUrl(previewUrl);
+    setPreviewFileName(fileName || 'File');
+    setPreviewFileType(fileType);
+    setShowPreviewModal(true);
+    
+    window.dispatchEvent(new Event("preview-modal-open"));
+  };
+
+  const closePreview = () => {
+    setShowPreviewModal(false);
+    setPreviewFileUrl("");
+    setPreviewFileName("");
+    setPreviewFileType("");
+    setIsFullscreen(false);
+    window.dispatchEvent(new Event("preview-modal-close"));
+  };
+
+  const toggleFullscreen = () => {
+    const previewElement = document.getElementById("preview-container");
+    
+    if (!isFullscreen) {
+      if (previewElement?.requestFullscreen) {
+        previewElement.requestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+    
+    setIsFullscreen(!isFullscreen);
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
 
   // Fetch tugas from backend
   const fetchTugas = async () => {
@@ -80,23 +205,85 @@ function DaftarTugas() {
       console.log("Tugas response:", response);
       
       if (response.success && response.data) {
-        const transformedTugas = response.data.map(item => ({
-          id: item.id_tugas,
-          judul: item.judul,
-          deskripsi: item.deskripsi || "-",
-          deadline: item.deadline,
-          bobot: item.bobot || 0,
-          status: item.status || (new Date(item.deadline) < new Date() ? "closed" : "active"),
-          created_at: item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
-          submissions: item.submissions || [],
-          total_submissions: item.total_submissions || 0,
-          submitted_count: item.submitted_count || 0,
-          pending_review: item.pending_review || 0,
-          file_tugas: item.file_tugas,
-          file_url: getFileUrl(item.file_tugas),
-          file_link: item.file_link,
-          link_type: item.link_type
-        }));
+        const transformedTugas = response.data.map(item => {
+          let fileUrls = [];
+          let filePreviewUrls = [];
+          let fileDownloadUrls = [];
+          let fileNames = [];
+          
+          if (item.file_urls && Array.isArray(item.file_urls)) {
+            fileUrls = item.file_urls.map(url => getBackendUrl(url));
+            filePreviewUrls = item.file_urls.map(url => {
+              const cleanPath = url.replace(/^\/storage\//, '');
+              return `${API_BASE_URL}/api/storage/preview/${cleanPath}`;
+            });
+            fileDownloadUrls = item.file_urls.map(url => {
+              const cleanPath = url.replace(/^\/storage\//, '');
+              return `${API_BASE_URL}/api/storage/download/${cleanPath}`;
+            });
+            fileNames = item.file_urls.map(url => url.split('/').pop() || 'File');
+          } else if (item.file_tugas) {
+            let filePath = item.file_tugas;
+            if (typeof filePath === 'string') {
+              try {
+                const parsed = JSON.parse(filePath);
+                if (Array.isArray(parsed)) {
+                  fileUrls = parsed.map(p => getBackendUrl(`/storage/${p}`));
+                  filePreviewUrls = parsed.map(p => `${API_BASE_URL}/api/storage/preview/${p}`);
+                  fileDownloadUrls = parsed.map(p => `${API_BASE_URL}/api/storage/download/${p}`);
+                  fileNames = parsed.map(p => p.split('/').pop() || 'File');
+                } else {
+                  fileUrls = [getBackendUrl(`/storage/${filePath}`)];
+                  filePreviewUrls = [`${API_BASE_URL}/api/storage/preview/${filePath}`];
+                  fileDownloadUrls = [`${API_BASE_URL}/api/storage/download/${filePath}`];
+                  fileNames = [filePath.split('/').pop() || 'File'];
+                }
+              } catch {
+                fileUrls = [getBackendUrl(`/storage/${filePath}`)];
+                filePreviewUrls = [`${API_BASE_URL}/api/storage/preview/${filePath}`];
+                fileDownloadUrls = [`${API_BASE_URL}/api/storage/download/${filePath}`];
+                fileNames = [filePath.split('/').pop() || 'File'];
+              }
+            }
+          }
+          
+          let links = [];
+          if (item.file_links && Array.isArray(item.file_links) && item.file_links.length > 0) {
+            links = item.file_links;
+          } else if (item.file_link) {
+            if (typeof item.file_link === 'string') {
+              try {
+                const parsed = JSON.parse(item.file_link);
+                links = Array.isArray(parsed) ? parsed : [item.file_link];
+              } catch {
+                links = [item.file_link];
+              }
+            } else {
+              links = [item.file_link];
+            }
+          }
+          
+          const isActive = isTugasActive(item.deadline);
+          
+          return {
+            id: item.id_tugas,
+            judul: item.judul,
+            deskripsi: item.deskripsi || "-",
+            deadline: item.deadline,
+            bobot: item.bobot || 0,
+            status: isActive ? "active" : "expired",
+            created_at: item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
+            submissions: item.submissions || [],
+            total_submissions: item.total_submissions || 0,
+            submitted_count: item.submitted_count || 0,
+            pending_review: item.pending_review || 0,
+            file_urls: fileUrls,
+            file_preview_urls: filePreviewUrls,
+            file_download_urls: fileDownloadUrls,
+            file_names: fileNames,
+            file_links: links,
+          };
+        });
         setTugas(transformedTugas);
         setFilteredTugas(transformedTugas);
       } else {
@@ -117,9 +304,11 @@ function DaftarTugas() {
     fetchTugas();
   }, []);
 
+  // Apply all filters
   useEffect(() => {
     let filtered = [...tugas];
     
+    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(t => 
         t.judul.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -127,31 +316,47 @@ function DaftarTugas() {
       );
     }
     
+    // Status filter (aktif/selesai berdasarkan deadline)
     if (filterStatus !== "all") {
       filtered = filtered.filter(t => t.status === filterStatus);
     }
     
+    // Deadline filter (urgent, upcoming, passed)
     if (filterDeadline !== "all") {
-      const today = new Date();
+      const now = new Date();
       const threeDaysLater = new Date();
-      threeDaysLater.setDate(today.getDate() + 3);
+      threeDaysLater.setDate(now.getDate() + 3);
       
       filtered = filtered.filter(t => {
-        const deadline = new Date(t.deadline);
+        const deadline = parseDeadline(t.deadline);
+        if (!deadline) return false;
+        
         if (filterDeadline === "urgent") {
-          return deadline <= threeDaysLater && deadline >= today;
-        } else if (filterDeadline === "passed") {
-          return deadline < today;
+          // Deadline dalam 3 hari ke depan dan belum lewat
+          return deadline <= threeDaysLater && deadline >= now;
         } else if (filterDeadline === "upcoming") {
+          // Deadline lebih dari 3 hari ke depan
           return deadline > threeDaysLater;
+        } else if (filterDeadline === "passed") {
+          // Deadline sudah lewat
+          return deadline < now;
         }
         return true;
       });
     }
     
+    // Validation filter (perlu review / sudah semua)
+    if (filterValidation !== "all") {
+      if (filterValidation === "need_review") {
+        filtered = filtered.filter(t => needsReview(t));
+      } else if (filterValidation === "all_reviewed") {
+        filtered = filtered.filter(t => !needsReview(t) && t.submitted_count > 0);
+      }
+    }
+    
     setFilteredTugas(filtered);
     setCurrentPage(1);
-  }, [searchTerm, filterStatus, filterDeadline, tugas]);
+  }, [searchTerm, filterStatus, filterDeadline, filterValidation, tugas]);
 
   const handleDelete = async () => {
     if (!selectedTugas) return;
@@ -165,12 +370,13 @@ function DaftarTugas() {
         setTugas(newTugas);
         setShowDeleteModal(false);
         setSelectedTugas(null);
+        showToast("Tugas berhasil dihapus", "success");
       } else {
-        alert("Gagal menghapus tugas: " + (response.message || "Terjadi kesalahan"));
+        showToast("Gagal menghapus tugas: " + (response.message || "Terjadi kesalahan"), "error");
       }
     } catch (error) {
       console.error("Error deleting tugas:", error);
-      alert("Gagal menghapus tugas");
+      showToast("Gagal menghapus tugas", "error");
     } finally {
       setDeleting(false);
     }
@@ -180,53 +386,36 @@ function DaftarTugas() {
     setSendingReminder(true);
     try {
       const response = await api.sendTugasReminder();
+      
       if (response.success) {
-        alert("Pengingat berhasil dikirim ke semua peserta yang belum mengumpulkan");
+        const sentCount = response.sent_count || 0;
+        
+        if (sentCount > 0) {
+          showToast(`Pengingat berhasil dikirim ke ${sentCount} peserta`, "success");
+        } else {
+          showToast("Semua peserta sudah mengumpulkan tugas", "info");
+        }
       } else {
-        alert("Gagal mengirim pengingat: " + (response.message || "Terjadi kesalahan"));
+        showToast("Gagal mengirim pengingat: " + (response.message || "Terjadi kesalahan"), "error");
       }
     } catch (error) {
       console.error("Error sending reminder:", error);
-      alert("Gagal mengirim pengingat");
+      showToast("Gagal mengirim pengingat", "error");
     } finally {
       setSendingReminder(false);
-      setShowReminderModal(false);
     }
   };
 
-  const copyToClipboard = async (text, tugasId) => {
+  const copyToClipboard = async (text, id) => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopySuccess(tugasId);
+      setCopySuccess(id);
       setTimeout(() => setCopySuccess(null), 2000);
+      showToast("Link berhasil disalin", "success");
     } catch (err) {
       console.error("Failed to copy:", err);
-      alert("Gagal menyalin link");
+      showToast("Gagal menyalin link", "error");
     }
-  };
-
-  const openPreview = (fileUrl, fileName) => {
-    const ext = fileName?.split('.').pop()?.toLowerCase() || '';
-    let fileType = '';
-    
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) {
-      fileType = 'image';
-    } else if (ext === 'pdf') {
-      fileType = 'pdf';
-    } else if (['doc', 'docx'].includes(ext)) {
-      fileType = 'word';
-    } else if (['xls', 'xlsx'].includes(ext)) {
-      fileType = 'excel';
-    } else if (['ppt', 'pptx'].includes(ext)) {
-      fileType = 'powerpoint';
-    } else {
-      fileType = 'other';
-    }
-    
-    setPreviewFileUrl(fileUrl);
-    setPreviewFileName(fileName || 'File');
-    setPreviewFileType(fileType);
-    setShowPreviewModal(true);
   };
 
   const getFileIcon = (fileName) => {
@@ -278,16 +467,55 @@ function DaftarTugas() {
   };
 
   const getDeadlineStatus = (deadline) => {
-    const today = new Date();
-    const deadlineDate = new Date(deadline);
-    const diffDays = Math.ceil((deadlineDate - today) / (1000 * 60 * 60 * 24));
+    const now = new Date();
+    const deadlineDate = parseDeadline(deadline);
     
-    if (diffDays < 0) {
-      return { bg: "bg-gradient-to-r from-rose-500/20 to-red-500/20", text: "text-rose-600", label: "Terlewat", icon: X };
-    } else if (diffDays <= 3) {
-      return { bg: "bg-gradient-to-r from-teal-500/20 to-blue-500/20", text: "text-teal-600", label: `${diffDays} hari lagi`, icon: AlertCircle };
+    if (!deadlineDate) {
+      return {
+        bg: "bg-gradient-to-r from-slate-500/10 to-slate-600/10",
+        text: "text-slate-500",
+        label: "Invalid",
+        icon: Calendar
+      };
     }
-    return { bg: "bg-gradient-to-r from-slate-500/10 to-slate-600/10", text: "text-slate-500", label: `${diffDays} hari`, icon: Calendar };
+    
+    const diffMs = deadlineDate - now;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffMs < 0) {
+      return {
+        bg: "bg-gradient-to-r from-rose-500/20 to-red-500/20",
+        text: "text-rose-600",
+        label: "Terlewat",
+        icon: X
+      };
+    }
+    
+    if (diffHours < 24) {
+      return {
+        bg: "bg-gradient-to-r from-amber-500/20 to-orange-500/20",
+        text: "text-orange-600",
+        label: `${diffHours} jam lagi`,
+        icon: AlertCircle
+      };
+    }
+    
+    if (diffDays <= 3) {
+      return {
+        bg: "bg-gradient-to-r from-teal-500/20 to-blue-500/20",
+        text: "text-teal-600",
+        label: `${diffDays} hari lagi`,
+        icon: AlertCircle
+      };
+    }
+    
+    return {
+      bg: "bg-gradient-to-r from-slate-500/10 to-slate-600/10",
+      text: "text-slate-500",
+      label: `${diffDays} hari lagi`,
+      icon: Calendar
+    };
   };
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -295,14 +523,8 @@ function DaftarTugas() {
   const currentItems = filteredTugas.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredTugas.length / itemsPerPage);
 
-  const totalPending = tugas.reduce((acc, t) => {
-    return acc + (t.pending_review || 0);
-  }, 0);
-
-  const totalSubmitted = tugas.reduce((acc, t) => {
-    return acc + (t.submitted_count || 0);
-  }, 0);
-
+  const totalPending = tugas.reduce((acc, t) => acc + (t.pending_review || 0), 0);
+  const totalSubmitted = tugas.reduce((acc, t) => acc + (t.submitted_count || 0), 0);
   const totalActiveTugas = tugas.filter(t => t.status === "active").length;
 
   if (loading) {
@@ -319,6 +541,22 @@ function DaftarTugas() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20">
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className="fixed top-5 right-5 z-[9999] animate-in slide-in-from-top-2 fade-in duration-300">
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border ${
+            toast.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" :
+            toast.type === "error" ? "bg-red-50 border-red-200 text-red-800" :
+            "bg-blue-50 border-blue-200 text-blue-800"
+          }`}>
+            {toast.type === "success" && <CheckCircle size="18" />}
+            {toast.type === "error" && <AlertCircle size="18" />}
+            {toast.type === "info" && <Bell size="18" />}
+            <span className="text-sm font-medium">{toast.message}</span>
+          </div>
+        </div>
+      )}
+
       {/* Background Decoration */}
       <div className="fixed inset-0 opacity-[0.03] pointer-events-none">
         <div className="absolute top-0 left-0 w-96 h-96 bg-teal-500 rounded-full blur-3xl"></div>
@@ -336,26 +574,30 @@ function DaftarTugas() {
               <div className="flex items-center gap-3 mb-2">
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl blur-md opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
-                  <div className="relative w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg transform group-hover:scale-105 transition-transform duration-300">
+                  <div className="relative w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
                     <ClipboardList className="w-6 h-6 text-white" />
                   </div>
                 </div>
                 <div>
                   <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 via-teal-800 to-blue-800 bg-clip-text text-transparent">
-                    Task Management
+                    Daftar Tugas
                   </h1>
                   <p className="text-sm text-slate-500 mt-0.5">Buat, kelola, dan evaluasi tugas peserta bimbingan</p>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <button onClick={() => setShowReminderModal(true)} className="relative group overflow-hidden px-5 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm hover:shadow-md">
-                <span className="relative z-10 flex items-center gap-2"><Bell size="14" />Kirim Pengingat</span>
+              <button 
+                onClick={handleSendReminder} 
+                disabled={sendingReminder}
+                className="relative group overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2"
+              >
+                {sendingReminder ? <Loader2 size="14" className="animate-spin" /> : <Bell size="14" />}
+                {sendingReminder ? "Mengirim..." : "Kirim Pengingat"}
               </button>
               <Link to="/mentor/add-tugas">
-                <button className="relative group overflow-hidden px-6 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-sm font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300">
+                <button className="relative group overflow-hidden px-6 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:text-teal-600 transition-all duration-300 shadow-sm hover:shadow-md">
                   <span className="relative z-10 flex items-center gap-2"><Plus size="14" />Buat Tugas</span>
-                  <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                 </button>
               </Link>
             </div>
@@ -364,40 +606,85 @@ function DaftarTugas() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-2">
-            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-5"><div className="flex items-center justify-between mb-3"><p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Total Tugas</p><div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500/20 to-blue-500/20 flex items-center justify-center group-hover:scale-110"><ClipboardList size="20" className="text-teal-600" /></div></div><p className="text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">{tugas.length}</p><p className="text-[11px] text-slate-400 mt-1">Seluruh tugas</p></div>
+          <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-lg transition-all duration-300">
+            <div className="relative p-5"><div className="flex items-center justify-between mb-3"><p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Total Tugas</p><div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500/20 to-blue-500/20 flex items-center justify-center"><ClipboardList size="20" className="text-teal-600" /></div></div><p className="text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">{tugas.length}</p><p className="text-[11px] text-slate-400 mt-1">Seluruh tugas</p></div>
           </div>
-          <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-2">
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-5"><div className="flex items-center justify-between mb-3"><p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Tugas Aktif</p><div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center group-hover:scale-110"><CheckCircle size="20" className="text-emerald-600" /></div></div><p className="text-4xl font-bold text-emerald-600">{totalActiveTugas}</p><p className="text-[11px] text-slate-400 mt-1">Sedang berjalan</p></div>
+          <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-lg transition-all duration-300">
+            <div className="relative p-5"><div className="flex items-center justify-between mb-3"><p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Tugas Aktif</p><div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center"><CheckCircle size="20" className="text-emerald-600" /></div></div><p className="text-4xl font-bold text-emerald-600">{totalActiveTugas}</p><p className="text-[11px] text-slate-400 mt-1">Belum deadline</p></div>
           </div>
-          <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-2">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-5"><div className="flex items-center justify-between mb-3"><p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Terkumpul</p><div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center group-hover:scale-110"><FileText size="20" className="text-blue-600" /></div></div><p className="text-4xl font-bold text-blue-600">{totalSubmitted}</p><p className="text-[11px] text-slate-400 mt-1">Tugas dikumpulkan</p></div>
+          <div className="relative group overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-lg transition-all duration-300">
+            <div className="relative p-5"><div className="flex items-center justify-between mb-3"><p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Terkumpul</p><div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center"><FileText size="20" className="text-blue-600" /></div></div><p className="text-4xl font-bold text-blue-600">{totalSubmitted}</p><p className="text-[11px] text-slate-400 mt-1">Tugas dikumpulkan</p></div>
           </div>
-          <div className="relative group overflow-hidden bg-gradient-to-br from-teal-500 to-blue-600 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-2">
-            <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative p-5"><div className="flex items-center justify-between mb-3"><p className="text-xs text-white/80 font-medium uppercase tracking-wider">Menunggu Review</p><div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm group-hover:scale-110"><Clock size="20" className="text-white" /></div></div><p className="text-4xl font-bold text-white">{totalPending}</p><p className="text-[11px] text-white/70 mt-1">Perlu dinilai</p></div>
+          <div className="relative group overflow-hidden bg-gradient-to-br from-teal-500 to-blue-600 rounded-2xl shadow-lg transition-all duration-300">
+            <div className="relative p-5"><div className="flex items-center justify-between mb-3"><p className="text-xs text-white/80 font-medium uppercase tracking-wider">Menunggu Review</p><div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm"><Clock size="20" className="text-white" /></div></div><p className="text-4xl font-bold text-white">{totalPending}</p><p className="text-[11px] text-white/70 mt-1">Perlu dinilai</p></div>
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/30"></div>
           </div>
         </div>
 
-        {/* Filter Bar */}
+        {/* Filter Bar - LENGKAP dengan semua filter */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-100 p-5 mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
-            <div className="relative flex-1 max-w-md group"><div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Search className="h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" /></div><input type="text" placeholder="Cari tugas..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-11 pr-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200" /></div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
-                <button onClick={() => setSelectedFilter("all")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${selectedFilter === "all" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>Semua</button>
-                <button onClick={() => setSelectedFilter("active")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${selectedFilter === "active" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>Aktif</button>
-                <button onClick={() => setSelectedFilter("closed")} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${selectedFilter === "closed" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}>Selesai</button>
+            {/* Search */}
+            <div className="relative flex-1 max-w-md group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
               </div>
-              <select value={filterDeadline} onChange={(e) => setFilterDeadline(e.target.value)} className="px-4 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-teal-400 cursor-pointer">
+              <input 
+                type="text" 
+                placeholder="Cari tugas..." 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
+                className="block w-full pl-11 pr-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all duration-200" 
+              />
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Filter Status - Aktif/Selesai */}
+              <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
+                <button 
+                  onClick={() => setFilterStatus("all")} 
+                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${filterStatus === "all" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Semua
+                </button>
+                <button 
+                  onClick={() => setFilterStatus("active")} 
+                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${filterStatus === "active" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Aktif
+                </button>
+                <button 
+                  onClick={() => setFilterStatus("expired")} 
+                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${filterStatus === "expired" ? "bg-white shadow-md text-teal-600" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Selesai
+                </button>
+              </div>
+              
+              {/* Filter Deadline - Mendesak/Mendatang/Terlewat */}
+              <select 
+                value={filterDeadline} 
+                onChange={(e) => setFilterDeadline(e.target.value)} 
+                className="px-4 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-teal-400 cursor-pointer"
+              >
                 <option value="all">Semua Deadline</option>
                 <option value="urgent">Mendesak (&lt; 3 hari)</option>
-                <option value="upcoming">Mendatang</option>
+                <option value="upcoming">Mendatang (&gt; 3 hari)</option>
                 <option value="passed">Terlewat</option>
+              </select>
+              
+              {/* Separator */}
+              <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
+              
+              {/* Filter Validasi - Dropdown untuk Perlu Review / Sudah Dinilai */}
+              <select 
+                value={filterValidation} 
+                onChange={(e) => setFilterValidation(e.target.value)} 
+                className="px-4 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-teal-400 cursor-pointer"
+              >
+                <option value="all">Semua Validasi</option>
+                <option value="need_review">⚠️ Perlu Review ({tugas.filter(t => (t.pending_review || 0) > 0).length})</option>
+                <option value="all_reviewed">✓ Sudah Dinilai Semua</option>
               </select>
             </div>
           </div>
@@ -427,125 +714,88 @@ function DaftarTugas() {
             const submittedCount = item.submitted_count || 0;
             const pendingReview = item.pending_review || 0;
             const isHovered = hoveredCard === item.id;
-            const hasFile = item.file_url && item.file_tugas;
-            const hasLink = item.file_link;
+            const hasFiles = item.file_urls && item.file_urls.length > 0;
+            const hasLinks = item.file_links && item.file_links.length > 0;
             
             return (
-              <div key={item.id} className="group relative bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100 overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1" onMouseEnter={() => setHoveredCard(item.id)} onMouseLeave={() => setHoveredCard(null)} style={{ borderLeftColor: isHovered ? '#14b8a6' : '#e2e8f0', borderLeftWidth: '4px' }}>
+              <div key={item.id} className="group relative bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-100 overflow-hidden transition-all duration-300 hover:shadow-xl" onMouseEnter={() => setHoveredCard(item.id)} onMouseLeave={() => setHoveredCard(null)} style={{ borderLeftColor: isHovered ? '#14b8a6' : '#e2e8f0', borderLeftWidth: '4px' }}>
                 
                 <div className="relative p-6">
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
                     <div className="flex-1">
                       <div className="flex flex-wrap items-center gap-3 mb-3">
                         <h3 className="font-bold text-slate-800 text-xl transition-colors duration-300">{item.judul}</h3>
-                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${status.bg} ${status.text} border ${status.border} shadow-sm`}><StatusIcon size="10" /><span className="text-[10px] font-semibold">{status.label}</span></div>
-                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${deadlineStatus.bg} ${deadlineStatus.text} border shadow-sm`}><DeadlineIcon size="10" /><span className="text-[10px] font-semibold">{deadlineStatus.label}</span></div>
+                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${status.bg} ${status.text} border ${status.border} shadow-sm`}>
+                          <StatusIcon size="10" />
+                          <span className="text-[10px] font-semibold">{status.label}</span>
+                        </div>
+                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${deadlineStatus.bg} ${deadlineStatus.text} border shadow-sm`}>
+                          <DeadlineIcon size="10" />
+                          <span className="text-[10px] font-semibold">{deadlineStatus.label}</span>
+                        </div>
+                        {pendingReview > 0 && (
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 shadow-sm">
+                            <AlertCircle size="10" />
+                            <span className="text-[10px] font-semibold">{pendingReview} perlu review</span>
+                          </div>
+                        )}
                       </div>
                       <p className="text-sm text-slate-500 mb-4 leading-relaxed line-clamp-2">{item.deskripsi}</p>
                       
-                      {/* Materi Tugas: File Upload atau Link */}
-                      {(hasFile || hasLink) && (
-                        <div className="mb-4 p-3 bg-gradient-to-r from-slate-50 to-white rounded-xl border border-slate-200">
-                          {hasFile && (
-                            <div className="flex flex-wrap items-center gap-3">
-                              {getFileIcon(item.file_tugas)}
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-slate-700 truncate max-w-[200px] md:max-w-[300px]">
-                                  {item.file_tugas?.split('/').pop() || 'File Tugas'}
-                                </p>
-                                <p className="text-[10px] text-slate-400">File tugas tersedia</p>
+                      {/* Materi Tugas: FILE dan LINK sections */}
+                      {(hasFiles || hasLinks) && (
+                        <div className="mb-4 space-y-3">
+                          {hasFiles && item.file_urls.map((fileUrl, fileIndex) => {
+                            const fileName = item.file_names[fileIndex] || `File ${fileIndex + 1}`;
+                            const previewUrl = item.file_preview_urls[fileIndex];
+                            const downloadUrl = item.file_download_urls[fileIndex];
+                            const isPreviewableFile = isPreviewable(fileName);
+                            
+                            return (
+                              <div key={`file-${fileIndex}`} className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
+                                <div className="flex items-center gap-3">
+                                  {getFileIcon(fileName)}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-slate-700 truncate">{fileName}</p>
+                                    <p className="text-xs text-slate-400">File tugas</p>
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    {isPreviewableFile && (
+                                      <button onClick={() => openPreview(previewUrl, fileName)} className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white transition-all duration-200" title="Preview"><Eye size={16} /></button>
+                                    )}
+                                    <button onClick={() => handleDownload(downloadUrl, fileName)} className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-500 hover:text-white transition-all duration-200" title="Download"><Download size={16} /></button>
+                                    <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-all duration-200" title="Buka di tab baru"><ExternalLink size={16} /></a>
+                                  </div>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                {isPreviewable(item.file_tugas) && (
-                                  <button
-                                    onClick={() => openPreview(item.file_url, item.file_tugas?.split('/').pop() || 'File Tugas')}
-                                    className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white transition-all duration-200"
-                                    title="Preview"
-                                  >
-                                    <Eye size="16" />
-                                  </button>
-                                )}
-                                <a 
-                                  href={item.file_url} 
-                                  download
-                                  className="p-2 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-500 hover:text-white transition-all duration-200"
-                                  title="Download"
-                                >
-                                  <Download size="16" />
-                                </a>
-                                <a 
-                                  href={item.file_url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition-all duration-200"
-                                  title="Buka di tab baru"
-                                >
-                                  <ExternalLink size="16" />
-                                </a>
-                              </div>
-                            </div>
-                          )}
+                            );
+                          })}
                           
-                          {hasLink && (
-                            <div className="flex flex-wrap items-center gap-3">
-                              {getLinkIcon(item.file_link)}
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-slate-700 truncate max-w-[250px] md:max-w-[450px]">
-                                  {item.file_link}
-                                </p>
-                                <p className="text-[10px] text-indigo-500">Link tugas eksternal - Klik tombol di samping untuk membuka</p>
-                              </div>
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                <a 
-                                  href={item.file_link} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-500 hover:text-white transition-all duration-200"
-                                  title="Buka link"
-                                >
-                                  <ExternalLink size="16" />
-                                </a>
-                                <button
-                                  onClick={() => copyToClipboard(item.file_link, item.id)}
-                                  className="p-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white transition-all duration-200 relative"
-                                  title="Salin link"
-                                >
-                                  <Copy size="16" />
-                                  {copySuccess === item.id && (
-                                    <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                                      Tersalin!
-                                    </span>
-                                  )}
-                                </button>
+                          {hasLinks && item.file_links.map((link, linkIndex) => (
+                            <div key={`link-${linkIndex}`} className="p-3 bg-indigo-50 rounded-xl border border-indigo-100 shadow-sm">
+                              <div className="flex items-center gap-3">
+                                {getLinkIcon(link)}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm text-slate-700 truncate">{link}</p>
+                                  <p className="text-xs text-indigo-500">Link materi / referensi</p>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <a href={link} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg bg-white text-indigo-600 hover:bg-indigo-500 hover:text-white transition-all duration-200" title="Buka link"><ExternalLink size={16} /></a>
+                                  <button onClick={() => copyToClipboard(link, `${item.id}-link-${linkIndex}`)} className="p-2 rounded-lg bg-white text-slate-600 hover:bg-teal-500 hover:text-white transition-all duration-200 relative" title="Salin link">
+                                    <Copy size={16} />
+                                    {copySuccess === `${item.id}-link-${linkIndex}` && (<span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10">Tersalin!</span>)}
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                          )}
+                          ))}
                         </div>
                       )}
                       
                       <div className="flex flex-wrap items-center gap-6 text-xs">
-                        <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-lg bg-slate-100"><Calendar size="12" className="text-slate-500" /></div>
-                          <div><p className="text-[10px] text-slate-400">Deadline</p><span className="text-slate-700 font-medium text-xs">{item.deadline}</span></div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-lg bg-teal-50"><Award size="12" className="text-teal-600" /></div>
-                          <div>
-                            <p className="text-[10px] text-slate-400">Bobot</p>
-                            <span className="text-teal-600 font-semibold text-xs">{item.bobot}%</span>
-                            <p className="text-[8px] text-slate-400">(% dari nilai akhir)</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-lg bg-blue-50"><Users size="12" className="text-blue-600" /></div>
-                          <div><p className="text-[10px] text-slate-400">Pengumpulan</p><span className="text-blue-600 font-semibold text-xs">{submittedCount}/{totalSubmissions}</span></div>
-                        </div>
-                        {pendingReview > 0 && (
-                          <div className="flex items-center gap-2">
-                            <div className="p-1.5 rounded-lg bg-teal-50"><AlertCircle size="12" className="text-teal-600" /></div>
-                            <div><p className="text-[10px] text-slate-400">Review</p><span className="text-teal-600 font-semibold text-xs">{pendingReview} perlu direview</span></div>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2"><div className="p-1.5 rounded-lg bg-slate-100"><Calendar size="12" className="text-slate-500" /></div><div><p className="text-[10px] text-slate-400">Deadline</p><span className="text-slate-700 font-medium text-xs">{item.deadline?.split(' ')[0]}</span></div></div>
+                        <div className="flex items-center gap-2"><div className="p-1.5 rounded-lg bg-teal-50"><Award size="12" className="text-teal-600" /></div><div><p className="text-[10px] text-slate-400">Bobot</p><span className="text-teal-600 font-semibold text-xs">{item.bobot}%</span></div></div>
+                        <div className="flex items-center gap-2"><div className="p-1.5 rounded-lg bg-blue-50"><Users size="12" className="text-blue-600" /></div><div><p className="text-[10px] text-slate-400">Pengumpulan</p><span className="text-blue-600 font-semibold text-xs">{submittedCount}/{totalSubmissions}</span></div></div>
                       </div>
                     </div>
                     
@@ -553,18 +803,16 @@ function DaftarTugas() {
                       <Link to={`/mentor/validasi-tugas/${item.id}`}>
                         <button className="relative overflow-hidden px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl text-xs font-semibold text-white shadow-md hover:shadow-xl transition-all duration-300 group/btn">
                           <span className="relative z-10 flex items-center gap-1.5"><Eye size="14" />Validasi</span>
-                          <div className="absolute inset-0 bg-gradient-to-r from-teal-600 to-blue-600 transform translate-y-full group-hover/btn:translate-y-0 transition-transform duration-300"></div>
                         </button>
                       </Link>
                       <Link to={`/mentor/edit-tugas/${item.id}`}>
-                        <button className="p-2.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white transition-all duration-200 hover:scale-105 transform"><Edit size="16" /></button>
+                        <button className="p-2.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-teal-500 hover:text-white transition-all duration-200"><Edit size="16" /></button>
                       </Link>
-                      <button onClick={() => { setSelectedTugas(item); setShowDeleteModal(true); }} className="p-2.5 rounded-xl bg-slate-100 text-rose-600 hover:bg-rose-500 hover:text-white transition-all duration-200 hover:scale-105 transform"><Trash2 size="16" /></button>
+                      <button onClick={() => { setSelectedTugas(item); setShowDeleteModal(true); }} className="p-2.5 rounded-xl bg-slate-100 text-rose-600 hover:bg-rose-500 hover:text-white transition-all duration-200"><Trash2 size="16" /></button>
                     </div>
                   </div>
                 </div>
                 
-                {/* Submission Preview */}
                 <div className="border-t border-slate-100 bg-gradient-to-r from-slate-50/80 to-white px-6 py-4">
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between flex-wrap gap-3">
@@ -572,18 +820,11 @@ function DaftarTugas() {
                       <div className="flex flex-wrap gap-3">
                         {item.submissions?.slice(0, 5).map((sub, idx) => {
                           const statusColor = getSubmissionStatusColor(sub.status, !!sub.submitted_at);
-                          return (
-                            <div key={idx} className="flex items-center gap-2 group/sub bg-slate-50 px-2 py-1 rounded-lg hover:bg-slate-100 transition-all duration-200">
-                              <div className={`w-2.5 h-2.5 rounded-full ${statusColor.bg} ring-2 ${statusColor.ring}`}></div>
-                              <span className={`text-[11px] font-medium transition-colors ${statusColor.text}`}>{sub.peserta_nama}</span>
-                              {sub.status === "revisi" && (<MessageSquare size="10" className="text-purple-600" />)}
-                            </div>
-                          );
+                          return (<div key={idx} className="flex items-center gap-2 group/sub bg-slate-50 px-2 py-1 rounded-lg hover:bg-slate-100 transition-all duration-200"><div className={`w-2.5 h-2.5 rounded-full ${statusColor.bg} ring-2 ${statusColor.ring}`}></div><span className={`text-[11px] font-medium transition-colors ${statusColor.text}`}>{sub.peserta_nama}</span>{sub.status === "revisi" && (<MessageSquare size="10" className="text-purple-600" />)}</div>);
                         })}
                         {item.submissions?.length > 5 && (<span className="text-[10px] text-slate-400 font-medium">+{item.submissions.length - 5} lainnya</span>)}
                       </div>
                     </div>
-                    {/* Keterangan Warna */}
                     <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-slate-100/50">
                       <p className="text-[9px] text-slate-500 font-medium">Keterangan:</p>
                       <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-200 ring-1 ring-emerald-300"></div><span className="text-[9px] text-slate-600">Selesai</span></div>
@@ -629,102 +870,10 @@ function DaftarTugas() {
         <div className="mt-8 bg-gradient-to-r from-teal-50/90 via-blue-50/90 to-transparent backdrop-blur-sm rounded-2xl p-5 border border-teal-100 shadow-md">
           <div className="flex items-start gap-3">
             <div className="relative"><div className="absolute inset-0 bg-teal-500 rounded-xl blur-md opacity-30"></div><div className="relative p-2 bg-white rounded-xl shadow-md"><Shield size="16" className="text-teal-500" /></div></div>
-            <div className="flex-1"><p className="text-sm font-semibold text-teal-800">Informasi Penting</p><p className="text-xs text-teal-700 mt-1 leading-relaxed">Tugas yang sudah melewati deadline akan ditandai <span className="font-semibold text-rose-600">"Terlewat"</span>. Segera lakukan validasi pada tugas yang sudah dikumpulkan untuk memberikan feedback kepada peserta.</p></div>
+            <div className="flex-1"><p className="text-sm font-semibold text-teal-800">Informasi Penting</p><p className="text-xs text-teal-700 mt-1 leading-relaxed">Gunakan filter <span className="font-semibold">"Perlu Review"</span> untuk melihat tugas yang memiliki pengumpulan peserta yang belum dinilai. Gunakan filter deadline untuk memprioritaskan tugas yang mendekati batas waktu.</p></div>
           </div>
         </div>
       </div>
-
-      {/* Preview Modal */}
-      {showPreviewModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={() => setShowPreviewModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-teal-100">
-                  <Eye size="18" className="text-teal-600" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-800">Preview File: <span className="text-teal-600">{previewFileName}</span></h3>
-              </div>
-              <button
-                onClick={() => setShowPreviewModal(false)}
-                className="p-2 rounded-lg hover:bg-slate-100 transition-all duration-200"
-              >
-                <X size="20" className="text-slate-500" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-4 bg-slate-50">
-              {previewFileUrl && previewFileType === 'pdf' && (
-                <iframe
-                  src={`${previewFileUrl}#toolbar=1&navpanes=1&scrollbar=1`}
-                  className="w-full h-[70vh] rounded-xl"
-                  title="PDF Preview"
-                />
-              )}
-              {previewFileUrl && previewFileType === 'image' && (
-                <img
-                  src={previewFileUrl}
-                  alt={previewFileName}
-                  className="max-w-full max-h-[70vh] mx-auto object-contain rounded-xl"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = 'https://placehold.co/600x400?text=Gambar+Tidak+Dapat+Dimuat';
-                  }}
-                />
-              )}
-              {previewFileUrl && (previewFileType === 'word' || previewFileType === 'excel' || previewFileType === 'powerpoint') && (
-                <div className="text-center py-12">
-                  <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
-                    {previewFileType === 'word' && <FileText size="40" className="text-blue-600" />}
-                    {previewFileType === 'excel' && <FileText size="40" className="text-green-600" />}
-                    {previewFileType === 'powerpoint' && <FileText size="40" className="text-orange-600" />}
-                  </div>
-                  <p className="text-slate-600 mb-4">File {previewFileType === 'word' ? 'Word' : previewFileType === 'excel' ? 'Excel' : 'PowerPoint'} tidak dapat dipreview langsung.</p>
-                  <a
-                    href={previewFileUrl}
-                    download
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-xl transition-all duration-200"
-                  >
-                    <Download size="18" />
-                    Download File
-                  </a>
-                </div>
-              )}
-              {previewFileUrl && previewFileType === 'other' && (
-                <div className="text-center py-12">
-                  <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
-                    <FileArchive size="40" className="text-slate-500" />
-                  </div>
-                  <p className="text-slate-600 mb-4">File ini tidak dapat dipreview.</p>
-                  <a
-                    href={previewFileUrl}
-                    download
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-xl transition-all duration-200"
-                  >
-                    <Download size="18" />
-                    Download File
-                  </a>
-                </div>
-              )}
-            </div>
-            <div className="flex justify-end gap-3 p-4 border-t border-slate-200 bg-gradient-to-r from-slate-50 to-white">
-              <button
-                onClick={() => setShowPreviewModal(false)}
-                className="px-5 py-2.5 border-2 border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-all duration-200"
-              >
-                Tutup
-              </button>
-              <a
-                href={previewFileUrl}
-                download
-                className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-xl transition-all duration-200 flex items-center gap-2"
-              >
-                <Download size="18" />
-                Download File
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Delete Modal */}
       {showDeleteModal && (
@@ -737,16 +886,29 @@ function DaftarTugas() {
         </div>
       )}
 
-      {/* Reminder Modal */}
-      {showReminderModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50" onClick={() => setShowReminderModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4"><div className="flex items-center gap-3"><div className="p-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-blue-600 shadow-lg"><Bell size="18" className="text-white" /></div><h3 className="text-xl font-bold text-slate-800">Kirim Pengingat</h3></div><button onClick={() => setShowReminderModal(false)} className="p-1.5 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200"><X size="18" /></button></div>
-            <p className="text-slate-600 mb-4">Kirim pengingat ke semua peserta yang belum mengumpulkan tugas?</p>
-            <div className="bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl p-4 mb-6 border border-teal-200"><div className="flex items-start gap-3"><div className="p-1.5 rounded-lg bg-white shadow-sm"><Send size="12" className="text-teal-500" /></div><div><p className="text-xs text-teal-800 font-medium">Pengingat akan dikirim ke peserta yang memiliki tugas belum dikumpulkan atau belum direview via email dan notifikasi dashboard.</p></div></div></div>
-            <div className="flex gap-3"><button onClick={() => setShowReminderModal(false)} className="flex-1 px-4 py-2.5 border-2 border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50">Batal</button><button onClick={handleSendReminder} disabled={sendingReminder} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2">{sendingReminder ? <Loader2 size="14" className="animate-spin" /> : <Send size="14" />}{sendingReminder ? "Mengirim..." : "Kirim"}</button></div>
+      {/* Preview Modal */}
+      {showPreviewModal && previewFileUrl && ReactDOM.createPortal(
+        <div id="preview-container" className="fixed inset-0 z-[999999] bg-[#0f172a] flex flex-col">
+          <div className="h-20 shrink-0 px-6 flex items-center justify-between border-b border-white/10 bg-[#0f172a]">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center"><Eye size="22" className="text-white" /></div>
+              <div className="min-w-0"><h2 className="text-white font-bold text-lg truncate">Preview File</h2><p className="text-white/60 text-sm truncate">{previewFileName}</p></div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={toggleFullscreen} className="w-12 h-12 rounded-2xl bg-white/10 hover:bg-white/20 transition flex items-center justify-center">{isFullscreen ? <Minimize2 size={20} className="text-white" /> : <Maximize2 size={20} className="text-white" />}</button>
+              <button onClick={() => handleDownload(previewFileUrl, previewFileName)} className="px-5 h-12 rounded-2xl bg-gradient-to-r from-teal-500 to-blue-600 text-white font-semibold flex items-center gap-2 hover:shadow-lg"><Download size={18} /> Download</button>
+              <button onClick={closePreview} className="w-12 h-12 rounded-2xl bg-white/10 hover:bg-red-500/20 transition flex items-center justify-center"><X size={22} className="text-white" /></button>
+            </div>
           </div>
-        </div>
+          <div className="flex-1 overflow-hidden bg-[#111827]">
+            <div className="w-full h-full">
+              {previewFileType === 'pdf' && <iframe src={previewFileUrl} className="w-full h-full border-0 bg-white" title="PDF Preview" />}
+              {previewFileType === 'image' && (<div className="w-full h-full flex items-center justify-center bg-black"><img src={previewFileUrl} alt={previewFileName} className="max-w-full max-h-full object-contain" /></div>)}
+              {previewFileType === 'other' && (<div className="w-full h-full flex items-center justify-center"><div className="text-center max-w-md"><div className="w-24 h-24 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center"><FileText size="40" className="text-amber-600" /></div><p className="text-white/80 mb-4">File tidak dapat dipreview langsung di browser.</p><button onClick={() => handleDownload(previewFileUrl, previewFileName)} className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold"><Download size="18" /> Download File</button></div></div>)}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

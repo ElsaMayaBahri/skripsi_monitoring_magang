@@ -60,7 +60,97 @@ class QuizController extends Controller
     }
 
     /**
-     * Get all quiz results for dashboard - FIXED with correct column names
+     * Get all jawaban kuis with user details
+     * GET /api/jawaban-kuis/all
+     */
+    public function getAllJawabanKuis()
+    {
+        try {
+            if (!Schema::hasTable('jawaban_kuis')) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'message' => 'Tabel jawaban_kuis belum ada'
+                ]);
+            }
+
+            $jawaban = DB::table('jawaban_kuis as jk')
+                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id_user')
+                ->leftJoin('pesertas as p', 'u.id_user', '=', 'p.id_user')
+                ->leftJoin('divisis as d', 'p.id_divisi', '=', 'd.id_divisi')
+                ->select(
+                    'jk.id_user',
+                    'u.nama as user_name',
+                    'u.email as user_email',
+                    'd.nama_divisi as divisi',
+                    'jk.id_kuis',
+                    'jk.skor',
+                    'jk.attempt',
+                    'jk.created_at'
+                )
+                ->orderBy('jk.created_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $jawaban,
+                'total' => $jawaban->count()
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error getAllJawabanKuis: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get jawaban kuis by user ID
+     * GET /api/jawaban-kuis/user/{userId}
+     */
+    public function getJawabanKuisByUser($userId)
+    {
+        try {
+            if (!Schema::hasTable('jawaban_kuis')) {
+                return response()->json([
+                    'success' => true,
+                    'data' => []
+                ]);
+            }
+
+            $jawaban = DB::table('jawaban_kuis as jk')
+                ->leftJoin('kuis as k', 'jk.id_kuis', '=', 'k.id_kuis')
+                ->select(
+                    'jk.id_user',
+                    'jk.id_kuis',
+                    'k.level as quiz_level',
+                    'k.judul_kuis as quiz_title',
+                    'k.passing as passing_score',
+                    'jk.skor',
+                    'jk.attempt',
+                    'jk.created_at'
+                )
+                ->where('jk.id_user', $userId)
+                ->orderBy('jk.created_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $jawaban
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error getJawabanKuisByUser: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get learning progress per user based on completed levels
+     * Returns detailed results for COO dashboard
      */
     public function getAllResults()
     {
@@ -74,32 +164,23 @@ class QuizController extends Controller
                 ]);
             }
 
-            // Cek apakah ada data di jawaban_kuis
-            $checkData = DB::table('jawaban_kuis')->count();
-            Log::info('Jumlah data jawaban_kuis: ' . $checkData);
-
-            if ($checkData == 0) {
-                return response()->json([
-                    'success' => true,
-                    'data' => [],
-                    'message' => 'Belum ada data jawaban kuis'
-                ]);
-            }
-
-            // FIXED: Gunakan 'id' bukan 'id_user', dan 'name' bukan 'nama'
+            // Ambil semua data jawaban kuis dengan detail user dan kuis
             $results = DB::table('jawaban_kuis as jk')
-                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id')  // FIX: u.id (bukan id_user)
+                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id_user')
+                ->leftJoin('pesertas as p', 'u.id_user', '=', 'p.id_user')
+                ->leftJoin('divisis as d', 'p.id_divisi', '=', 'd.id_divisi')
                 ->leftJoin('kuis as k', 'jk.id_kuis', '=', 'k.id_kuis')
                 ->select(
-                    'jk.id_jawaban',
                     'jk.id_user',
-                    'u.name as user_name',  // FIX: u.name (bukan u.nama)
-                    'u.divisi as user_divisi',
-                    'jk.id_kuis',
+                    'u.nama as user_name',
+                    'u.email as user_email',
+                    'd.nama_divisi as user_divisi',
+                    'k.id_kuis',
                     'k.judul_kuis as quiz_title',
-                    'k.divisi as quiz_divisi',
-                    'jk.skor',
-                    'jk.jawaban',
+                    'k.level as quiz_level',
+                    'k.passing as passing_score',
+                    'jk.skor as score',
+                    'jk.attempt',
                     'jk.created_at'
                 )
                 ->orderBy('jk.created_at', 'desc')
@@ -107,73 +188,121 @@ class QuizController extends Controller
 
             Log::info('Hasil query jawaban_kuis: ' . $results->count() . ' records');
 
-            // Jika ada data, format hasilnya
-            if ($results->isNotEmpty()) {
-                // Kelompokkan berdasarkan user dan quiz untuk menghitung rata-rata
-                $groupedResults = [];
-
-                foreach ($results as $item) {
-                    $key = $item->id_user . '_' . $item->id_kuis;
-
-                    if (!isset($groupedResults[$key])) {
-                        $groupedResults[$key] = [
-                            'user_id' => $item->id_user,
-                            'user_name' => $item->user_name ?? 'Pengguna',
-                            'quiz_id' => $item->id_kuis,
-                            'quiz_title' => $item->quiz_title ?? 'Kuis',
-                            'divisi' => $item->user_divisi ?? $item->quiz_divisi ?? 'Umum',
-                            'total_score' => 0,
-                            'count' => 0,
-                            'answers' => []
-                        ];
-                    }
-
-                    $groupedResults[$key]['total_score'] += $item->skor;
-                    $groupedResults[$key]['count']++;
-                    $groupedResults[$key]['answers'][] = [
-                        'jawaban' => $item->jawaban,
-                        'skor' => $item->skor
-                    ];
-                }
-
-                // Format hasil akhir
-                $formattedResults = [];
-                foreach ($groupedResults as $group) {
-                    $formattedResults[] = [
-                        'user_id' => $group['user_id'],
-                        'user_name' => $group['user_name'],
-                        'quiz_id' => $group['quiz_id'],
-                        'quiz_title' => $group['quiz_title'],
-                        'divisi' => $group['divisi'],
-                        'score' => $group['count'] > 0 ? round($group['total_score'] / $group['count'], 2) : 0,
-                        'total_answers' => $group['count'],
-                        'created_at' => now()
-                    ];
-                }
-
+            if ($results->isEmpty()) {
                 return response()->json([
                     'success' => true,
-                    'data' => $formattedResults,
-                    'total' => count($formattedResults),
-                    'raw_count' => $results->count()
+                    'data' => [],
+                    'message' => 'Belum ada data jawaban kuis'
                 ]);
             }
 
+            // Kelompokkan berdasarkan user untuk mendapatkan semua detail
+            $userResults = [];
+            foreach ($results as $item) {
+                $userId = $item->id_user;
+                
+                if (!isset($userResults[$userId])) {
+                    $userResults[$userId] = [
+                        'user_id' => $userId,
+                        'user_name' => $item->user_name ?? 'Pengguna',
+                        'user_email' => $item->user_email ?? '',
+                        'divisi' => $item->user_divisi ?? 'Umum',
+                        'quizzes' => []
+                    ];
+                }
+                
+                // Tambahkan detail kuis
+                $userResults[$userId]['quizzes'][] = [
+                    'id_kuis' => $item->id_kuis,
+                    'quiz_title' => $item->quiz_title ?? 'Kuis',
+                    'level' => (int) ($item->quiz_level ?? 1),
+                    'score' => (int) ($item->score ?? 0),
+                    'passing_score' => (int) ($item->passing_score ?? 75),
+                    'status' => ((int) ($item->score ?? 0) >= (int) ($item->passing_score ?? 75)) ? 'lulus' : 'tidak_lulus',
+                    'attempt' => $item->attempt ?? 1,
+                    'tanggal' => $item->created_at
+                ];
+            }
+
+            // Untuk setiap user, urutkan quizzes berdasarkan level dan ambil skor tertinggi per level
+            $formattedResults = [];
+            foreach ($userResults as $user) {
+                // Kelompokkan per level dan ambil skor tertinggi
+                $bestPerLevel = [];
+                foreach ($user['quizzes'] as $quiz) {
+                    $level = $quiz['level'];
+                    if (!isset($bestPerLevel[$level]) || $quiz['score'] > $bestPerLevel[$level]['score']) {
+                        $bestPerLevel[$level] = $quiz;
+                    }
+                }
+                
+                // Hitung level tertinggi yang lulus
+                $highestPassedLevel = 0;
+                $allQuizzes = [];
+                foreach ($bestPerLevel as $level => $quiz) {
+                    $allQuizzes[] = $quiz;
+                    if ($quiz['status'] === 'lulus' && $level > $highestPassedLevel) {
+                        $highestPassedLevel = $level;
+                    }
+                }
+                
+                // Urutkan berdasarkan level
+                usort($allQuizzes, function($a, $b) {
+                    return $a['level'] - $b['level'];
+                });
+                
+                $completedLevels = $highestPassedLevel;
+                $totalLevels = 4; // Level 1,2,3,4
+                $currentLevel = $highestPassedLevel + 1;
+                $isLocked = ($currentLevel > 1 && !$this->isLevelUnlocked($allQuizzes, $currentLevel - 1));
+                
+                $formattedResults[] = [
+                    'id' => $user['user_id'],
+                    'user_id' => $user['user_id'],
+                    'user_name' => $user['user_name'],
+                    'user_email' => $user['user_email'],
+                    'user_divisi' => $user['divisi'],
+                    'quizzes' => $allQuizzes,
+                    'completed_levels' => $completedLevels,
+                    'total_levels' => $totalLevels,
+                    'current_level' => $currentLevel,
+                    'is_locked' => $isLocked,
+                    'progress' => round(($completedLevels / $totalLevels) * 100),
+                    'status' => $completedLevels >= $totalLevels ? 'Completed' : ($completedLevels > 0 ? 'In Progress' : 'Not Started')
+                ];
+            }
+
+            Log::info('User progress results: ' . count($formattedResults));
+
             return response()->json([
                 'success' => true,
-                'data' => [],
-                'message' => 'Tidak ada data jawaban kuis ditemukan'
+                'data' => $formattedResults,
+                'total_users' => count($formattedResults)
             ]);
+
         } catch (\Exception $e) {
             Log::error('Error getAllResults: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
 
             return response()->json([
-                'success' => true,
+                'success' => false,
                 'data' => [],
                 'message' => 'Error: ' . $e->getMessage()
-            ]);
+            ], 500);
         }
+    }
+
+    /**
+     * Helper function to check if a level is unlocked
+     */
+    private function isLevelUnlocked($quizzes, $level)
+    {
+        foreach ($quizzes as $quiz) {
+            if ($quiz['level'] == $level && $quiz['status'] === 'lulus') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -189,14 +318,16 @@ class QuizController extends Controller
                 ]);
             }
 
-            // FIX: Gunakan 'id' bukan 'id_user', dan 'name' bukan 'nama'
             $results = DB::table('jawaban_kuis as jk')
-                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id')  // FIX: u.id
+                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id_user')
+                ->leftJoin('pesertas as p', 'u.id_user', '=', 'p.id_user')
+                ->leftJoin('divisis as d', 'p.id_divisi', '=', 'd.id_divisi')
                 ->select(
                     'jk.id_user',
-                    'u.name as user_name',  // FIX: u.name
-                    'u.divisi',
+                    'u.nama as user_name',
+                    'd.nama_divisi as divisi',
                     'jk.skor as score',
+                    'jk.attempt',
                     'jk.created_at'
                 )
                 ->where('jk.id_kuis', $quizId)
@@ -216,6 +347,63 @@ class QuizController extends Controller
         }
     }
 
+    /**
+     * Export all quiz results to Excel
+     */
+    public function exportResults()
+    {
+        try {
+            $results = DB::table('jawaban_kuis as jk')
+                ->leftJoin('users as u', 'jk.id_user', '=', 'u.id_user')
+                ->leftJoin('pesertas as p', 'u.id_user', '=', 'p.id_user')
+                ->leftJoin('divisis as d', 'p.id_divisi', '=', 'd.id_divisi')
+                ->leftJoin('kuis as k', 'jk.id_kuis', '=', 'k.id_kuis')
+                ->select(
+                    'u.nama as nama_peserta',
+                    'u.email as email',
+                    'd.nama_divisi as divisi',
+                    'k.judul_kuis as judul_kuis',
+                    'k.level as level',
+                    'jk.skor as nilai',
+                    'k.passing as passing_score',
+                    'jk.attempt as attempt',
+                    'jk.created_at as tanggal'
+                )
+                ->orderBy('jk.created_at', 'desc')
+                ->get();
+
+            // Convert to array for export
+            $exportArray = $results->map(function ($item) {
+                return [
+                    'Nama Peserta' => $item->nama_peserta,
+                    'Email' => $item->email,
+                    'Divisi' => $item->divisi ?? '-',
+                    'Judul Kuis' => $item->judul_kuis,
+                    'Level' => $item->level,
+                    'Nilai' => $item->nilai,
+                    'Passing Score' => $item->passing_score,
+                    'Status' => ($item->nilai >= $item->passing_score) ? 'Lulus' : 'Tidak Lulus',
+                    'Attempt' => $item->attempt,
+                    'Tanggal' => $item->tanggal
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $exportArray,
+                'count' => $exportArray->count()
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error exportResults: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // ========== METHOD LAINNYA (store, show, update, destroy, dll) SAMA PERSIS DENGAN FILE ANDA ==========
+    
     public function store(Request $request)
     {
         try {
@@ -269,22 +457,17 @@ class QuizController extends Controller
                 'tanggal_selesai' => $request->tanggal_selesai,
             ]);
 
-            // ============================================================
-            // SINKRONISASI SOAL KE TABEL soal_kuis
-            // ============================================================
             if ($request->questions && count($request->questions) > 0) {
                 foreach ($request->questions as $index => $q) {
                     $options = $q['options'] ?? [];
 
-                    // Pastikan minimal ada 4 opsi
                     $opsiA = $options[0] ?? '';
                     $opsiB = $options[1] ?? '';
                     $opsiC = $options[2] ?? '';
                     $opsiD = $options[3] ?? '';
 
-                    // correct: 0=A, 1=B, 2=C, 3=D
                     $correctIndex = $q['correct'] ?? 0;
-                    $jawabanBenar = chr(65 + (int)$correctIndex); // 0→A, 1→B, 2→C, 3→D
+                    $jawabanBenar = chr(65 + (int)$correctIndex);
 
                     \App\Models\SoalKuis::create([
                         'id_kuis'       => $quiz->id_kuis,
@@ -299,7 +482,6 @@ class QuizController extends Controller
                     Log::info("Soal ke-" . ($index + 1) . " berhasil disimpan ke soal_kuis untuk kuis id: " . $quiz->id_kuis);
                 }
             }
-            // ============================================================
 
             return response()->json([
                 'success' => true,
@@ -396,9 +578,6 @@ class QuizController extends Controller
                 $quiz->questions  = $request->questions;
                 $quiz->total_soal = count($request->questions);
 
-                // ============================================================
-                // SINKRONISASI SOAL KE soal_kuis — hapus lama, simpan baru
-                // ============================================================
                 \App\Models\SoalKuis::where('id_kuis', $quiz->id_kuis)->delete();
 
                 foreach ($request->questions as $index => $q) {
@@ -424,7 +603,6 @@ class QuizController extends Controller
 
                     Log::info("Soal ke-" . ($index + 1) . " berhasil diupdate di soal_kuis untuk kuis id: " . $quiz->id_kuis);
                 }
-                // ============================================================
             }
 
             $quiz->save();
@@ -497,9 +675,6 @@ class QuizController extends Controller
         }
     }
 
-    /**
-     * Import quiz from CSV file
-     */
     public function import(Request $request)
     {
         try {
@@ -553,7 +728,7 @@ class QuizController extends Controller
             $failed = 0;
             $errors = [];
 
-            $expectedHeaders = ['judul_kuis', 'deskripsi', 'divisi', 'durasi', 'passing', 'questions', 'tanggal_mulai', 'tanggal_selesai'];
+            $expectedHeaders = ['judul_kuis', 'deskripsi', 'divisi', 'durasi', 'passing', 'level', 'questions', 'tanggal_mulai', 'tanggal_selesai'];
             $missingHeaders = array_diff($expectedHeaders, $headers);
             if (!empty($missingHeaders)) {
                 return response()->json([
@@ -582,6 +757,11 @@ class QuizController extends Controller
                         $failed++;
                         $errors[] = "Baris " . ($rowIndex + 2) . ": Judul kuis wajib diisi";
                         continue;
+                    }
+
+                    $level = isset($data['level']) ? intval($data['level']) : 1;
+                    if ($level < 1 || $level > 3) {
+                        $level = 1;
                     }
 
                     $questions = null;
@@ -616,6 +796,7 @@ class QuizController extends Controller
                         'divisi' => $data['divisi'] ?? null,
                         'durasi' => intval($data['durasi'] ?? 30),
                         'passing' => intval($data['passing'] ?? 75),
+                        'level' => $level,
                         'status' => 'aktif',
                         'total_soal' => $questions ? count($questions) : 0,
                         'questions' => $questions,
@@ -649,82 +830,75 @@ class QuizController extends Controller
         }
     }
 
-    /**
-     * Download template CSV untuk import
-     */
     public function downloadTemplate()
     {
         try {
-            $headers = ['judul_kuis', 'deskripsi', 'divisi', 'durasi', 'passing', 'questions', 'tanggal_mulai', 'tanggal_selesai'];
+            $filename = "template_kuis.csv";
 
-            $exampleQuestion = json_encode([
-                [
-                    'text' => 'Apa ibu kota Indonesia?',
-                    'options' => ['Jakarta', 'Surabaya', 'Bandung', 'Medan'],
-                    'correct' => 0
-                ]
-            ]);
-
-            $exampleData = [
-                'Quiz Programming Dasar',
-                'Quiz untuk menguji dasar pemrograman',
-                'ENGINEERING',
-                '30',
-                '75',
-                $exampleQuestion,
-                date('Y-m-d'),
-                date('Y-m-d', strtotime('+30 days'))
-            ];
-
-            $callback = function () use ($headers, $exampleData) {
-                $handle = fopen('php://output', 'w');
-
-                fputs($handle, "\xEF\xBB\xBF");
-
-                fputcsv($handle, $headers);
-
-                fputcsv($handle, $exampleData);
-
-                $multipleQuestions = json_encode([
-                    [
-                        'text' => 'Apa kepanjangan dari HTML?',
-                        'options' => ['Hyper Text Markup Language', 'High Text Markup Language', 'Hyper Transfer Markup Language', 'Home Tool Markup Language'],
-                        'correct' => 0
-                    ],
-                    [
-                        'text' => 'Apa fungsi CSS?',
-                        'options' => ['Styling halaman web', 'Database connection', 'Server side scripting', 'Backend logic'],
-                        'correct' => 0
-                    ]
-                ]);
-
-                $secondExample = [
-                    'Quiz Web Development',
-                    'Quiz untuk menguji pengetahuan web development',
-                    'ENGINEERING',
-                    '45',
-                    '70',
-                    $multipleQuestions,
-                    date('Y-m-d'),
-                    date('Y-m-d', strtotime('+30 days'))
-                ];
-
-                fputcsv($handle, $secondExample);
-
-                fclose($handle);
-            };
-
-            return response()->stream($callback, 200, [
-                'Content-Type' => 'text/csv',
-                'Content-Disposition' => 'attachment; filename="template_kuis.csv"',
+            $headers = [
+                'Content-Type' => 'text/csv; charset=utf-8',
+                'Content-Disposition' => "attachment; filename={$filename}",
                 'Cache-Control' => 'private, max-age=0, must-revalidate',
                 'Pragma' => 'public',
-            ]);
+            ];
+
+            $callback = function () {
+                $file = fopen('php://output', 'w');
+                
+                fputs($file, "\xEF\xBB\xBF");
+
+                fputcsv($file, [
+                    'judul_kuis',
+                    'deskripsi',
+                    'divisi',
+                    'durasi',
+                    'passing',
+                    'level',
+                    'questions',
+                    'tanggal_mulai',
+                    'tanggal_selesai'
+                ]);
+
+                $questions = json_encode([
+                    [
+                        "text" => "Apa ibu kota Indonesia?",
+                        "options" => ["Jakarta", "Surabaya", "Bandung", "Medan"],
+                        "correct" => 0
+                    ],
+                    [
+                        "text" => "Apa kepanjangan dari HTML?",
+                        "options" => [
+                            "Hyper Trainer Marking Language",
+                            "Hyper Text Markup Language",
+                            "High Text Machine Language",
+                            "Hyper Tool Multi Language"
+                        ],
+                        "correct" => 1
+                    ]
+                ], JSON_UNESCAPED_UNICODE);
+
+                fputcsv($file, [
+                    'Quiz Programming Dasar',
+                    'Quiz untuk menguji dasar pemrograman (2 soal contoh)',
+                    'ENGINEERING',
+                    30,
+                    75,
+                    1,
+                    $questions,
+                    now()->format('Y-m-d'),
+                    now()->addDays(30)->format('Y-m-d')
+                ]);
+
+                fclose($file);
+            };
+
+            return response()->stream($callback, 200, $headers);
+
         } catch (\Exception $e) {
-            Log::error('Error download template: ' . $e->getMessage());
+            Log::error('Error downloadTemplate: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal membuat template: ' . $e->getMessage()
+                'message' => 'Gagal mendownload template: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -735,9 +909,6 @@ class QuizController extends Controller
             $user = $request->user();
             $userId = $user->id_user ?? $user->id;
 
-            // ============================================================
-            // CEK APAKAH SEMUA MATERI SUDAH DIBACA PESERTA
-            // ============================================================
             $peserta = \App\Models\Peserta::where('id_user', $userId)->first();
 
             $allMateriCompleted = false;
@@ -773,9 +944,6 @@ class QuizController extends Controller
                 $allMateriCompleted = $totalMateri > 0 && $totalMateriSelesai >= $totalMateri;
             }
 
-            // ============================================================
-            // AMBIL KUIS SESUAI DIVISI PESERTA
-            // ============================================================
             $kuisQuery = Kuis::where('status', 'aktif')
                 ->orderBy('level', 'asc')
                 ->orderBy('id_kuis', 'asc');
@@ -790,9 +958,6 @@ class QuizController extends Controller
 
             $kuisList = $kuisQuery->get();
 
-            // ============================================================
-            // FORMAT DATA KUIS + LOGIC LOCK
-            // ============================================================
             $data = $kuisList->map(function ($kuis) use (
                 $userId,
                 $allMateriCompleted,
@@ -815,12 +980,10 @@ class QuizController extends Controller
                 $isLocked = false;
                 $lockedMessage = null;
 
-                // Jika semua materi belum selesai, semua kuis dikunci
                 if (!$allMateriCompleted) {
                     $isLocked = true;
                     $lockedMessage = 'Selesaikan semua materi kompetensi terlebih dahulu sebelum mengerjakan kuis.';
                 } else {
-                    // Jika materi sudah selesai, baru cek aturan kuis bertingkat
                     if ((int) $kuis->level > 1) {
                         $prevKuisQuery = Kuis::where('level', $kuis->level - 1)
                             ->where('status', 'aktif')
@@ -868,12 +1031,9 @@ class QuizController extends Controller
                     'can_start' => !$isLocked,
                     'can_retake' => !$isLocked && !$isPassed && $bestScore !== null,
                     'locked_message' => $lockedMessage,
-
-                    // Progress materi
                     'materi_completed' => $allMateriCompleted,
                     'total_materi' => $totalMateri,
                     'total_materi_selesai' => $totalMateriSelesai,
-
                     'tanggal_mulai' => $kuis->tanggal_mulai,
                     'tanggal_selesai' => $kuis->tanggal_selesai,
                 ];
@@ -885,17 +1045,13 @@ class QuizController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Error getDaftarKuisPeserta: ' . $e->getMessage());
-
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal mengambil daftar kuis: ' . $e->getMessage()
             ], 500);
         }
     }
-    /**
-     * Get list kuis kompetensi untuk peserta (filter by divisi)
-     * GET /api/peserta/kuis-kompetensi
-     */
+    
     public function getKuisForPeserta(Request $request)
     {
         try {
@@ -910,18 +1066,12 @@ class QuizController extends Controller
                 ], 404);
             }
 
-            // Ambil nama divisi dari id_divisi peserta
             $divisiPeserta = null;
 
             if ($peserta->id_divisi) {
                 $divisi = \App\Models\Divisi::find($peserta->id_divisi);
                 $divisiPeserta = $divisi ? $divisi->nama_divisi : null;
-
-                Log::info('Divisi peserta: ' . $divisiPeserta);
             }
-
-            Log::info('id_divisi peserta: ' . $peserta->id_divisi);
-            Log::info('Mencari kuis untuk divisi: ' . $divisiPeserta);
 
             $query = Kuis::where('status', 'aktif')
                 ->where('tanggal_mulai', '<=', now()->toDateString())
@@ -936,9 +1086,6 @@ class QuizController extends Controller
 
             $kuisList = $query->orderBy('created_at', 'desc')->get();
 
-            Log::info('Jumlah kuis ditemukan: ' . $kuisList->count());
-
-            // Cek kuis yang sudah dikerjakan
             $sudahDikerjakan = [];
             if (Schema::hasTable('jawaban_kuis')) {
                 $sudahDikerjakan = DB::table('jawaban_kuis')
@@ -947,7 +1094,6 @@ class QuizController extends Controller
                     ->toArray();
             }
 
-            // Ambil skor terbaik per kuis untuk user ini
             $skorTerbaik = [];
             if (Schema::hasTable('jawaban_kuis')) {
                 $skorData = DB::table('jawaban_kuis')
@@ -960,18 +1106,12 @@ class QuizController extends Controller
                 }
             }
 
-            // Urutkan kuis berdasarkan level
             $kuisList = $kuisList->sortBy('level')->values();
 
             $result = $kuisList->map(function ($kuis) use ($skorTerbaik) {
                 $skor = $skorTerbaik[$kuis->id_kuis] ?? null;
                 $sudah = $skor !== null;
                 $lulus = $skor !== null ? ($skor >= ($kuis->passing ?? 75)) : false;
-
-                // Hitung attempt count
-                $attemptCount = DB::table('jawaban_kuis')
-                    ->where('id_user', $kuis->id_kuis) // akan diisi nanti
-                    ->count();
 
                 return [
                     'id'           => $kuis->id_kuis,
@@ -988,21 +1128,17 @@ class QuizController extends Controller
                     'sudah_dikerjakan' => $sudah,
                     'skor'         => $skor,
                     'lulus'        => $lulus,
-                    // is_locked dihitung setelah map selesai
                 ];
             });
 
-            // Hitung is_locked berdasarkan level
             $resultWithLock = [];
             foreach ($result as $item) {
                 $level = $item['level'];
                 $locked = false;
 
                 if ($level > 1) {
-                    // Cari kuis level sebelumnya
                     $prevKuis = $result->first(fn($k) => $k['level'] === $level - 1);
                     if ($prevKuis) {
-                        // Terkunci jika kuis level sebelumnya belum lulus
                         $locked = !$prevKuis['lulus'];
                     }
                 }
@@ -1015,16 +1151,6 @@ class QuizController extends Controller
                 'success' => true,
                 'data'    => $resultWithLock,
             ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $result,
-                'debug' => [
-                    'id_divisi_peserta' => $peserta->id_divisi,
-                    'nama_divisi_peserta' => $divisiPeserta,
-                    'total_kuis_ditemukan' => $kuisList->count()
-                ]
-            ]);
         } catch (\Exception $e) {
             Log::error('Error getKuisForPeserta: ' . $e->getMessage());
             return response()->json([
@@ -1034,20 +1160,12 @@ class QuizController extends Controller
         }
     }
 
-    /**
-     * Get soal kuis untuk peserta
-     * GET /api/peserta/kuis-kompetensi/{id}/soal
-     */
     public function getSoalForPeserta(Request $request, int $id)
     {
         try {
             $user = $request->user();
             $userId = $user->id_user ?? $user->id;
 
-            // ============================================================
-            // CEK APAKAH SEMUA MATERI SUDAH DIBACA
-            // Ini untuk mencegah peserta membuka kuis langsung dari URL
-            // ============================================================
             $peserta = \App\Models\Peserta::where('id_user', $userId)->first();
 
             if (!$peserta) {
@@ -1073,7 +1191,6 @@ class QuizController extends Controller
             $materiIds = $materiQuery->pluck('id_materi_pelatihan')->toArray();
 
             $totalMateri = count($materiIds);
-
             $totalMateriSelesai = 0;
 
             if ($totalMateri > 0) {
@@ -1093,17 +1210,9 @@ class QuizController extends Controller
                 ], 403);
             }
 
-            // ============================================================
-            // AMBIL DATA KUIS
-            // ============================================================
             $kuis = Kuis::findOrFail($id);
             $levelKuis = (int) ($kuis->level ?? 1);
 
-            // ============================================================
-            // CEK KUNCI KUIS BERDASARKAN LEVEL
-            // Level 2 harus lulus Level 1
-            // Level 3 harus lulus Level 2
-            // ============================================================
             if ($levelKuis > 1) {
                 $prevKuisQuery = Kuis::where('level', $levelKuis - 1)
                     ->where('status', 'aktif')
@@ -1135,9 +1244,6 @@ class QuizController extends Controller
                 }
             }
 
-            // ============================================================
-            // FORMAT SOAL, JANGAN KIRIM JAWABAN BENAR KE FRONTEND
-            // ============================================================
             $questions = $kuis->questions ?? [];
 
             if (is_string($questions)) {
@@ -1169,7 +1275,6 @@ class QuizController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Error getSoalForPeserta: ' . $e->getMessage());
-
             return response()->json([
                 'success' => false,
                 'message' => 'Kuis tidak ditemukan: ' . $e->getMessage()
@@ -1177,10 +1282,6 @@ class QuizController extends Controller
         }
     }
 
-    /**
-     * Submit jawaban kuis peserta + hitung skor di backend
-     * POST /api/peserta/kuis-kompetensi/{id}/submit
-     */
     public function submitKuisPeserta(Request $request, int $id)
     {
         try {
@@ -1247,7 +1348,6 @@ class QuizController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Error submitKuisPeserta: ' . $e->getMessage());
-
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal submit kuis: ' . $e->getMessage()

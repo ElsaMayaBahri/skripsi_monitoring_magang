@@ -7,11 +7,15 @@ use App\Models\User;
 use App\Models\Mentor;
 use App\Models\Divisi;
 use App\Models\Peserta;
+use App\Models\Tugas;
+use App\Models\PengumpulanTugas;
+use App\Models\Presensi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
 
 class MentorController extends Controller
 {
@@ -313,6 +317,87 @@ class MentorController extends Controller
     }
 
     /**
+     * Get mentor profile data (for logged in mentor)
+     * GET /api/mentor/profile
+     */
+    public function profile(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            if (!$user || $user->role !== 'mentor') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akses ditolak. Hanya untuk mentor.'
+                ], 403);
+            }
+
+            // 🔥 PERBAIKAN: Gunakan Eloquent relationship yang sudah ada
+            $mentor = Mentor::with(['user', 'divisi'])
+                ->where('id_user', $user->id_user)
+                ->first();
+
+            if (!$mentor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Data mentor tidak ditemukan'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'nama' => $mentor->user->nama ?? '-',
+                    'email' => $mentor->user->email ?? '-',
+                    'no_telepon' => $mentor->user->no_telepon ?? '-',
+                    'jabatan' => $mentor->jabatan ?? 'Mentor',
+                    'divisi' => $mentor->divisi->nama_divisi ?? '-',
+                    'status_akun' => $mentor->user->status_akun ?? 'aktif',
+                    'foto_profil' => $mentor->user->foto_profil ?? null,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error in mentor profile: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Format periode magang dari tanggal mulai dan selesai
+     */
+    private function formatPeriodeMagang($tanggalMulai, $tanggalSelesai)
+    {
+        if (!$tanggalMulai || !$tanggalSelesai) {
+            return '-';
+        }
+
+        $bulanIndo = [
+            'January' => 'Januari', 'February' => 'Februari', 'March' => 'Maret',
+            'April' => 'April', 'May' => 'Mei', 'June' => 'Juni',
+            'July' => 'Juli', 'August' => 'Agustus', 'September' => 'September',
+            'October' => 'Oktober', 'November' => 'November', 'December' => 'Desember'
+        ];
+
+        $start = new \DateTime($tanggalMulai);
+        $end = new \DateTime($tanggalSelesai);
+        
+        $bulanMulai = $bulanIndo[$start->format('F')] ?? $start->format('F');
+        $tahunMulai = $start->format('Y');
+        $bulanSelesai = $bulanIndo[$end->format('F')] ?? $end->format('F');
+        $tahunSelesai = $end->format('Y');
+        
+        if ($tahunMulai == $tahunSelesai) {
+            return $bulanMulai . ' - ' . $bulanSelesai . ' ' . $tahunMulai;
+        }
+        
+        return $bulanMulai . ' ' . $tahunMulai . ' - ' . $bulanSelesai . ' ' . $tahunSelesai;
+    }
+
+    /**
      * Get list of peserta with filter (search, periode, divisi)
      * GET /api/mentor/peserta-list
      */
@@ -360,16 +445,51 @@ class MentorController extends Controller
                 });
             }
 
-            $pesertas = $query->get()->map(function ($peserta) {
-                $progress = rand(45, 95);
-                $kehadiran = rand(60, 100);
-                $tugasSelesai = rand(5, 15);
-                $totalTugas = 15;
-                $nilaiAkhir = rand(65, 95);
+            // Ambil semua tugas mentor untuk menghitung progress
+            $allTugas = Tugas::where('id_mentor', $mentor->id_mentor)->get();
+            $totalTugasMentor = $allTugas->count();
+
+            $pesertas = $query->get()->map(function ($peserta) use ($totalTugasMentor) {
+                // Hitung progress REAL dari database
+                $pengumpulan = PengumpulanTugas::where('id_peserta', $peserta->id_peserta)->get();
+                
+                // Hitung tugas yang sudah dikumpulkan (tanggal_kumpul tidak NULL)
+                $tugasSelesai = $pengumpulan->filter(function ($item) {
+                    return !is_null($item->tanggal_kumpul);
+                })->count();
+                
+                // Progress = (tugas selesai / total tugas mentor) * 100
+                $progress = $totalTugasMentor > 0 ? round(($tugasSelesai / $totalTugasMentor) * 100) : 0;
+                
+                // Hitung kehadiran REAL dari database
+                $presensiList = Presensi::where('id_peserta', $peserta->id_peserta)->get();
+                $totalPresensi = $presensiList->count();
+                
+                // Hitung kehadiran (status Hadir atau Terlambat)
+                $hadirCount = $presensiList->filter(function ($item) {
+                    return in_array($item->status_kehadiran, ['Hadir', 'Terlambat']);
+                })->count();
+                
+                $kehadiranPersen = $totalPresensi > 0 ? round(($hadirCount / $totalPresensi) * 100) : 0;
+                
+                // Hitung nilai akhir dari rata-rata nilai tugas
+                $nilaiAkhir = 0;
+                $totalNilai = 0;
+                $nilaiCount = 0;
+                foreach ($pengumpulan as $item) {
+                    if ($item->nilai !== null && $item->nilai > 0) {
+                        $totalNilai += $item->nilai;
+                        $nilaiCount++;
+                    }
+                }
+                $nilaiAkhir = $nilaiCount > 0 ? round($totalNilai / $nilaiCount) : 0;
                 
                 $rank = 'silver';
                 if ($nilaiAkhir >= 85) $rank = 'diamond';
                 elseif ($nilaiAkhir >= 70) $rank = 'gold';
+
+                // Format periode magang
+                $periodeMagang = $this->formatPeriodeMagang($peserta->tanggal_mulai, $peserta->tanggal_selesai);
 
                 return [
                     'id' => $peserta->id_peserta,
@@ -379,16 +499,18 @@ class MentorController extends Controller
                     'nama' => optional($peserta->user)->nama ?? '-',
                     'name' => optional($peserta->user)->nama ?? '-',
                     'email' => optional($peserta->user)->email ?? '-',
-                    'periode_magang' => $peserta->tanggal_mulai ? date('Y', strtotime($peserta->tanggal_mulai)) : '-',
+                    'periode_magang' => $periodeMagang,
                     'divisi' => optional($peserta->divisi)->nama_divisi ?? '-',
                     'peserta_divisi' => optional($peserta->divisi)->nama_divisi ?? '-',
                     'status' => $peserta->status_magang ?? 'aktif',
                     'status_magang' => $peserta->status_magang ?? 'aktif',
                     'status_akun' => optional($peserta->user)->status_akun ?? 'non_aktif',
+                    'asal_kampus' => $peserta->asal_kampus ?? '-',
+                    'prodi' => $peserta->prodi ?? '-',
                     'progress' => $progress,
-                    'kehadiran_persen' => $kehadiran,
+                    'kehadiran_persen' => $kehadiranPersen,
                     'tugas_selesai' => $tugasSelesai,
-                    'total_tugas' => $totalTugas,
+                    'total_tugas' => $totalTugasMentor,
                     'nilai_akhir' => $nilaiAkhir,
                     'rank' => $rank
                 ];
@@ -400,6 +522,7 @@ class MentorController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Error in getPesertaList: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan: ' . $e->getMessage()
@@ -589,13 +712,31 @@ class MentorController extends Controller
 
             $totalPeserta = Peserta::where('id_mentor', $mentor->id_mentor)->count();
             
+            $totalTugas = Tugas::where('id_mentor', $mentor->id_mentor)->count();
+            
+            $totalPengumpulan = PengumpulanTugas::whereHas('tugas', function($q) use ($mentor) {
+                $q->where('id_mentor', $mentor->id_mentor);
+            })->count();
+            
+            $allPresensi = Presensi::whereHas('peserta', function($q) use ($mentor) {
+                $q->where('id_mentor', $mentor->id_mentor);
+            })->get();
+            
+            $totalHadir = $allPresensi->filter(function($item) {
+                return in_array($item->status_kehadiran, ['Hadir', 'Terlambat']);
+            })->count();
+            
+            $rataKehadiran = $allPresensi->count() > 0 ? round(($totalHadir / $allPresensi->count()) * 100) : 0;
+            
             return response()->json([
                 'success' => true,
-                'data' => [
-                    'total_peserta' => $totalPeserta,
-                    'total_tugas' => 0,
-                    'total_pengumpulan' => 0,
-                    'rata_rata_kehadiran' => 0
+                'stats' => [
+                    'totalMentees' => $totalPeserta,
+                    'pendingTasks' => 0,
+                    'completedTasks' => 0,
+                    'attendanceRate' => $rataKehadiran,
+                    'totalTasks' => $totalTugas,
+                    'unfinishedTasks' => 0
                 ]
             ]);
         } catch (\Exception $e) {

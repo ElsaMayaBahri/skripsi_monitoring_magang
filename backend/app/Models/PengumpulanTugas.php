@@ -17,6 +17,7 @@ class PengumpulanTugas extends Model
         'id_tugas',
         'id_peserta',
         'file_jawaban',
+        'link_jawaban',  // DITAMBAHKAN - untuk menyimpan link jawaban
         'status',
         'nilai',
         'catatan_mentor',
@@ -56,6 +57,8 @@ class PengumpulanTugas extends Model
             'dinilai' => 'Sedang Dinilai',
             'selesai' => 'Selesai',
             'revisi' => 'Perlu Revisi',
+            'terlambat' => 'Terlambat',  // DITAMBAHKAN
+            'belum_dikumpulkan' => 'Belum Dikumpulkan',  // DITAMBAHKAN
             'pending' => 'Belum Kumpul',
         ];
         
@@ -72,6 +75,8 @@ class PengumpulanTugas extends Model
             'dinilai' => 'info',
             'selesai' => 'success',
             'revisi' => 'danger',
+            'terlambat' => 'danger',  // DITAMBAHKAN
+            'belum_dikumpulkan' => 'secondary',  // DITAMBAHKAN
             'pending' => 'secondary',
         ];
         
@@ -88,6 +93,8 @@ class PengumpulanTugas extends Model
             'dinilai' => 'bg-blue-100 text-blue-800',
             'selesai' => 'bg-emerald-100 text-emerald-800',
             'revisi' => 'bg-purple-100 text-purple-800',
+            'terlambat' => 'bg-red-100 text-red-800',  // DITAMBAHKAN
+            'belum_dikumpulkan' => 'bg-slate-100 text-slate-800',  // DITAMBAHKAN
             'pending' => 'bg-slate-100 text-slate-800',
         ];
         
@@ -100,6 +107,10 @@ class PengumpulanTugas extends Model
     public function getIsTerlambatAttribute()
     {
         if (!$this->tugas) {
+            return false;
+        }
+        
+        if (!$this->tanggal_kumpul) {
             return false;
         }
         
@@ -149,6 +160,14 @@ class PengumpulanTugas extends Model
     }
 
     /**
+     * Cek apakah sudah dikumpulkan
+     */
+    public function getIsSubmittedAttribute()
+    {
+        return !is_null($this->tanggal_kumpul);
+    }
+
+    /**
      * Scope untuk pengumpulan berdasarkan status
      */
     public function scopeByStatus($query, $status)
@@ -189,6 +208,22 @@ class PengumpulanTugas extends Model
     }
 
     /**
+     * Scope untuk pengumpulan yang sudah dikumpulkan (termasuk revisi)
+     */
+    public function scopeSudahDikumpulkan($query)
+    {
+        return $query->whereNotNull('tanggal_kumpul');
+    }
+
+    /**
+     * Scope untuk pengumpulan yang belum dikumpulkan
+     */
+    public function scopeBelumDikumpulkan($query)
+    {
+        return $query->whereNull('tanggal_kumpul');
+    }
+
+    /**
      * Update status menjadi dinilai
      */
     public function setDinilai()
@@ -224,6 +259,14 @@ class PengumpulanTugas extends Model
     }
 
     /**
+     * Update status menjadi terlambat
+     */
+    public function setTerlambat()
+    {
+        $this->update(['status' => 'terlambat']);
+    }
+
+    /**
      * Update nilai dan status
      */
     public function updateNilai($nilai, $catatan = null)
@@ -239,6 +282,20 @@ class PengumpulanTugas extends Model
     }
 
     /**
+     * Reset submission (untuk cancel)
+     */
+    public function resetSubmission()
+    {
+        $this->update([
+            'status' => 'belum_dikumpulkan',
+            'tanggal_kumpul' => null,
+            'file_jawaban' => null,
+            'link_jawaban' => null,
+            'catatan_mentor' => null,
+        ]);
+    }
+
+    /**
      * Mendapatkan nilai dalam huruf (A, B, C, D)
      */
     public function getNilaiHurufAttribute()
@@ -250,5 +307,31 @@ class PengumpulanTugas extends Model
         if ($this->nilai >= 60) return 'C';
         if ($this->nilai >= 50) return 'D';
         return 'E';
+    }
+
+    /**
+     * Mendapatkan informasi submission untuk API response
+     */
+    public function toApiResponse()
+    {
+        return [
+            'id_pengumpulan' => $this->id_pengumpulan,
+            'id_tugas' => $this->id_tugas,
+            'id_peserta' => $this->id_peserta,
+            'status' => $this->status,
+            'status_text' => $this->status_text,
+            'nilai' => $this->nilai,
+            'nilai_huruf' => $this->nilai_huruf,
+            'catatan_mentor' => $this->catatan_mentor,
+            'tanggal_kumpul' => $this->tanggal_kumpul,
+            'tanggal_kumpul_formatted' => $this->tanggal_kumpul_formatted,
+            'file_jawaban' => $this->file_jawaban,
+            'file_url' => $this->file_url,
+            'link_jawaban' => $this->link_jawaban,
+            'is_terlambat' => $this->is_terlambat,
+            'keterlambatan' => $this->keterlambatan,
+            'is_submitted' => $this->is_submitted,
+            'is_dinilai' => $this->is_dinilai,
+        ];
     }
 }

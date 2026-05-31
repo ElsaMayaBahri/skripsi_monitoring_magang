@@ -2,8 +2,8 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import {
-  User, Mail, Phone, MapPin, Calendar, Building, GraduationCap,
-  Shield, Edit2, X, Camera, Briefcase, Clock, CheckCircle,
+  User, Mail, Phone, Calendar, Building, GraduationCap,
+  Shield, Edit2, X, Camera, Briefcase, CheckCircle,
   AlertCircle, Key, Lock, Eye, EyeOff, RefreshCw, Verified
 } from "lucide-react"
 import axios from "../../api/axios"
@@ -18,9 +18,7 @@ function ProfilePeserta() {
   const [isEditing, setIsEditing] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [formData, setFormData] = useState({})
-  const [pesertaFormData, setPesertaFormData] = useState({})
   const [originalData, setOriginalData] = useState({})
-  const [originalPesertaData, setOriginalPesertaData] = useState({})
   const [loading, setLoading] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   const [errorMessage, setErrorMessage] = useState("")
@@ -50,63 +48,54 @@ function ProfilePeserta() {
   const fetchUserData = async () => {
     try {
       const response = await axios.get("/me")
+      console.log("User data response:", response.data)
       
-      if (response.data && response.data.user) {
-        setUser(response.data.user)
+      // 🔥 PERBAIKAN: Sesuaikan dengan struktur response
+      const userData = response.data.user || response.data
+      
+      if (userData) {
+        setUser(userData)
         setFormData({
-          nama: response.data.user.nama || "",
-          email: response.data.user.email || "",
-          no_telepon: response.data.user.no_telepon || "",
-          foto_profil: response.data.user.foto_profil || ""
+          nama: userData.nama || "",
+          email: userData.email || "",
+          no_telepon: userData.no_telepon || "",
+          foto_profil: userData.foto_profil || ""
         })
         setOriginalData({
-          nama: response.data.user.nama || "",
-          email: response.data.user.email || "",
-          no_telepon: response.data.user.no_telepon || "",
-          foto_profil: response.data.user.foto_profil || ""
+          nama: userData.nama || "",
+          email: userData.email || "",
+          no_telepon: userData.no_telepon || "",
+          foto_profil: userData.foto_profil || ""
         })
       }
     } catch (error) {
       console.error("Error fetching user data:", error)
+      console.error("Error response:", error.response?.data)
     }
   }
 
   const fetchPesertaData = async () => {
     try {
       const response = await axios.get("/peserta/profile")
+      console.log("Peserta data response:", response.data)
       
-      if (response.data) {
+      // 🔥 PERBAIKAN: Sesuaikan dengan struktur response
+      if (response.data.success && response.data.data) {
+        setPeserta(response.data.data)
+      } else if (response.data.data) {
+        setPeserta(response.data.data)
+      } else {
         setPeserta(response.data)
-        setPesertaFormData({
-          asal_kampus: response.data.asal_kampus || "",
-          prodi: response.data.prodi || "",
-          tanggal_mulai: response.data.tanggal_mulai || "",
-          tanggal_selesai: response.data.tanggal_selesai || "",
-          divisi_nama: response.data.divisi || "",
-          mentor_nama: response.data.mentor_nama || ""
-        })
-        setOriginalPesertaData({
-          asal_kampus: response.data.asal_kampus || "",
-          prodi: response.data.prodi || "",
-          tanggal_mulai: response.data.tanggal_mulai || "",
-          tanggal_selesai: response.data.tanggal_selesai || "",
-          divisi_nama: response.data.divisi || "",
-          mentor_nama: response.data.mentor_nama || ""
-        })
       }
     } catch (error) {
       console.error("Error fetching peserta data:", error)
+      console.error("Error response:", error.response?.data)
     }
   }
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
-  }
-
-  const handlePesertaInputChange = (e) => {
-    const { name, value } = e.target
-    setPesertaFormData(prev => ({ ...prev, [name]: value }))
   }
 
   const handlePasswordChange = (e) => {
@@ -139,27 +128,38 @@ function ProfilePeserta() {
     reader.onloadend = () => setImagePreview(reader.result)
     reader.readAsDataURL(file)
     setProfileImage(file)
-    await uploadImageDirect(file)
+    await uploadImage(file)
   }
 
-  const uploadImageDirect = async (file) => {
+  const uploadImage = async (file) => {
     setUploadingImage(true)
     try {
       const formDataImg = new FormData()
       formDataImg.append("foto_profil", file)
       
-      const response = await axios.post("/update-profile", formDataImg, {
-        headers: { "Content-Type": "multipart/form-data" }
+      const response = await axios.post("/profile", formDataImg, {
+        headers: { 
+          "Content-Type": "multipart/form-data"
+        }
       })
       
+      console.log("Upload response:", response.data)
+      
       if (response.data.success) {
-        setUser(prev => ({ ...prev, foto_profil: response.data.user.foto_profil }))
-        setFormData(prev => ({ ...prev, foto_profil: response.data.user.foto_profil }))
+        const userData = response.data.user || response.data
+        const photoPath = userData.foto_profil
+        
+        setUser(prev => ({ ...prev, foto_profil: photoPath }))
+        setFormData(prev => ({ ...prev, foto_profil: photoPath }))
+        setOriginalData(prev => ({ ...prev, foto_profil: photoPath }))
         setSuccessMessage("Foto profil berhasil diupdate!")
         setTimeout(() => setSuccessMessage(""), 3000)
         setImagePreview(null)
+        setProfileImage(null)
       }
     } catch (error) {
+      console.error("Upload error:", error)
+      console.error("Error response:", error.response?.data)
       setErrorMessage(error.response?.data?.message || "Gagal upload foto")
       setTimeout(() => setErrorMessage(""), 3000)
     } finally {
@@ -173,19 +173,23 @@ function ProfilePeserta() {
     setErrorMessage("")
 
     try {
-      const userResponse = await axios.post("/update-profile", {
+      const response = await axios.put("/profile", {
         nama: formData.nama,
         no_telepon: formData.no_telepon
       })
 
-      if (userResponse.data.success) {
-        setUser(userResponse.data.user)
+      console.log("Update profile response:", response.data)
+
+      if (response.data.success) {
+        const userData = response.data.user || response.data
+        setUser(userData)
         setOriginalData(formData)
         setIsEditing(false)
         setSuccessMessage("Profil berhasil diperbarui!")
         setTimeout(() => setSuccessMessage(""), 3000)
       }
     } catch (error) {
+      console.error("Update profile error:", error)
       setErrorMessage(error.response?.data?.message || "Gagal memperbarui profil")
       setTimeout(() => setErrorMessage(""), 3000)
     } finally {
@@ -214,6 +218,8 @@ function ProfilePeserta() {
         new_password_confirmation: passwordForm.new_password_confirmation
       })
 
+      console.log("Change password response:", response.data)
+
       if (response.data.success) {
         setSuccessMessage("Password berhasil diubah!")
         setIsChangingPassword(false)
@@ -225,6 +231,7 @@ function ProfilePeserta() {
         setTimeout(() => setSuccessMessage(""), 3000)
       }
     } catch (error) {
+      console.error("Change password error:", error)
       setErrorMessage(error.response?.data?.message || "Gagal mengubah password")
       setTimeout(() => setErrorMessage(""), 3000)
     } finally {
@@ -234,32 +241,30 @@ function ProfilePeserta() {
 
   const handleCancel = () => {
     setFormData(originalData)
-    setPesertaFormData(originalPesertaData)
     setIsEditing(false)
     setProfileImage(null)
     setImagePreview(null)
   }
 
+  const getPhotoUrl = (path) => {
+    if (!path) return null
+    if (path.startsWith("http")) return path
+    const cleanPath = path.replace(/^\/+/, "")
+    return `http://localhost:8000/storage/${cleanPath}`
+  }
+
+  // Gunakan data peserta yang sudah di-fetch
+  const pesertaData = peserta || {}
+
   if (isLoadingData || !user) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="relative">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-teal-500"></div>
           <p className="text-center text-gray-500 mt-4">Memuat data profil...</p>
         </div>
       </div>
     )
-  }
-
-  const getInitials = (name) => {
-    if (!name) return "P"
-    return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
-  }
-
-  const getPhotoUrl = (path) => {
-    if (!path) return null
-    if (path.startsWith('http')) return path
-    return `http://localhost:8000/storage/${path}`
   }
 
   return (
@@ -301,7 +306,7 @@ function ProfilePeserta() {
             <div className="absolute inset-0 bg-black/30"></div>
           </div>
 
-          {/* Profile Info di area biru */}
+          {/* Profile Info */}
           <div className="relative px-6 pb-6">
             <div className="relative -mt-28 mb-4">
               <div className="flex flex-col md:flex-row md:items-end gap-4">
@@ -321,7 +326,9 @@ function ProfilePeserta() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className="text-white text-2xl font-bold">{getInitials(user.nama)}</span>
+                      <span className="text-white text-2xl font-bold">
+                        {user.nama?.charAt(0) || "P"}
+                      </span>
                     )}
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <Camera size={20} className="text-white" />
@@ -361,10 +368,10 @@ function ProfilePeserta() {
                           <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
                           <span className="text-xs font-semibold text-white">{user.status_akun || "Aktif"}</span>
                         </div>
-                        {peserta?.divisi && (
+                        {pesertaData.divisi && (
                           <div className="flex items-center gap-1 px-3 py-1.5 bg-white/10 backdrop-blur-sm rounded-full">
                             <Briefcase size={12} className="text-white" />
-                            <span className="text-xs font-semibold text-white">{peserta.divisi}</span>
+                            <span className="text-xs font-semibold text-white">{pesertaData.divisi}</span>
                           </div>
                         )}
                       </div>
@@ -380,7 +387,7 @@ function ProfilePeserta() {
                         </button>
                         <button 
                           onClick={() => setIsEditing(true)} 
-                          className="flex items-center gap-2 px-4 py-2 bg-white text-blue-700 rounded-xl hover:bg-gray-100 transition-all duration-200 shadow-md font-medium text-sm"
+                          className="flex items-center gap-2 px-4 py-2 bg-white text-teal-700 rounded-xl hover:bg-gray-100 transition-all duration-200 shadow-md font-medium text-sm"
                         >
                           <Edit2 size={14} /> Edit Profil
                         </button>
@@ -449,7 +456,7 @@ function ProfilePeserta() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Konfirmasi Password Baru</label>
                     <input 
-                      type={showConfirmPassword ? "text" : "password"} 
+                      type="password" 
                       name="new_password_confirmation"
                       value={passwordForm.new_password_confirmation}
                       onChange={handlePasswordChange}
@@ -479,7 +486,7 @@ function ProfilePeserta() {
               </div>
             )}
 
-            {/* Informasi Pribadi - DITAMBAH margin top mt-8 */}
+            {/* Informasi Pribadi */}
             {!isChangingPassword && (
               <div className="mt-8">
                 <div className="flex items-center justify-between mb-4">
@@ -498,7 +505,6 @@ function ProfilePeserta() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Data dari tabel users */}
                   <div className="bg-gradient-to-br from-gray-50/50 to-white rounded-lg p-4 border border-gray-100">
                     <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
                       <User size={12} className="text-teal-500" /> Nama Lengkap
@@ -528,51 +534,50 @@ function ProfilePeserta() {
                     )}
                   </div>
 
-                  {/* Data dari tabel pesertas */}
                   <div className="bg-gradient-to-br from-gray-50/50 to-white rounded-lg p-4 border border-gray-100">
                     <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
                       <Building size={12} className="text-teal-500" /> Asal Kampus
                     </label>
-                    <p className="text-gray-800 font-medium text-sm">{peserta?.asal_kampus || "-"}</p>
+                    <p className="text-gray-800 text-sm">{pesertaData.asal_kampus || "-"}</p>
                   </div>
 
                   <div className="bg-gradient-to-br from-gray-50/50 to-white rounded-lg p-4 border border-gray-100">
                     <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
                       <GraduationCap size={12} className="text-teal-500" /> Program Studi
                     </label>
-                    <p className="text-gray-800 text-sm">{peserta?.prodi || "-"}</p>
+                    <p className="text-gray-800 text-sm">{pesertaData.prodi || "-"}</p>
                   </div>
 
                   <div className="bg-gradient-to-br from-gray-50/50 to-white rounded-lg p-4 border border-gray-100">
                     <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
                       <Briefcase size={12} className="text-teal-500" /> Divisi Magang
                     </label>
-                    <p className="text-gray-800 font-medium text-sm">{peserta?.divisi || "-"}</p>
+                    <p className="text-gray-800 font-medium text-sm">{pesertaData.divisi || "-"}</p>
                   </div>
 
                   <div className="bg-gradient-to-br from-gray-50/50 to-white rounded-lg p-4 border border-gray-100">
                     <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
                       <Calendar size={12} className="text-teal-500" /> Tanggal Mulai
                     </label>
-                    <p className="text-gray-800 text-sm">{peserta?.tanggal_mulai ? new Date(peserta.tanggal_mulai).toLocaleDateString('id-ID') : "-"}</p>
+                    <p className="text-gray-800 text-sm">{pesertaData.tanggal_mulai ? new Date(pesertaData.tanggal_mulai).toLocaleDateString('id-ID') : "-"}</p>
                   </div>
 
                   <div className="bg-gradient-to-br from-gray-50/50 to-white rounded-lg p-4 border border-gray-100">
                     <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
                       <Calendar size={12} className="text-teal-500" /> Tanggal Selesai
                     </label>
-                    <p className="text-gray-800 text-sm">{peserta?.tanggal_selesai ? new Date(peserta.tanggal_selesai).toLocaleDateString('id-ID') : "-"}</p>
+                    <p className="text-gray-800 text-sm">{pesertaData.tanggal_selesai ? new Date(pesertaData.tanggal_selesai).toLocaleDateString('id-ID') : "-"}</p>
                   </div>
 
                   <div className="bg-gradient-to-br from-gray-50/50 to-white rounded-lg p-4 border border-gray-100">
                     <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
-                      <User size={12} className="text-teal-500" /> Mentor
+                      <Shield size={12} className="text-teal-500" /> Mentor
                     </label>
                     <div className="flex items-center gap-2">
                       <div className="w-6 h-6 rounded-full bg-gradient-to-br from-teal-100 to-blue-100 flex items-center justify-center">
-                        <Shield size={10} className="text-teal-500" />
+                        <User size={10} className="text-teal-500" />
                       </div>
-                      <p className="text-gray-800 font-medium text-sm">{peserta?.mentor_nama || "-"}</p>
+                      <p className="text-gray-800 font-medium text-sm">{pesertaData.mentor_nama || "-"}</p>
                     </div>
                   </div>
                 </div>

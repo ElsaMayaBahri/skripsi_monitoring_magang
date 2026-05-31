@@ -9,16 +9,23 @@ function NotifikasiBell() {
 
   // Tutup dropdown saat klik di luar
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const handler = (e) => { 
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
     document.addEventListener("mousedown", handler)
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
   const getIkonJudul = (judul = "") => {
+    if (!judul) return "🔔"
     if (judul.includes("Deadline"))  return "⚠️"
     if (judul.includes("Revisi"))    return "🔄"
     if (judul.includes("Disetujui")) return "✅"
     if (judul.includes("Tugas Baru")) return "📋"
+    if (judul.includes("Pengingat")) return "🔔"
+    if (judul.includes("Dikumpulkan")) return "📝"
     if (judul.includes("Kuis"))      return "❗"
     return "🔔"
   }
@@ -29,6 +36,7 @@ function NotifikasiBell() {
       <button
         onClick={() => setOpen(prev => !prev)}
         className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors"
+        aria-label="Notifikasi"
       >
         <Bell size={20} className="text-gray-600" />
         {unreadCount > 0 && (
@@ -52,7 +60,7 @@ function NotifikasiBell() {
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
-                className="flex items-center gap-1 text-[10px] text-teal-600 hover:text-teal-700 font-medium"
+                className="flex items-center gap-1 text-[10px] text-teal-600 hover:text-teal-700 font-medium transition-colors"
               >
                 <CheckCheck size={12} />
                 Tandai semua dibaca
@@ -87,7 +95,7 @@ function NotifikasiBell() {
                     <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">
                       {n.pesan}
                     </p>
-                    <p className="text-[9px] text-gray-400 mt-1">{n.waktu}</p>
+                    <p className="text-[9px] text-gray-400 mt-1">{n.waktu || "Baru saja"}</p>
                   </div>
                   {/* Aksi */}
                   <div className="flex flex-col gap-1 shrink-0">
@@ -116,7 +124,7 @@ function NotifikasiBell() {
           {/* Footer */}
           {notifikasi.length > 0 && (
             <div className="px-4 py-2 border-t border-gray-100 text-center">
-              <a href="/peserta/notifikasi" className="text-[11px] text-teal-600 hover:text-teal-700 font-medium">
+              <a href="/peserta/notifikasi" className="text-[11px] text-teal-600 hover:text-teal-700 font-medium transition-colors">
                 Lihat semua notifikasi →
               </a>
             </div>

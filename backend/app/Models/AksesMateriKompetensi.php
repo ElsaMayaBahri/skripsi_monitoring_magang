@@ -21,11 +21,17 @@ class AksesMateriKompetensi extends Model
         'tanggal_akses' => 'datetime',
     ];
 
+    /**
+     * Relasi ke model Peserta
+     */
     public function peserta(): BelongsTo
     {
         return $this->belongsTo(Peserta::class, 'id_peserta', 'id_peserta');
     }
 
+    /**
+     * Relasi ke model MateriPelatihan
+     */
     public function materiPelatihan(): BelongsTo
     {
         return $this->belongsTo(

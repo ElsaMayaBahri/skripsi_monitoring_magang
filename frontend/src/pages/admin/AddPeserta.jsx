@@ -1,10 +1,9 @@
-// src/pages/admin/AddPeserta.jsx
+// frontend/src/pages/admin/AddPeserta.jsx
 import { useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService"
 import { createPeserta } from "../../api/admin/pesertaService"
 import {
-  ArrowLeft,
   UserPlus,
   Mail,
   Lock,
@@ -20,7 +19,6 @@ import {
   Eye,
   EyeOff,
   Save,
-  Zap,
   CheckCircle,
   AlertTriangle,
   Award,
@@ -28,10 +26,7 @@ import {
   CalendarDays,
   Clock,
   Calendar,
-  TrendingUp,
-  Info,
   Briefcase,
-  Star,
   ThumbsUp,
   CalendarRange
 } from "lucide-react"
@@ -82,7 +77,6 @@ function AddPeserta() {
 
   useEffect(() => {
     fetchDropdownData()
-    // Set default tanggal mulai ke hari ini
     const today = new Date().toISOString().split('T')[0]
     const threeMonthsLater = new Date()
     threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3)
@@ -95,7 +89,6 @@ function AddPeserta() {
     }))
   }, [])
 
-  // Filter mentors based on selected division
   useEffect(() => {
     if (form.id_divisi) {
       const selectedDivisi = divisiList.find(d => (d.id_divisi || d.id) == form.id_divisi)
@@ -139,13 +132,11 @@ function AddPeserta() {
         divisiArray = divisiData.data
       }
 
-      // PERBAIKAN: Hanya masukkan divisi yang berstatus 'aktif'
       const activeDivisi = divisiArray.filter(d => 
         d.status_divisi === 'aktif' || d.status === 'aktif'
       )
       
       setDivisiList(activeDivisi)
-      console.log("=== DIVISI LOADED (ACTIVE ONLY) ===", activeDivisi)
     } catch (error) {
       console.error("Error fetching divisi:", error)
       setDivisiList([])
@@ -447,10 +438,6 @@ function AddPeserta() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-[1200px] mx-auto">
         <div className="mb-6">
-          <button onClick={() => navigate("/admin/users")} className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 mb-3 transition text-sm group">
-            <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
-            Kembali ke Data Pengguna
-          </button>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 rounded-xl shadow-md">
               <UserPlus className="w-4 h-4 text-white" />
@@ -507,47 +494,17 @@ function AddPeserta() {
                     </div>
                   )}
                   {getFieldError('password') && <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1"><AlertTriangle size={10} /> {getFieldError('password')}</p>}
-                  <p className="text-[10px] text-slate-400 mt-1">Password harus mengandung: huruf besar, huruf kecil, angka, dan minimal 8 karakter</p>
                 </div>
                 <div>
-  <label className="block text-xs font-medium text-slate-600 mb-1.5">
-    Konfirmasi Password <span className="text-red-500">*</span>
-  </label>
-  <div className="relative">
-    <Lock size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${getFieldError('password_confirmation') ? 'text-red-400' : 'text-slate-400'}`} />
-    <input 
-      name="password_confirmation" 
-      type={showConfirmPassword ? "text" : "password"} 
-      placeholder="Konfirmasi password" 
-      value={form.password_confirmation} 
-      onChange={handleChange} 
-      onBlur={() => handleBlur('password_confirmation')} 
-      disabled={loading} 
-      className={`w-full pl-9 pr-10 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 transition ${
-        getFieldError('password_confirmation') 
-          ? 'border-red-300 focus:border-red-400 focus:ring-red-500/30 bg-red-50/30' 
-          : form.password_confirmation && isPasswordMatch() 
-            ? 'border-emerald-300 focus:border-emerald-400 focus:ring-emerald-500/30' 
-            : 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-500/30'
-      }`} 
-    />
-    <button 
-  type="button" 
-  onClick={() => setShowConfirmPassword(!showConfirmPassword)} 
-  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
->
-  {showConfirmPassword ? <Eye size={14} /> : <EyeOff size={14} />}
-</button>
-    {form.password_confirmation && isPasswordMatch() && !getFieldError('password_confirmation') && 
-      <CheckCircle size={14} className="absolute right-9 top-1/2 -translate-y-1/2 text-emerald-500" />
-    }
-  </div>
-  {getFieldError('password_confirmation') && 
-    <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1">
-      <AlertTriangle size={10} /> {getFieldError('password_confirmation')}
-    </p>
-  }
-</div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Konfirmasi Password <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <Lock size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${getFieldError('password_confirmation') ? 'text-red-400' : 'text-slate-400'}`} />
+                    <input name="password_confirmation" type={showConfirmPassword ? "text" : "password"} placeholder="Konfirmasi password" value={form.password_confirmation} onChange={handleChange} onBlur={() => handleBlur('password_confirmation')} disabled={loading} className={`w-full pl-9 pr-10 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 transition ${getFieldError('password_confirmation') ? 'border-red-300 focus:border-red-400 focus:ring-red-500/30 bg-red-50/30' : form.password_confirmation && isPasswordMatch() ? 'border-emerald-300 focus:border-emerald-400 focus:ring-emerald-500/30' : 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-500/30'}`} />
+                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">{showConfirmPassword ? <Eye size={14} /> : <EyeOff size={14} />}</button>
+                    {form.password_confirmation && isPasswordMatch() && !getFieldError('password_confirmation') && <CheckCircle size={14} className="absolute right-9 top-1/2 -translate-y-1/2 text-emerald-500" />}
+                  </div>
+                  {getFieldError('password_confirmation') && <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1"><AlertTriangle size={10} /> {getFieldError('password_confirmation')}</p>}
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">Divisi <span className="text-red-500">*</span></label>
                   <div className="relative">
@@ -602,7 +559,6 @@ function AddPeserta() {
                     {form.no_telepon && isPhoneValid() && !getFieldError('no_telepon') && <CheckCircle size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" />}
                   </div>
                   {getFieldError('no_telepon') && <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1"><AlertTriangle size={10} /> {getFieldError('no_telepon')}</p>}
-                  <p className="text-[10px] text-slate-400 mt-1">Hanya angka, 10-15 digit, tanpa 0 di depan</p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">Asal Kampus / Universitas <span className="text-red-500">*</span></label>
@@ -643,18 +599,8 @@ function AddPeserta() {
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">Tanggal Mulai <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <Calendar size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${getFieldError('tanggal_mulai') ? 'text-red-400' : 'text-slate-400'}`} />
-                    <input 
-                      name="tanggal_mulai" 
-                      type="date" 
-                      value={form.tanggal_mulai} 
-                      onChange={handleChange} 
-                      onBlur={() => handleBlur('tanggal_mulai')} 
-                      className={`w-full pl-9 pr-9 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 transition ${getFieldError('tanggal_mulai') ? 'border-red-300 focus:border-red-400 focus:ring-red-500/30 bg-red-50/30' : form.tanggal_mulai && isTanggalMulaiValid() ? 'border-emerald-300 focus:border-emerald-400 focus:ring-emerald-500/30' : 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-500/30'}`} 
-                      disabled={loading} 
-                    />
-                    {form.tanggal_mulai && isTanggalMulaiValid() && !getFieldError('tanggal_mulai') && (
-                      <CheckCircle size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" />
-                    )}
+                    <input name="tanggal_mulai" type="date" value={form.tanggal_mulai} onChange={handleChange} onBlur={() => handleBlur('tanggal_mulai')} className={`w-full pl-9 pr-9 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 transition ${getFieldError('tanggal_mulai') ? 'border-red-300 focus:border-red-400 focus:ring-red-500/30 bg-red-50/30' : form.tanggal_mulai && isTanggalMulaiValid() ? 'border-emerald-300 focus:border-emerald-400 focus:ring-emerald-500/30' : 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-500/30'}`} disabled={loading} />
+                    {form.tanggal_mulai && isTanggalMulaiValid() && !getFieldError('tanggal_mulai') && <CheckCircle size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" />}
                   </div>
                   {getFieldError('tanggal_mulai') && <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1"><AlertTriangle size={10} /> {getFieldError('tanggal_mulai')}</p>}
                 </div>
@@ -662,19 +608,8 @@ function AddPeserta() {
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">Tanggal Selesai <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <Calendar size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${getFieldError('tanggal_selesai') ? 'text-red-400' : 'text-slate-400'}`} />
-                    <input 
-                      name="tanggal_selesai" 
-                      type="date" 
-                      value={form.tanggal_selesai} 
-                      onChange={handleChange} 
-                      onBlur={() => handleBlur('tanggal_selesai')} 
-                      min={form.tanggal_mulai} 
-                      className={`w-full pl-9 pr-9 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 transition ${getFieldError('tanggal_selesai') ? 'border-red-300 focus:border-red-400 focus:ring-red-500/30 bg-red-50/30' : form.tanggal_selesai && isTanggalSelesaiValid() ? 'border-emerald-300 focus:border-emerald-400 focus:ring-emerald-500/30' : 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-500/30'}`} 
-                      disabled={loading} 
-                    />
-                    {form.tanggal_selesai && isTanggalSelesaiValid() && !getFieldError('tanggal_selesai') && (
-                      <CheckCircle size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" />
-                    )}
+                    <input name="tanggal_selesai" type="date" value={form.tanggal_selesai} onChange={handleChange} onBlur={() => handleBlur('tanggal_selesai')} min={form.tanggal_mulai} className={`w-full pl-9 pr-9 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 transition ${getFieldError('tanggal_selesai') ? 'border-red-300 focus:border-red-400 focus:ring-red-500/30 bg-red-50/30' : form.tanggal_selesai && isTanggalSelesaiValid() ? 'border-emerald-300 focus:border-emerald-400 focus:ring-emerald-500/30' : 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-500/30'}`} disabled={loading} />
+                    {form.tanggal_selesai && isTanggalSelesaiValid() && !getFieldError('tanggal_selesai') && <CheckCircle size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" />}
                   </div>
                   {getFieldError('tanggal_selesai') && <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1"><AlertTriangle size={10} /> {getFieldError('tanggal_selesai')}</p>}
                 </div>
@@ -705,9 +640,6 @@ function AddPeserta() {
               <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 rounded-full transition-all duration-500" style={{ width: `${(completedCount / totalRequired) * 100}%` }} />
               </div>
-              <p className="text-[10px] text-slate-400 mt-2">
-                {isFormComplete() ? <span className="flex items-center gap-1"><ThumbsUp size={10} className="text-emerald-600" /> Semua data telah terisi, siap disimpan!</span> : <span className="flex items-center gap-1"><AlertCircle size={10} className="text-amber-500" /> Lengkapi semua field (*) untuk melanjutkan</span>}
-              </p>
             </div>
           </div>
 
@@ -716,17 +648,6 @@ function AddPeserta() {
             <button type="button" onClick={handleSubmit} disabled={loading || !isFormComplete()} className={`px-6 py-2 rounded-lg text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2 ${isFormComplete() && !loading ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:scale-105 cursor-pointer" : "bg-slate-400 cursor-not-allowed opacity-60"}`}>
               {loading ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Menyimpan...</> : <><Save size={14} /> Simpan Peserta</>}
             </button>
-          </div>
-        </div>
-
-        <div className="mt-6 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-3 border border-emerald-100">
-          <div className="flex items-center gap-2">
-            <Star size={14} className="text-amber-500" />
-            <p className="text-xs text-emerald-700">
-              <strong className="font-semibold">Tips:</strong> Password minimal 8 karakter, harus mengandung huruf Besar, huruf kecil, dan angka.
-              <span className="text-red-500 font-medium ml-1">Semua field wajib diisi</span>.
-              Nomor telepon hanya angka 10-15 digit tanpa 0 di depan. Periode magang minimal 30 hari.
-            </p>
           </div>
         </div>
       </div>
@@ -809,4 +730,4 @@ function AddPeserta() {
   )
 }
 
-export default AddPeserta
+export default AddPeserta;

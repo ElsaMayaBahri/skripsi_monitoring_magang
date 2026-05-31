@@ -1,26 +1,28 @@
 // src/pages/mentor/DetailPeserta.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
   Mail,
   Building2,
   GraduationCap,
   CalendarDays,
-  MapPin,
   Phone,
-  Briefcase,
-  Clock,
   Loader2,
   AlertCircle,
-  Target,
   FileText,
   Users,
   User,
-  BookOpen,
-  Calendar
 } from "lucide-react";
 import axiosInstance from "../../api/axios";
+import { getMentorTugasSubmissions, getMentorTugas } from "../../api/mentor/tugasService";
+
+// 🔥 Helper function untuk mendapatkan URL foto profil
+const getPhotoUrl = (path) => {
+  if (!path) return null;
+  if (path.startsWith("http")) return path;
+  const cleanPath = path.replace(/^\/+/, "");
+  return `http://localhost:8000/storage/${cleanPath}`;
+};
 
 function DetailPeserta() {
   const { id } = useParams();
@@ -29,25 +31,19 @@ function DetailPeserta() {
   const [peserta, setPeserta] = useState(null);
   const [error, setError] = useState(null);
   const [currentMentor, setCurrentMentor] = useState(null);
+  const [totalTugasMentor, setTotalTugasMentor] = useState(0);
+  const [tugasSelesai, setTugasSelesai] = useState(0);
 
-  useEffect(() => {
-    if (id) {
-      fetchDetailPeserta();
-      fetchCurrentMentor();
-    }
-  }, [id]);
-
-  const fetchCurrentMentor = async () => {
+  // Fetch current mentor profile
+  const fetchCurrentMentor = useCallback(async () => {
     try {
       const response = await axiosInstance.get("/mentor/profile");
-      console.log("Mentor profile response:", response.data);
       if (response.data && response.data.success) {
         setCurrentMentor(response.data.data);
       } else if (response.data && response.data.data) {
         setCurrentMentor(response.data.data);
       }
     } catch (err) {
-      console.error("Error fetching mentor profile:", err);
       const userStorage = localStorage.getItem("user");
       if (userStorage) {
         try {
@@ -56,16 +52,28 @@ function DetailPeserta() {
         } catch (e) {}
       }
     }
-  };
+  }, []);
 
-  const fetchDetailPeserta = async () => {
-    setLoading(true);
-    setError(null);
+  // Fetch total tugas mentor
+  const fetchTotalTugasMentor = useCallback(async () => {
     try {
-      console.log("Fetching detail peserta with id_peserta:", id);
-      
+      const response = await getMentorTugas();
+      if (response?.success && response?.data) {
+        const total = response.data.length;
+        setTotalTugasMentor(total);
+        return total;
+      }
+      return 0;
+    } catch (err) {
+      console.error("Error fetching total tugas mentor:", err);
+      return 0;
+    }
+  }, []);
+
+  // Fetch detail peserta
+  const fetchDetailPeserta = useCallback(async () => {
+    try {
       const response = await axiosInstance.get(`/mentor/pesertas/${id}`);
-      console.log("Response from /mentor/pesertas/:", response.data);
       
       if (response.data && response.data.success && response.data.data) {
         const dataPeserta = response.data.data;
@@ -82,13 +90,14 @@ function DetailPeserta() {
           return String(value);
         };
         
-        setPeserta({
+        let fotoProfil = dataPeserta.foto_profil || dataPeserta.user?.foto_profil || null;
+        
+        return {
           id: dataPeserta.id_peserta || dataPeserta.id,
           nama: dataPeserta.nama || dataPeserta.nama_lengkap || dataPeserta.user?.nama || "-",
           email: dataPeserta.email || dataPeserta.user?.email || "-",
           no_telepon: dataPeserta.no_telepon || dataPeserta.user?.no_telepon || "-",
-          foto_profil: dataPeserta.foto_profil || dataPeserta.user?.foto_profil || null,
-          alamat: dataPeserta.alamat || dataPeserta.user?.alamat || "-",
+          foto_profil: fotoProfil,
           status_akun: dataPeserta.status_akun || "aktif",
           divisi: getString(dataPeserta.divisi),
           universitas: getString(dataPeserta.asal_kampus),
@@ -99,23 +108,72 @@ function DetailPeserta() {
           id_user: dataPeserta.id_user,
           id_mentor: dataPeserta.id_mentor,
           id_divisi: dataPeserta.id_divisi,
-          progress: dataPeserta.progress || 0,
-          attendance: dataPeserta.kehadiran_persen || 0,
-          tugas_selesai: dataPeserta.tugas_selesai || 0,
-          total_tugas: dataPeserta.total_tugas || 0,
-          nilai_akhir: dataPeserta.nilai_akhir || 0,
           mentor: dataPeserta.mentor || null
-        });
-      } else {
-        setError(response.data?.message || "Data peserta tidak ditemukan");
+        };
       }
+      return null;
     } catch (err) {
       console.error("Error fetching detail peserta:", err);
+      throw err;
+    }
+  }, [id]);
+
+  // Fetch data tugas submissions
+  const fetchTugasSubmissions = useCallback(async (pesertaId) => {
+    try {
+      const response = await getMentorTugasSubmissions(pesertaId);
+      
+      if (response?.success && response?.data) {
+        const submissions = response.data || [];
+        const selesai = submissions.filter((sub) => {
+          return sub.tanggal_kumpul !== null && sub.tanggal_kumpul !== '';
+        }).length;
+        return selesai;
+      }
+      return 0;
+    } catch (err) {
+      console.error("Error fetching tugas submissions:", err);
+      return 0;
+    }
+  }, []);
+
+  // Load all data
+  const loadAllData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const [mentor, totalTugas, pesertaData] = await Promise.all([
+        fetchCurrentMentor(),
+        fetchTotalTugasMentor(),
+        fetchDetailPeserta()
+      ]);
+      
+      if (!pesertaData) {
+        setError("Data peserta tidak ditemukan");
+        setLoading(false);
+        return;
+      }
+      
+      setPeserta(pesertaData);
+      setTotalTugasMentor(totalTugas);
+      
+      const selesai = await fetchTugasSubmissions(id);
+      setTugasSelesai(selesai);
+      
+    } catch (err) {
+      console.error("Error loading data:", err);
       setError(err.response?.data?.message || err.message || "Gagal memuat data peserta");
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, fetchCurrentMentor, fetchTotalTugasMentor, fetchDetailPeserta, fetchTugasSubmissions]);
+
+  useEffect(() => {
+    if (id) {
+      loadAllData();
+    }
+  }, [id, loadAllData]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "-";
@@ -130,6 +188,10 @@ function DetailPeserta() {
     } catch {
       return "-";
     }
+  };
+
+  const handleInputNilai = () => {
+    navigate("/mentor/input-nilai-manual");
   };
 
   const mentorName = currentMentor?.nama || currentMentor?.name || currentMentor?.nama_lengkap || "Mentor";
@@ -171,27 +233,29 @@ function DetailPeserta() {
         
         {/* Header Profile */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-          {/* Background Gradient Hijau */}
           <div className="relative h-28 bg-gradient-to-r from-teal-500 to-blue-600"></div>
           
-          {/* Area Putih di bawah gradien */}
           <div className="relative px-6 pb-6">
             <div className="flex flex-col md:flex-row gap-6 -mt-12">
-              {/* Avatar */}
               <div className="w-28 h-28 rounded-2xl bg-white shadow-lg flex items-center justify-center border-4 border-white overflow-hidden flex-shrink-0">
                 {peserta.foto_profil ? (
-                  <img src={peserta.foto_profil} alt={peserta.nama} className="w-full h-full object-cover" />
+                  <img 
+                    src={getPhotoUrl(peserta.foto_profil)} 
+                    alt={peserta.nama} 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML = `<span class="text-4xl font-bold text-teal-600">${peserta.nama?.charAt(0) || "P"}</span>`;
+                    }}
+                  />
                 ) : (
                   <span className="text-4xl font-bold text-teal-600">{peserta.nama?.charAt(0) || "P"}</span>
                 )}
               </div>
               
-              {/* Informasi di area putih */}
               <div className="flex-1 pt-4 md:pt-0">
-                {/* NAMA - warna gelap */}
                 <h1 className="text-2xl font-bold text-slate-800">{peserta.nama}</h1>
                 
-                {/* DIVISI & UNIVERSITAS - di dalam area putih, di bawah nama */}
                 <div className="mt-6 space-y-1.5">
                   <div className="flex items-center gap-2">
                     <Building2 size="14" className="text-slate-400" />
@@ -207,8 +271,8 @@ function DetailPeserta() {
           </div>
         </div>
 
-        {/* Informasi Detail */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Informasi Detail - 2 kolom (tanpa statistik) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Informasi Pribadi */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
@@ -234,13 +298,6 @@ function DetailPeserta() {
                 <div>
                   <p className="text-xs text-slate-400">No. Telepon</p>
                   <p className="text-sm text-slate-700">{peserta.no_telepon}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <MapPin size="16" className="text-slate-400 mt-0.5" />
-                <div>
-                  <p className="text-xs text-slate-400">Alamat</p>
-                  <p className="text-sm text-slate-700">{peserta.alamat}</p>
                 </div>
               </div>
             </div>
@@ -275,45 +332,6 @@ function DetailPeserta() {
               </div>
             </div>
           </div>
-
-          {/* Statistik */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-              <h3 className="font-semibold text-slate-800">Statistik</h3>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-slate-600">Progress Tugas</span>
-                  <span className="font-semibold text-teal-600">{peserta.progress}%</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-teal-500 rounded-full" style={{ width: `${peserta.progress}%` }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-slate-600">Kehadiran</span>
-                  <span className="font-semibold text-emerald-600">{peserta.attendance}%</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${peserta.attendance}%` }}></div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <div className="bg-slate-50 rounded-lg p-3 text-center">
-                  <FileText size="16" className="text-slate-400 mx-auto mb-1" />
-                  <p className="text-lg font-bold text-slate-700">{peserta.tugas_selesai}/{peserta.total_tugas}</p>
-                  <p className="text-[10px] text-slate-400">Tugas Selesai</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3 text-center">
-                  <Target size="16" className="text-slate-400 mx-auto mb-1" />
-                  <p className="text-lg font-bold text-slate-700">{peserta.nilai_akhir}</p>
-                  <p className="text-[10px] text-slate-400">Nilai Akhir</p>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Tombol Aksi */}
@@ -325,7 +343,7 @@ function DetailPeserta() {
             Kembali
           </button>
           <button
-            onClick={() => navigate(`/mentor/input-nilai/${peserta.id}`)}
+            onClick={handleInputNilai}
             className="px-5 py-2 bg-gradient-to-r from-teal-500 to-blue-600 rounded-lg text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all"
           >
             Input Nilai

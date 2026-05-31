@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
@@ -68,6 +69,9 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * Update user profile including photo
+     */
     public function updateProfile(Request $request)
     {
         $user = $request->user();
@@ -79,6 +83,7 @@ class AuthController extends Controller
             'foto_profil' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
+        // Update text fields
         if ($request->has('nama')) {
             $user->nama = $request->nama;
         }
@@ -91,17 +96,36 @@ class AuthController extends Controller
             $user->alamat = $request->alamat;
         }
 
+        // 🔥 PERBAIKAN: Handle file upload with debug
         if ($request->hasFile('foto_profil')) {
+            $file = $request->file('foto_profil');
+            
+            Log::info('Uploading photo', [
+                'user_id' => $user->id_user,
+                'file_name' => $file->getClientOriginalName(),
+                'file_size' => $file->getSize(),
+                'file_mime' => $file->getMimeType()
+            ]);
+            
             // Hapus foto lama jika ada
             if ($user->foto_profil && Storage::disk('public')->exists($user->foto_profil)) {
                 Storage::disk('public')->delete($user->foto_profil);
+                Log::info('Old photo deleted', ['old_path' => $user->foto_profil]);
             }
             
-            $path = $request->file('foto_profil')->store('profile-photos', 'public');
+            // Buat nama file unik
+            $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+            $path = $file->storeAs('profile-photos', $filename, 'public');
+            
+            Log::info('Photo saved', ['new_path' => $path]);
+            
             $user->foto_profil = $path;
         }
 
         $user->save();
+
+        // Refresh user data
+        $user->refresh();
 
         return response()->json([
             'success' => true,
@@ -119,6 +143,9 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * Change user password
+     */
     public function changePassword(Request $request)
     {
         $request->validate([

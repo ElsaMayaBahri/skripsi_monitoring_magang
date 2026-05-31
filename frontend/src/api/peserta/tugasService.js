@@ -15,7 +15,7 @@ export const getPesertaTugas = async (params = {}) => {
   
   try {
     const response = await axiosInstance.get(url)
-    console.log("[DEBUG] getPesertaTugas - Response:", response.data)
+    console.log("[DEBUG] getPesertaTugas - Full Response:", response.data)
     
     // Handle berbagai kemungkinan struktur response
     let responseData = []
@@ -31,6 +31,12 @@ export const getPesertaTugas = async (params = {}) => {
       } else {
         responseData = []
       }
+    }
+    
+    // Log deadline dari data pertama untuk debugging
+    if (responseData.length > 0) {
+      console.log("[DEBUG] First item deadline:", responseData[0].deadline)
+      console.log("[DEBUG] First item full data:", responseData[0])
     }
     
     return {
@@ -129,6 +135,39 @@ export const submitPesertaTugas = async (id, formData) => {
       errorMessage = "Tidak dapat terhubung ke server"
     } else if (error.response?.status === 404) {
       errorMessage = "Endpoint tidak ditemukan. Backend perlu membuat: POST /api/peserta/tugas/{id}/submit"
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message
+    }
+    
+    return {
+      success: false,
+      data: null,
+      message: errorMessage
+    }
+  }
+}
+
+/**
+ * Cancel submission tugas
+ * POST /api/peserta/tugas/{id}/cancel
+ */
+export const cancelPesertaTugas = async (id) => {
+  const url = `/peserta/tugas/${id}/cancel`
+  console.log("[DEBUG] cancelPesertaTugas - URL:", url)
+  
+  try {
+    const response = await axiosInstance.post(url)
+    return {
+      success: true,
+      data: response.data?.data || response.data,
+      message: response.data?.message || "Pengumpulan tugas dibatalkan"
+    }
+  } catch (error) {
+    console.error("[DEBUG] cancelPesertaTugas - Error:", error)
+    
+    let errorMessage = "Gagal membatalkan pengumpulan"
+    if (error.code === "ERR_NETWORK") {
+      errorMessage = "Tidak dapat terhubung ke server"
     } else if (error.response?.data?.message) {
       errorMessage = error.response.data.message
     }

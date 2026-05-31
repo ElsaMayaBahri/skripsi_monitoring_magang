@@ -16,17 +16,32 @@ export const getNilaiAkhir = async () => {
 }
 
 /**
- * Download sertifikat
- * GET /api/peserta/sertifikat/download
+ * Get sertifikat magang template (khusus untuk sertifikat magang)
+ * GET /api/sertifikat/magang/template
  */
-export const downloadSertifikat = async () => {
+export const getSertifikatMagangTemplate = async () => {
   try {
-    const response = await api.get("/peserta/sertifikat/download", {
+    // 🔥 PASTIKAN panggil endpoint yang BENAR: /sertifikat/magang/template
+    const response = await api.get("/sertifikat/magang/template")
+    return response.data
+  } catch (error) {
+    console.error("Error fetching sertifikat magang template:", error)
+    throw error
+  }
+}
+
+/**
+ * Download file template sertifikat
+ * GET /storage/{file_path}
+ */
+export const downloadTemplateFile = async (filePath) => {
+  try {
+    const response = await api.get(`/storage/${filePath}`, {
       responseType: "blob"
     })
     return response.data
   } catch (error) {
-    console.error("Error downloading sertifikat:", error)
+    console.error("Error downloading template file:", error)
     throw error
   }
 }

@@ -18,7 +18,8 @@ import {
   XCircle,
   Loader2,
   FileSpreadsheet,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle
 } from "lucide-react"
 import { getAllPresensi, exportPresensiReport } from "../../api/coo/presensiService"
 import * as XLSX from 'xlsx'
@@ -47,17 +48,62 @@ function LaporanPresensi() {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   const [selectedDivisi, setSelectedDivisi] = useState("all")
+  const [searchNama, setSearchNama] = useState("")
   const [divisiList, setDivisiList] = useState([])
   const [isExporting, setIsExporting] = useState(false)
   const [showExportDropdown, setShowExportDropdown] = useState(false)
-  const [showConfirmModal, setShowConfirmModal] = useState(false)
-  const [exportType, setExportType] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const dropdownRef = useRef(null)
   
+  // Toast notification state - hanya untuk warning/error
+  const [toast, setToast] = useState({ show: false, message: "", type: "" })
+  
   const itemsPerPage = 10
+
+  // Auto hide toast after 5 seconds
+  useEffect(() => {
+    if (toast.show) {
+      const timer = setTimeout(() => {
+        setToast({ show: false, message: "", type: "" })
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [toast.show])
+
+  // Hitung rentang hari - DENGAN VALIDASI DAN TANPA Math.abs()
+  const getDateRangeDays = () => {
+    let start = startDate
+    let end = endDate
+    
+    // Jika hanya startDate yang diisi, anggap single date
+    if (startDate && !endDate) {
+      start = startDate
+      end = startDate
+    }
+    // Jika hanya endDate yang diisi, anggap single date
+    if (!startDate && endDate) {
+      start = endDate
+      end = endDate
+    }
+    
+    if (!start || !end) return 0
+    
+    const startObj = new Date(start)
+    const endObj = new Date(end)
+    
+    // VALIDASI: jika startDate > endDate, return 0
+    if (startObj > endObj) {
+      return 0
+    }
+    
+    // HITUNG SELISIH TANPA Math.abs() - pastikan start <= end
+    const diffTime = endObj - startObj
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    return diffDays + 1
+  }
 
   // Fetch divisi list
   const fetchDivisi = async () => {
@@ -134,8 +180,6 @@ function LaporanPresensi() {
     try {
       const response = await getAllPresensi()
       
-      console.log("Response dari API:", response)
-      
       let presensiList = []
       if (response && response.success && response.data) {
         presensiList = response.data
@@ -145,28 +189,52 @@ function LaporanPresensi() {
         presensiList = response.data
       }
       
-      console.log("Presensi list:", presensiList)
-      
-      // Filter berdasarkan tanggal jika ada
+      // LOGIC CERDAS UNTUK FILTER TANGGAL
       let filteredByDate = presensiList
-      if (startDate && endDate) {
-        const start = new Date(startDate)
-        const end = new Date(endDate)
-        end.setHours(23, 59, 59)
+      
+      if (startDate || endDate) {
+        let start = null
+        let end = null
         
-        filteredByDate = presensiList.filter(item => {
-          const itemDate = new Date(item.tanggal || item.created_at)
-          return itemDate >= start && itemDate <= end
-        })
-      } else if (startDate) {
-        const start = new Date(startDate)
-        const end = new Date(startDate)
-        end.setHours(23, 59, 59)
+        // Jika hanya startDate yang diisi -> single date
+        if (startDate && !endDate) {
+          start = new Date(startDate)
+          end = new Date(startDate)
+          end.setHours(23, 59, 59)
+        }
+        // Jika hanya endDate yang diisi -> single date
+        else if (!startDate && endDate) {
+          start = new Date(endDate)
+          end = new Date(endDate)
+          end.setHours(23, 59, 59)
+        }
+        // Jika kedua diisi -> range date (dengan validasi start <= end)
+        else if (startDate && endDate) {
+          const startObj = new Date(startDate)
+          const endObj = new Date(endDate)
+          
+          // Jika start > end, tukar
+          if (startObj > endObj) {
+            setToast({ 
+              show: true, 
+              message: "Tanggal mulai tidak boleh lebih besar dari tanggal akhir", 
+              type: "error" 
+            })
+            setLoading(false)
+            return
+          }
+          
+          start = startObj
+          end = endObj
+          end.setHours(23, 59, 59)
+        }
         
-        filteredByDate = presensiList.filter(item => {
-          const itemDate = new Date(item.tanggal || item.created_at)
-          return itemDate >= start && itemDate <= end
-        })
+        if (start && end) {
+          filteredByDate = presensiList.filter(item => {
+            const itemDate = new Date(item.tanggal || item.created_at)
+            return itemDate >= start && itemDate <= end
+          })
+        }
       }
       
       // Process data to calculate summary per participant
@@ -184,7 +252,6 @@ function LaporanPresensi() {
           divisi = rawDivisi.nama_divisi || rawDivisi.nama || "-"
         }
         
-        // 🔥 PERBAIKAN: Gunakan status atau status_kehadiran
         const status = (item.status || item.status_kehadiran || "").toString().toLowerCase()
         const checkIn = item.check_in
         const checkOut = item.check_out
@@ -207,7 +274,6 @@ function LaporanPresensi() {
         const participant = participantMap.get(nama)
         participant.daysCount++
         
-        // 🔥 PERBAIKAN: Gunakan status yang sudah di-lowercase
         if (status === "hadir") {
           participant.totalHadir++
           if (checkIn) participant.totalCheckIn += parseTimeToMinutes(checkIn)
@@ -270,9 +336,15 @@ function LaporanPresensi() {
       })
     }
     
+    if (searchNama.trim() !== "") {
+      filtered = filtered.filter((p) => 
+        p.nama?.toLowerCase().includes(searchNama.toLowerCase())
+      )
+    }
+    
     setFilteredData(filtered)
     setCurrentPage(1)
-  }, [selectedDivisi, presensiData])
+  }, [selectedDivisi, presensiData, searchNama])
 
   // Tutup dropdown saat klik di luar
   useEffect(() => {
@@ -290,28 +362,16 @@ function LaporanPresensi() {
     setStartDate("")
     setEndDate("")
     setSelectedDivisi("all")
-  }
-
-  // Show confirm modal before export
-  const showConfirmExport = (type) => {
-    setExportType(type)
-    setShowConfirmModal(true)
-    setShowExportDropdown(false)
-  }
-
-  // Execute export after confirmation
-  const executeExport = () => {
-    setShowConfirmModal(false)
-    if (exportType === 'excel') {
-      handleExportExcel()
-    } else if (exportType === 'pdf') {
-      handleExportPDF()
-    }
-    setExportType(null)
+    setSearchNama("")
   }
 
   // Export ke Excel
-  const handleExportExcel = async () => {
+  const handleExportExcel = () => {
+    if (filteredData.length === 0) {
+      setToast({ show: true, message: "Tidak ada data untuk diexport", type: "error" })
+      return
+    }
+    
     setIsExporting(true)
     try {
       const exportData = filteredData.map((item, index) => {
@@ -323,35 +383,88 @@ function LaporanPresensi() {
           "No": index + 1,
           "Nama Peserta": item.nama,
           "Divisi": divisiName,
-          "Total Hadir": item.totalHadir,
+          "Hadir": item.totalHadir,
           "Terlambat": item.totalTerlambat,
           "Izin": item.totalIzin,
           "Absen": item.totalAbsen,
-          "Persentase Kehadiran": `${item.persenKehadiran}%`,
-          "Rata-rata Check-In": item.rataRataCheckIn,
-          "Rata-rata Check-Out": item.rataRataCheckOut,
-          "Status": item.persenKehadiran >= 95 ? "Excellent" : item.persenKehadiran >= 80 ? "Baik" : item.persenKehadiran >= 60 ? "Cukup" : "Kurang"
+          "Persentase Kehadiran": `${item.persenKehadiran}%`
         }
       })
 
       const ws = XLSX.utils.json_to_sheet(exportData)
+      
+      ws['!cols'] = [
+        { wch: 5 },   // No
+        { wch: 25 },  // Nama Peserta
+        { wch: 20 },  // Divisi
+        { wch: 8 },   // Hadir
+        { wch: 12 },  // Terlambat
+        { wch: 8 },   // Izin
+        { wch: 8 },   // Absen
+        { wch: 20 }   // Persentase Kehadiran
+      ]
+      
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, "Laporan Presensi")
       
-      const periodText = startDate && endDate ? `periode_${startDate}_sampai_${endDate}` : "semua_periode"
+      let periodText = "semua_periode"
+      if (startDate && !endDate) {
+        periodText = startDate
+      } else if (!startDate && endDate) {
+        periodText = endDate
+      } else if (startDate && endDate) {
+        periodText = `${startDate}_sampai_${endDate}`
+      }
+      
       const fileName = `laporan_presensi_${periodText}.xlsx`
       XLSX.writeFile(wb, fileName)
-      alert("Laporan berhasil diunduh dalam format Excel")
+      
     } catch (err) {
       console.error("Error exporting to Excel:", err)
-      alert("Gagal mengunduh laporan dalam format Excel")
+      setToast({ show: true, message: "Gagal mengunduh laporan Excel", type: "error" })
     } finally {
       setIsExporting(false)
+      setShowExportDropdown(false)
     }
   }
 
-  // Export ke PDF
+  // CEK RENTANG UNTUK PDF
   const handleExportPDF = () => {
+    if (filteredData.length === 0) {
+      setToast({ show: true, message: "Tidak ada data untuk diexport", type: "error" })
+      return
+    }
+    
+    const rangeDays = getDateRangeDays()
+    const THREE_MONTHS = 90
+    const MAX_DATA_FOR_PDF = 500
+    
+    if (filteredData.length > MAX_DATA_FOR_PDF) {
+      setToast({ 
+        show: true, 
+        message: `Data terlalu banyak (${filteredData.length} peserta). Disarankan menggunakan format Excel.`, 
+        type: "warning" 
+      })
+      setShowExportDropdown(false)
+      return
+    }
+    
+    if (rangeDays > THREE_MONTHS) {
+      setToast({ 
+        show: true, 
+        message: `Rentang waktu ${rangeDays} hari melebihi batas maksimal PDF (3 bulan). Silakan gunakan format Excel.`, 
+        type: "warning" 
+      })
+      setShowExportDropdown(false)
+      return
+    }
+    
+    executePDFExport()
+    setShowExportDropdown(false)
+  }
+
+  // EKSEKUSI DOWNLOAD PDF
+  const executePDFExport = () => {
     setIsExporting(true)
     
     try {
@@ -369,8 +482,21 @@ function LaporanPresensi() {
         year: 'numeric'
       })
       
-      const startDateFormatted = startDate ? formatDatePDF(startDate) : "Semua"
-      const endDateFormatted = endDate ? formatDatePDF(endDate) : "Semua"
+      let startDateFormatted = "Semua"
+      let endDateFormatted = "Semua"
+      let periodeText = ""
+      
+      if (startDate && !endDate) {
+        periodeText = `Tanggal: ${formatDatePDF(startDate)}`
+      } else if (!startDate && endDate) {
+        periodeText = `Tanggal: ${formatDatePDF(endDate)}`
+      } else if (startDate && endDate) {
+        startDateFormatted = formatDatePDF(startDate)
+        endDateFormatted = formatDatePDF(endDate)
+        periodeText = `Periode: ${startDateFormatted} s/d ${endDateFormatted}`
+      } else {
+        periodeText = "Periode: Semua Data"
+      }
       
       const element = document.createElement('div')
       element.style.padding = '30px'
@@ -391,8 +517,9 @@ function LaporanPresensi() {
         
         <div style="text-align: center; margin-bottom: 25px;">
           <h2 style="color: #1e293b; margin: 0; font-size: 20px;">LAPORAN REKAP PRESENSI PESERTA MAGANG</h2>
-          <p style="color: #64748b; margin: 8px 0 0 0; font-size: 12px;">Periode: ${startDateFormatted} s/d ${endDateFormatted}</p>
+          <p style="color: #64748b; margin: 8px 0 0 0; font-size: 12px;">${periodeText}</p>
           <p style="color: #64748b; margin: 4px 0 0 0; font-size: 11px;">Divisi: ${selectedDivisi === 'all' ? 'Semua Divisi' : selectedDivisi}</p>
+          ${searchNama ? `<p style="color: #64748b; margin: 4px 0 0 0; font-size: 11px;">Pencarian: ${searchNama}</p>` : ''}
         </div>
         
         <div style="margin-bottom: 20px; text-align: right;">
@@ -425,8 +552,7 @@ function LaporanPresensi() {
               <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Izin</th>
               <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Absen</th>
               <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Kehadiran</th>
-              <th style="border: 1px solid #cbd5e1; padding: 10px; color: white; text-align: center;">Status</th>
-            </tr>
+             </tr>
           </thead>
           <tbody>
             ${filteredData.map((item, index) => {
@@ -434,33 +560,22 @@ function LaporanPresensi() {
                 ? (item.divisi?.nama_divisi || item.divisi?.nama || "-")
                 : (item.divisi || "-")
               
-              let statusText = ''
-              if (item.persenKehadiran >= 95) {
-                statusText = 'Excellent'
-              } else if (item.persenKehadiran >= 80) {
-                statusText = 'Baik'
-              } else if (item.persenKehadiran >= 60) {
-                statusText = 'Cukup'
-              } else {
-                statusText = 'Kurang'
-              }
               return `
                 <tr style="border-bottom: 1px solid #e2e8f0;">
                   <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${index + 1}</td>
-                  <td style="border: 1px solid #cbd5e1; padding: 8px;">${item.nama?.replace(/[<>]/g, '') || '-'}</td>
+                  <td style="border: 1px solid #cbd5e1; padding: 8px;">${(item.nama || '-').replace(/[<>]/g, '')}</td>
                   <td style="border: 1px solid #cbd5e1; padding: 8px;">${divisiName.replace(/[<>]/g, '')}</td>
                   <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.totalHadir}</td>
                   <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.totalTerlambat}</td>
                   <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.totalIzin}</td>
                   <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.totalAbsen}</td>
                   <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${item.persenKehadiran}%</td>
-                  <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${statusText}</td>
                 </tr>
               `
             }).join('')}
             ${filteredData.length === 0 ? `
               <tr>
-                <td colspan="9" style="border: 1px solid #cbd5e1; padding: 40px; text-align: center; color: #94a3b8;">Tidak ada data laporan</td>
+                <td colspan="8" style="border: 1px solid #cbd5e1; padding: 40px; text-align: center; color: #94a3b8;">Tidak ada data laporan</td>
               </tr>
             ` : ''}
           </tbody>
@@ -495,10 +610,9 @@ function LaporanPresensi() {
       }
       
       html2pdf().set(opt).from(element).save()
-      alert("Laporan berhasil diunduh dalam format PDF")
     } catch (err) {
       console.error("Error exporting to PDF:", err)
-      alert("Gagal mengunduh laporan presensi dalam format PDF")
+      setToast({ show: true, message: "Gagal mengunduh laporan PDF", type: "error" })
     } finally {
       setIsExporting(false)
     }
@@ -520,7 +634,6 @@ function LaporanPresensi() {
     currentPage * itemsPerPage
   )
 
-  // Helper untuk mendapatkan nama divisi yang sudah dinormalisasi
   const getDivisiName = (divisi) => {
     if (!divisi) return "-"
     if (typeof divisi === "string") return divisi
@@ -528,13 +641,6 @@ function LaporanPresensi() {
       return divisi.nama_divisi || divisi.nama || "-"
     }
     return "-"
-  }
-
-  const getKehadiranBadge = (persen) => {
-    if (persen >= 95) return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-medium"><Award size={10} /> Excellent</span>
-    if (persen >= 80) return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-medium"><CheckCircle size={10} /> Baik</span>
-    if (persen >= 60) return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-medium"><AlertCircle size={10} /> Cukup</span>
-    return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-medium"><XCircle size={10} /> Kurang</span>
   }
 
   if (loading && presensiData.length === 0) {
@@ -552,47 +658,29 @@ function LaporanPresensi() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-[1400px] mx-auto">
         
-        {/* CONFIRMATION MODAL */}
-        {showConfirmModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-zoomIn">
-              <div className="relative">
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-t-2xl"></div>
-                <div className="p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-blue-100 rounded-xl">
-                      <Download className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-slate-800">Konfirmasi Unduh Laporan</h3>
-                  </div>
-                  <p className="text-slate-600 mb-6">
-                    Apakah Anda yakin ingin mengunduh laporan presensi dalam format <strong className="text-blue-600">{exportType?.toUpperCase()}</strong>?
-                    <br />
-                    <span className="text-sm text-slate-400">Data yang diunduh sesuai dengan filter yang sedang aktif.</span>
-                  </p>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => {
-                        setShowConfirmModal(false)
-                        setExportType(null)
-                      }}
-                      className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 transition-all"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      onClick={executeExport}
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl text-white font-medium hover:shadow-lg transition-all"
-                    >
-                      Ya, Unduh
-                    </button>
-                  </div>
-                </div>
-              </div>
+        {/* TOAST NOTIFICATION */}
+        {toast.show && (
+          <div className="fixed top-5 right-5 z-50 animate-slide-in-right">
+            <div className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border ${
+              toast.type === "warning" ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200"
+            }`}>
+              {toast.type === "warning" && <AlertTriangle size={18} className="text-amber-600" />}
+              {toast.type === "error" && <AlertCircle size={18} className="text-red-600" />}
+              <p className={`text-sm ${
+                toast.type === "warning" ? "text-amber-800" : "text-red-800"
+              }`}>
+                {toast.message}
+              </p>
+              <button 
+                onClick={() => setToast({ show: false, message: "", type: "" })}
+                className="ml-2 p-0.5 hover:bg-white/50 rounded-lg transition"
+              >
+                <XCircle size={14} className="text-slate-500" />
+              </button>
             </div>
           </div>
         )}
-
+        
         {/* HEADER */}
         <div className="mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -632,14 +720,14 @@ function LaporanPresensi() {
               {showExportDropdown && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden z-50">
                   <button
-                    onClick={() => showConfirmExport('excel')}
+                    onClick={handleExportExcel}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-emerald-50 transition-colors"
                   >
                     <FileSpreadsheet size={16} className="text-emerald-600" />
                     <span>Export ke Excel</span>
                   </button>
                   <button
-                    onClick={() => showConfirmExport('pdf')}
+                    onClick={handleExportPDF}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-red-50 transition-colors border-t border-slate-100"
                   >
                     <FileText size={16} className="text-red-600" />
@@ -690,7 +778,22 @@ function LaporanPresensi() {
         {/* FILTERS */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <label className="text-xs text-slate-500 mb-1 block">Cari Peserta</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  type="text"
+                  value={searchNama}
+                  onChange={(e) => setSearchNama(e.target.value)}
+                  placeholder="Nama peserta..."
+                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
+                />
+              </div>
+            </div>
+
             <div className="w-full md:w-56">
+              <label className="text-xs text-slate-500 mb-1 block">Divisi</label>
               <select
                 value={selectedDivisi}
                 onChange={(e) => setSelectedDivisi(e.target.value)}
@@ -706,34 +809,44 @@ function LaporanPresensi() {
             </div>
             
             <div className="w-full md:w-48">
+              <label className="text-xs text-slate-500 mb-1 block">Dari Tanggal</label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                placeholder="Tanggal Mulai"
               />
             </div>
 
             <div className="w-full md:w-48">
+              <label className="text-xs text-slate-500 mb-1 block">Sampai Tanggal</label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                placeholder="Tanggal Selesai"
               />
             </div>
             
-            {(selectedDivisi !== "all" || startDate || endDate) && (
-              <button
-                onClick={resetFilters}
-                className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700 transition"
-              >
-                Reset Filter
-              </button>
+            {(selectedDivisi !== "all" || startDate || endDate || searchNama) && (
+              <div className="flex items-end">
+                <button
+                  onClick={resetFilters}
+                  className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700 transition"
+                >
+                  Reset Filter
+                </button>
+              </div>
             )}
           </div>
+
+          {/* Info filter */}
+          {(startDate || endDate) && (
+            <div className="mt-3 text-xs text-slate-400 flex items-center gap-1">
+              <Calendar size={12} />
+              <span>Rentang waktu: {getDateRangeDays()} hari</span>
+            </div>
+          )}
         </div>
 
         {/* ERROR MESSAGE */}
@@ -758,18 +871,27 @@ function LaporanPresensi() {
                   <th className="text-center px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Izin</th>
                   <th className="text-center px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Absen</th>
                   <th className="text-center px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Kehadiran</th>
-                  <th className="text-center px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {paginatedData.length === 0 && !loading ? (
                   <tr>
-                    <td colSpan="8" className="px-5 py-12 text-center">
+                    <td colSpan="7" className="px-5 py-12 text-center">
                       <div className="flex flex-col items-center gap-2">
                         <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center">
                           <FileText size={20} className="text-slate-400" />
                         </div>
-                        <p className="text-slate-500 text-sm">Tidak ada data laporan</p>
+                        <p className="text-slate-500 text-sm">
+                          {searchNama ? `Tidak ditemukan peserta dengan nama "${searchNama}"` : "Tidak ada data laporan"}
+                        </p>
+                        {(searchNama || selectedDivisi !== "all" || startDate || endDate) && (
+                          <button
+                            onClick={resetFilters}
+                            className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-2"
+                          >
+                            Reset Filter
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -789,16 +911,16 @@ function LaporanPresensi() {
                           {getDivisiName(item.divisi)}
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-center text-sm font-semibold text-emerald-600">
+                      <td className="px-5 py-3 text-center text-sm font-semibold text-slate-700">
                         {item.totalHadir}
                       </td>
-                      <td className="px-5 py-3 text-center text-sm font-semibold text-amber-600">
+                      <td className="px-5 py-3 text-center text-sm font-semibold text-slate-700">
                         {item.totalTerlambat}
                       </td>
-                      <td className="px-5 py-3 text-center text-sm font-semibold text-blue-600">
+                      <td className="px-5 py-3 text-center text-sm font-semibold text-slate-700">
                         {item.totalIzin}
                       </td>
-                      <td className="px-5 py-3 text-center text-sm font-semibold text-red-600">
+                      <td className="px-5 py-3 text-center text-sm font-semibold text-slate-700">
                         {item.totalAbsen}
                       </td>
                       <td className="px-5 py-3 text-center">
@@ -811,9 +933,6 @@ function LaporanPresensi() {
                             ></div>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-5 py-3 text-center">
-                        {getKehadiranBadge(item.persenKehadiran)}
                       </td>
                     </tr>
                   ))
@@ -861,30 +980,34 @@ function LaporanPresensi() {
               </div>
             </div>
           )}
-        </div>
+        </div> 
 
         {/* INFO BANNER */}
         <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100">
           <div className="flex items-center gap-2">
             <BarChart3 size={14} className="text-blue-500" />
             <p className="text-xs text-blue-700">
-              <strong className="font-semibold">Informasi:</strong> Laporan ini dihitung berdasarkan data presensi harian peserta magang untuk periode yang dipilih.
+              <strong className="font-semibold">Informasi:</strong> Laporan ini dihitung berdasarkan data presensi harian peserta magang untuk periode yang dipilih. Gunakan filter pencarian untuk mencari peserta tertentu.
             </p>
           </div>
         </div>
       </div>
-
-      <style>
-        {`
-          @keyframes zoomIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
+      
+      <style>{`
+        @keyframes slideInRight {
+          from {
+            opacity: 0;
+            transform: translateX(100%);
           }
-          .animate-zoomIn {
-            animation: zoomIn 0.3s ease-out;
+          to {
+            opacity: 1;
+            transform: translateX(0);
           }
-        `}
-      </style>
+        }
+        .animate-slide-in-right {
+          animation: slideInRight 0.3s ease-out;
+        }
+      `}</style>
     </div>
   )
 }

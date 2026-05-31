@@ -1,5 +1,5 @@
 // src/api/peserta/sertifikatService.js
-import axiosInstance from "../axios"
+import api from "../axios"
 
 /**
  * Get certificate eligibility and data
@@ -7,7 +7,7 @@ import axiosInstance from "../axios"
  */
 export const getSertifikatData = async () => {
   try {
-    const response = await axiosInstance.get("/peserta/sertifikat")
+    const response = await api.get("/peserta/sertifikat")
     return response.data
   } catch (error) {
     console.error("Error fetching sertifikat data:", error)
@@ -21,7 +21,7 @@ export const getSertifikatData = async () => {
  */
 export const getSertifikatRequirements = async () => {
   try {
-    const response = await axiosInstance.get("/peserta/sertifikat/requirements")
+    const response = await api.get("/peserta/sertifikat/requirements")
     return response.data
   } catch (error) {
     console.error("Error fetching requirements:", error)
@@ -35,12 +35,26 @@ export const getSertifikatRequirements = async () => {
  */
 export const downloadSertifikat = async () => {
   try {
-    const response = await axiosInstance.get("/peserta/sertifikat/download", {
+    const response = await api.get("/peserta/sertifikat/download", {
       responseType: 'blob'
     })
     return response.data
   } catch (error) {
     console.error("Error downloading certificate:", error)
+    throw error
+  }
+}
+
+/**
+ * Generate Sertifikat Magang
+ * POST /api/peserta/sertifikat-magang/generate
+ */
+export const generateSertifikatMagang = async () => {
+  try {
+    const response = await api.post("/peserta/sertifikat-magang/generate")
+    return response.data
+  } catch (error) {
+    console.error("Error generating sertifikat magang:", error)
     throw error
   }
 }

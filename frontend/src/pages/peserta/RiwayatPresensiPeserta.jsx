@@ -2,17 +2,14 @@
 import React, { useState, useEffect } from "react";
 import {
   Calendar,
-  Clock,
   MapPin,
   FileText,
-  Download,
   Eye,
   CheckCircle,
   AlertCircle,
   XCircle,
   ChevronLeft,
   ChevronRight,
-  FileSpreadsheet,
   X,
   TrendingUp,
   Filter,
@@ -20,6 +17,9 @@ import {
   Wifi,
   File,
   AlertTriangle,
+  Search,
+  Building,
+  Home,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { saveAs } from "file-saver";
@@ -33,11 +33,15 @@ function RiwayatPresensiPeserta() {
   const [showModal, setShowModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [backendError, setBackendError] = useState(false);
-  const itemsPerPage = 10;
-
-  // Filter tanggal
+  
+  // Filter tambahan
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  
+  // Fixed items per page
+  const itemsPerPage = 10;
 
   useEffect(() => {
     loadPresensiData();
@@ -45,7 +49,7 @@ function RiwayatPresensiPeserta() {
 
   useEffect(() => {
     filterData();
-  }, [startDate, endDate, presensiList]);
+  }, [startDate, endDate, statusFilter, search, presensiList]);
 
   const API_BASE_URL = "http://localhost:8000";
 
@@ -71,7 +75,6 @@ function RiwayatPresensiPeserta() {
     return `${API_BASE_URL}/storage/${path}`;
   };
 
-  // ============ LOAD DATA DARI BACKEND ============
   const loadPresensiData = async () => {
     setLoading(true);
     setBackendError(false);
@@ -134,7 +137,8 @@ function RiwayatPresensiPeserta() {
                 item.status_kehadiran ||
                 item.status ||
                 (item.is_late ? "terlambat" : "hadir"),
-              lokasi: item.lokasi || item.jenis_kehadiran || "WFO",
+              jenis: item.jenis_kehadiran || "WFO",
+              lokasi: item.lokasi || "-",
               device: item.device || "Web",
               aktivitas: report.aktivitas,
               kendala: report.kendala,
@@ -173,16 +177,16 @@ function RiwayatPresensiPeserta() {
     }
   };
 
-  // Dummy data untuk testing
   const loadDummyData = () => {
     const dummyData = [
       {
         id: 1,
-        tanggal: "2026-05-12",
+        tanggal: "2026-05-28",
         check_in: "08:00:00",
         check_out: "17:30:00",
         status: "hadir",
-        lokasi: "WFO - Kantor Pusat",
+        jenis: "WFO",
+        lokasi: "WFO - Kantor Pusat, Jalan Raya Kertajaya No. 123, Surabaya",
         device: "Web",
         aktivitas: "Mengerjakan tugas frontend dashboard monitoring magang",
         kendala: "Tidak ada kendala berarti",
@@ -191,11 +195,12 @@ function RiwayatPresensiPeserta() {
       },
       {
         id: 2,
-        tanggal: "2026-05-11",
+        tanggal: "2026-05-27",
         check_in: "08:15:00",
         check_out: "17:00:00",
         status: "terlambat",
-        lokasi: "WFH - Rumah",
+        jenis: "WFH",
+        lokasi: "WFH - Rumah, Jalan Raya Mulyosari No. 45, Surabaya",
         device: "Mobile",
         aktivitas: "Membuat API endpoint untuk presensi",
         kendala: "Error pada database connection",
@@ -204,10 +209,11 @@ function RiwayatPresensiPeserta() {
       },
       {
         id: 3,
-        tanggal: "2026-05-10",
+        tanggal: "2026-05-26",
         check_in: null,
         check_out: null,
         status: "alpha",
+        jenis: "-",
         lokasi: "-",
         device: "-",
         aktivitas: null,
@@ -217,10 +223,11 @@ function RiwayatPresensiPeserta() {
       },
       {
         id: 4,
-        tanggal: "2026-05-09",
+        tanggal: "2026-05-25",
         check_in: "07:55:00",
         check_out: "17:15:00",
         status: "hadir",
+        jenis: "WFO",
         lokasi: "WFO - Kantor Pusat",
         device: "Web",
         aktivitas: "Membuat UI komponen presensi",
@@ -230,54 +237,16 @@ function RiwayatPresensiPeserta() {
       },
       {
         id: 5,
-        tanggal: "2026-05-08",
+        tanggal: "2026-05-24",
         check_in: "08:30:00",
         check_out: "17:00:00",
         status: "terlambat",
+        jenis: "WFO",
         lokasi: "WFO - Kantor Pusat",
         device: "Web",
         aktivitas: "Meeting dengan mentor",
         kendala: "Koneksi internet tidak stabil",
         rencana: "Review tugas",
-        foto: null,
-      },
-      {
-        id: 6,
-        tanggal: "2026-05-07",
-        check_in: "08:00:00",
-        check_out: "16:30:00",
-        status: "hadir",
-        lokasi: "WFH - Rumah",
-        device: "Mobile",
-        aktivitas: "Mempelajari React hooks",
-        kendala: null,
-        rencana: "Implementasi di project",
-        foto: null,
-      },
-      {
-        id: 7,
-        tanggal: "2026-05-06",
-        check_in: "09:00:00",
-        check_out: "17:00:00",
-        status: "terlambat",
-        lokasi: "WFO - Kantor Pusat",
-        device: "Web",
-        aktivitas: "Memperbaiki bug",
-        kendala: "Bug cukup kompleks",
-        rencana: "Testing dan deployment",
-        foto: null,
-      },
-      {
-        id: 8,
-        tanggal: "2026-05-05",
-        check_in: "08:00:00",
-        check_out: "17:00:00",
-        status: "hadir",
-        lokasi: "WFO - Kantor Pusat",
-        device: "Web",
-        aktivitas: "Code review",
-        kendala: null,
-        rencana: "Merge pull request",
         foto: null,
       },
     ];
@@ -307,8 +276,28 @@ function RiwayatPresensiPeserta() {
       filtered = filtered.filter((p) => p.tanggal <= endDate);
     }
 
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((p) => {
+        const status = getStatusText(p);
+        return status === statusFilter;
+      });
+    }
+
+    if (search.trim()) {
+      filtered = filtered.filter((p) =>
+        p.aktivitas?.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+
     setFilteredPresensi(filtered);
     setCurrentPage(1);
+  };
+
+  const getStatusText = (item) => {
+    if (!item.check_in) return "alpha";
+    if (item.check_in && !item.check_out) return "belum_checkout";
+    if (String(item.status).toLowerCase() === "terlambat" || item.is_late === true) return "terlambat";
+    return "hadir";
   };
 
   const getStatusBadge = (item) => {
@@ -318,6 +307,7 @@ function RiwayatPresensiPeserta() {
         text: "text-red-700",
         icon: XCircle,
         label: "Alpha",
+        value: "alpha",
       };
     }
     if (item.check_in && !item.check_out) {
@@ -326,6 +316,7 @@ function RiwayatPresensiPeserta() {
         text: "text-orange-700",
         icon: AlertCircle,
         label: "Belum Check-out",
+        value: "belum_checkout",
       };
     }
     if (String(item.status).toLowerCase() === "terlambat" || item.is_late === true) {
@@ -334,6 +325,7 @@ function RiwayatPresensiPeserta() {
         text: "text-amber-700",
         icon: AlertCircle,
         label: "Terlambat",
+        value: "terlambat",
       };
     }
     return {
@@ -341,7 +333,14 @@ function RiwayatPresensiPeserta() {
       text: "text-emerald-700",
       icon: CheckCircle,
       label: "Hadir",
+      value: "hadir",
     };
+  };
+
+  const getJenisIcon = (jenis) => {
+    if (jenis === "WFH") return <Home size="14" className="text-blue-500" />;
+    if (jenis === "WFO") return <Building size="14" className="text-teal-500" />;
+    return null;
   };
 
   const formatTanggal = (tanggal) => {
@@ -367,53 +366,59 @@ function RiwayatPresensiPeserta() {
       .replace(/\//g, "-");
   };
 
+  const formatTanggalPDF = (tanggal) => {
+    if (!tanggal) return "-";
+    const date = new Date(tanggal);
+    return date.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
   // ============ EXPORT PDF ============
   const handleExportPDF = async () => {
     try {
       const doc = new jsPDF("landscape", "mm", "a4");
       let yPos = 20;
 
-      // Logo - ukuran lebih besar agar tidak kegencet
+      // Logo
       const logoImg = new Image();
       logoImg.src = logo;
       await new Promise((resolve) => {
         logoImg.onload = resolve;
       });
-      doc.addImage(logoImg, "PNG", 14, yPos - 15, 45, 45); // Ukuran 45x45 mm
+      doc.addImage(logoImg, "PNG", 14, yPos - 15, 40, 40);
 
       // Header
       doc.setFontSize(18);
       doc.setTextColor(13, 148, 136);
       doc.setFont("helvetica", "bold");
-      doc.text("LAPORAN RIWAYAT PRESENSI", 70, 25);
+      doc.text("LAPORAN RIWAYAT PRESENSI", 65, 25);
 
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
       doc.setFont("helvetica", "normal");
       doc.text(
         `Periode: ${formatTanggalFile(startDate)} - ${formatTanggalFile(endDate)}`,
-        70,
+        65,
         33,
       );
       doc.text(
-        `Tanggal Cetak: ${new Date().toLocaleDateString("id-ID")}`,
-        70,
+        `Tanggal Cetak: ${new Date().toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        })}`,
+        65,
         39,
       );
-      doc.text("Kuanta Academy - Sistem Monitoring Magang", 70, 45);
+      doc.text("Kuanta Academy - Sistem Monitoring Magang", 65, 45);
 
       // Table Header
       yPos = 60;
-      const headers = [
-        "Tanggal",
-        "Check-in",
-        "Check-out",
-        "Status",
-        "Lokasi",
-        "Device",
-        "Aktivitas",
-      ];
-      const colWidths = [35, 20, 20, 25, 35, 18, 60];
+      const headers = ["Tanggal", "Check-in", "Check-out", "Status", "Lokasi", "Device", "Aktivitas"];
+      const colWidths = [24, 18, 18, 20, 68, 18, 78];
 
       doc.setFillColor(13, 148, 136);
       doc.rect(14, yPos - 5, 280, 8, "F");
@@ -430,6 +435,7 @@ function RiwayatPresensiPeserta() {
       // Table Body
       doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
       let currentY = yPos + 5;
       let rowCount = 0;
 
@@ -452,17 +458,13 @@ function RiwayatPresensiPeserta() {
 
         const status = getStatusBadge(item);
         const rowData = [
-          formatTanggal(item.tanggal),
+          formatTanggalPDF(item.tanggal),
           item.check_in ? item.check_in.substring(0, 5) : "-",
           item.check_out ? item.check_out.substring(0, 5) : "-",
           status.label,
           item.lokasi || "-",
           item.device || "Web",
-          item.aktivitas
-            ? item.aktivitas.length > 40
-              ? item.aktivitas.substring(0, 40) + "..."
-              : item.aktivitas
-            : "-",
+          item.aktivitas || "-",
         ];
 
         if (rowCount % 2 === 0) {
@@ -471,24 +473,29 @@ function RiwayatPresensiPeserta() {
         }
 
         xPos = 14;
+        let maxLines = 1;
+
         rowData.forEach((data, i) => {
-          doc.text(String(data), xPos + 2, currentY);
+          const splitText = doc.splitTextToSize(String(data), colWidths[i] - 4);
+          if (splitText.length > maxLines) {
+            maxLines = splitText.length;
+          }
+          doc.text(splitText, xPos + 2, currentY);
           xPos += colWidths[i];
         });
 
-        currentY += 6;
+        currentY += maxLines * 5;
         rowCount++;
       }
 
-      const lastY = currentY + 8;
-      doc.setFontSize(7);
-      doc.setTextColor(156, 163, 175);
-      doc.text(
-        "Dicetak dari Sistem Monitoring Magang Kuanta Academy",
-        14,
-        lastY,
-      );
-      doc.text(`Halaman 1 dari 1`, 280, lastY, { align: "right" });
+      // Add page numbers dynamically
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7);
+        doc.setTextColor(156, 163, 175);
+        doc.text(`Halaman ${i} dari ${pageCount}`, 280, 200, { align: "right" });
+      }
 
       doc.save(
         `laporan_presensi_${formatTanggalFile(startDate)}_sd_${formatTanggalFile(endDate)}.pdf`,
@@ -509,16 +516,16 @@ function RiwayatPresensiPeserta() {
         <meta charset="UTF-8">
         <title>Laporan Riwayat Presensi</title>
         <style>
-          body { font-family: 'Times New Roman', Times, serif; margin: 40px; font-size: 12px; }
+          body { font-family: 'Times New Roman', Times, serif; margin: 40px; font-size: 11px; }
           .header { text-align: center; margin-bottom: 30px; }
-          .logo { width: 150px; height: auto; margin-bottom: 15px; }
-          h1 { color: #0d9488; margin-bottom: 5px; font-size: 20px; }
-          .subtitle { color: #64748b; margin-top: 0; font-size: 12px; }
+          .logo { width: 120px; height: auto; margin-bottom: 15px; }
+          h1 { color: #0d9488; margin-bottom: 5px; font-size: 18px; }
+          .subtitle { color: #64748b; margin-top: 0; font-size: 11px; }
           table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th { background-color: #0d9488; color: white; padding: 10px; text-align: left; border: 1px solid #ddd; }
-          td { padding: 8px; border: 1px solid #ddd; }
+          th { background-color: #0d9488; color: white; padding: 8px; text-align: left; border: 1px solid #ddd; font-size: 10px; }
+          td { padding: 6px; border: 1px solid #ddd; font-size: 10px; vertical-align: top; }
           tr:nth-child(even) { background-color: #f1f5f9; }
-          .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #94a3b8; }
+          .footer { margin-top: 30px; text-align: center; font-size: 9px; color: #94a3b8; }
         </style>
       </head>
       <body>
@@ -526,29 +533,33 @@ function RiwayatPresensiPeserta() {
           <img src="${logo}" class="logo" alt="Logo Kuanta Academy" />
           <h1>LAPORAN RIWAYAT PRESENSI</h1>
           <p class="subtitle">Periode: ${formatTanggalFile(startDate)} - ${formatTanggalFile(endDate)}</p>
-          <p class="subtitle">Tanggal Cetak: ${new Date().toLocaleDateString("id-ID")}</p>
+          <p class="subtitle">Tanggal Cetak: ${new Date().toLocaleDateString("id-ID", {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          })}</p>
         </div>
         <table>
           <thead>
             <tr><th>No</th><th>Tanggal</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Lokasi</th><th>Device</th><th>Aktivitas</th></tr>
           </thead>
           <tbody>
-    `;
+      `;
 
       filteredPresensi.forEach((item, idx) => {
         const status = getStatusBadge(item);
         htmlContent += `
-        <tr>
-          <td>${idx + 1}</td>
-          <td>${formatTanggal(item.tanggal)}</td>
-          <td>${item.check_in ? item.check_in.substring(0, 5) : "-"}</td>
-          <td>${item.check_out ? item.check_out.substring(0, 5) : "-"}</td>
-          <td>${status.label}</td>
-          <td>${item.lokasi || "-"}</td>
-          <td>${item.device || "Web"}</td>
-          <td>${item.aktivitas || "-"}</td>
-        </tr>
-      `;
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${formatTanggalPDF(item.tanggal)}</td>
+            <td>${item.check_in ? item.check_in.substring(0, 5) : "-"}</td>
+            <td>${item.check_out ? item.check_out.substring(0, 5) : "-"}</td>
+            <td>${status.label}</td>
+            <td>${item.lokasi || "-"}</td>
+            <td>${item.device || "Web"}</td>
+            <td>${item.aktivitas || "-"}</td>
+          </tr>
+        `;
       });
 
       htmlContent += `
@@ -595,6 +606,9 @@ function RiwayatPresensiPeserta() {
   );
   const totalPages = Math.ceil(filteredPresensi.length / itemsPerPage);
   const stats = getStatistics();
+  
+  const startItem = indexOfFirstItem + 1;
+  const endItem = Math.min(indexOfLastItem, filteredPresensi.length);
 
   if (loading) {
     return (
@@ -638,11 +652,6 @@ function RiwayatPresensiPeserta() {
               <p className="mt-1 text-xs text-amber-700">
                 Backend API belum terhubung. Menampilkan data dummy untuk
                 testing tampilan.
-                <br />
-                API Endpoint:{" "}
-                <span className="font-mono">
-                  GET http://localhost:8000/api/peserta/presensi
-                </span>
               </p>
             </div>
           </div>
@@ -655,10 +664,10 @@ function RiwayatPresensiPeserta() {
           <div className="flex items-center gap-2 mb-4">
             <Filter size="16" className="text-teal-500" />
             <h3 className="text-sm font-semibold text-gray-700">
-              Filter Periode
+              Filter Data
             </h3>
           </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label className="block mb-1 text-xs font-medium text-gray-600">
                 Dari Tanggal
@@ -681,17 +690,48 @@ function RiwayatPresensiPeserta() {
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-teal-400"
               />
             </div>
+            <div>
+              <label className="block mb-1 text-xs font-medium text-gray-600">
+                Status Kehadiran
+              </label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-teal-400"
+              >
+                <option value="all">Semua Status</option>
+                <option value="hadir">Hadir</option>
+                <option value="terlambat">Terlambat</option>
+                <option value="alpha">Alpha</option>
+                <option value="belum_checkout">Belum Check-out</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-4">
+            <label className="block mb-1 text-xs font-medium text-gray-600">
+              Cari Aktivitas
+            </label>
+            <div className="relative">
+              <Search size="14" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Cari berdasarkan aktivitas..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full px-3 py-2 pl-9 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:border-teal-400"
+              />
+            </div>
           </div>
           <div className="flex gap-2 pt-2 mt-4 border-t border-gray-100">
             <button
               onClick={handleExportPDF}
-              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
+              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all"
             >
               <FileText size="12" /> PDF
             </button>
             <button
               onClick={handleExportDOC}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all"
             >
               <File size="12" /> DOC
             </button>
@@ -734,27 +774,13 @@ function RiwayatPresensiPeserta() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200 bg-gradient-to-r from-teal-50 to-blue-50">
-                <th className="px-5 py-3 text-xs font-semibold text-left text-gray-600">
-                  Tanggal
-                </th>
-                <th className="px-5 py-3 text-xs font-semibold text-left text-gray-600">
-                  Check-in
-                </th>
-                <th className="px-5 py-3 text-xs font-semibold text-left text-gray-600">
-                  Check-out
-                </th>
-                <th className="px-5 py-3 text-xs font-semibold text-left text-gray-600">
-                  Status
-                </th>
-                <th className="px-5 py-3 text-xs font-semibold text-left text-gray-600">
-                  Lokasi
-                </th>
-                <th className="px-5 py-3 text-xs font-semibold text-left text-gray-600">
-                  Daily Report
-                </th>
-                <th className="px-5 py-3 text-xs font-semibold text-center text-gray-600">
-                  Detail
-                </th>
+                <th className="px-5 py-3 text-xs font-semibold text-left text-gray-600">Tanggal</th>
+                <th className="px-5 py-3 text-xs font-semibold text-left text-gray-600">Check-in</th>
+                <th className="px-5 py-3 text-xs font-semibold text-left text-gray-600">Check-out</th>
+                <th className="px-5 py-3 text-xs font-semibold text-left text-gray-600">Status</th>
+                <th className="px-5 py-3 text-xs font-semibold text-left text-gray-600">Jenis</th>
+                <th className="px-5 py-3 text-xs font-semibold text-left text-gray-600">Daily Report</th>
+                <th className="px-5 py-3 text-xs font-semibold text-center text-gray-600">Detail</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -766,6 +792,7 @@ function RiwayatPresensiPeserta() {
                     ? item.aktivitas.substring(0, 50) + "..."
                     : item.aktivitas
                   : "-";
+                const JenisIcon = getJenisIcon(item.jenis);
                 return (
                   <tr key={item.id || index} className="hover:bg-gray-50/50">
                     <td className="px-5 py-3">
@@ -778,7 +805,7 @@ function RiwayatPresensiPeserta() {
                     </td>
                     <td className="px-5 py-3">
                       {item.check_in ? (
-                        <span className="text-sm font-medium text-green-600">
+                        <span className="text-sm font-semibold text-gray-700">
                           {item.check_in.substring(0, 5)}
                         </span>
                       ) : (
@@ -787,44 +814,31 @@ function RiwayatPresensiPeserta() {
                     </td>
                     <td className="px-5 py-3">
                       {item.check_out ? (
-                        <span className="text-sm font-medium text-blue-600">
+                        <span className="text-sm font-semibold text-gray-700">
                           {item.check_out.substring(0, 5)}
                         </span>
                       ) : item.check_in ? (
-                        <span className="text-sm text-orange-400">Belum</span>
+                        <span className="text-sm italic text-gray-400">Belum</span>
                       ) : (
                         <span className="text-sm text-gray-400">-</span>
                       )}
                     </td>
                     <td className="px-5 py-3">
-                      <div
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${status.bg} ${status.text}`}
-                      >
+                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${status.bg} ${status.text}`}>
                         <StatusIcon size="12" />
-                        <span className="text-xs font-medium">
-                          {status.label}
-                        </span>
+                        <span className="text-xs font-medium">{status.label}</span>
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="flex items-center gap-1">
-                        {item.lokasi?.includes("WFH") ? (
-                          <Wifi size="10" className="text-blue-500" />
-                        ) : (
-                          <MapPin size="10" className="text-teal-500" />
-                        )}
-                        <span className="text-sm text-gray-600">
-                          {item.lokasi || "-"}
-                        </span>
+                      <div className="flex items-center gap-1.5">
+                        {JenisIcon}
+                        <span className="text-sm font-medium text-gray-700">{item.jenis}</span>
                       </div>
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1">
                         <FileText size="12" className="text-teal-500" />
-                        <span
-                          className="text-xs text-gray-600 truncate max-w-[200px]"
-                          title={item.aktivitas}
-                        >
+                        <span className="text-xs text-gray-600 truncate max-w-[200px]" title={item.aktivitas}>
                           {dailyReportText}
                         </span>
                       </div>
@@ -834,8 +848,9 @@ function RiwayatPresensiPeserta() {
                         onClick={() => {
                           setSelectedPresensi(item);
                           setShowModal(true);
+                          window.dispatchEvent(new CustomEvent("preview-modal-open"));
                         }}
-                        className="p-1.5 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100"
+                        className="p-1.5 rounded-lg bg-teal-50 text-teal-600 hover:bg-teal-100 transition-all"
                       >
                         <Eye size="14" />
                       </button>
@@ -857,13 +872,13 @@ function RiwayatPresensiPeserta() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/30">
             <p className="text-xs text-gray-500">
-              Halaman {currentPage} dari {totalPages}
+              Menampilkan {startItem}-{endItem} dari {filteredPresensi.length} data
             </p>
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40"
+                className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 hover:bg-gray-50 transition-all"
               >
                 <ChevronLeft size="14" />
               </button>
@@ -881,7 +896,7 @@ function RiwayatPresensiPeserta() {
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`w-7 h-7 rounded-lg text-xs font-semibold ${currentPage === pageNum ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-white border border-gray-200 text-gray-600"}`}
+                      className={`w-7 h-7 rounded-lg text-xs font-semibold transition-all ${currentPage === pageNum ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
                     >
                       {pageNum}
                     </button>
@@ -889,11 +904,9 @@ function RiwayatPresensiPeserta() {
                 })}
               </div>
               <button
-                onClick={() =>
-                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                }
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40"
+                className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40 hover:bg-gray-50 transition-all"
               >
                 <ChevronRight size="14" />
               </button>
@@ -902,48 +915,43 @@ function RiwayatPresensiPeserta() {
         )}
       </div>
 
-      {/* Modal Detail */}
+      {/* Modal Detail - Dengan Custom Event */}
       {showModal && selectedPresensi && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 flex items-center justify-between px-5 py-3 bg-white border-b border-gray-100 rounded-t-xl">
               <div className="flex items-center gap-2">
                 <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-blue-600">
                   <FileText size="14" className="text-white" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-800">
-                    Detail Presensi
-                  </h3>
-                  <p className="text-xs text-gray-500">
-                    {formatTanggal(selectedPresensi.tanggal)}
-                  </p>
+                  <h3 className="text-base font-bold text-gray-800">Detail Presensi</h3>
+                  <p className="text-xs text-gray-500">{formatTanggal(selectedPresensi.tanggal)}</p>
                 </div>
               </div>
               <button
-                onClick={() => setShowModal(false)}
-                className="p-1.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200"
+                onClick={() => {
+                  setShowModal(false);
+                  window.dispatchEvent(new CustomEvent("preview-modal-close"));
+                }}
+                className="p-2 text-gray-500 transition-all rounded-xl hover:bg-red-50 hover:text-red-500"
               >
                 <X size="16" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg bg-gradient-to-br from-green-50 to-emerald-50">
+            <div className="p-5 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bg-green-50 border border-green-100">
                   <p className="text-xs font-medium text-green-600">CHECK-IN</p>
                   <p className="text-lg font-bold text-green-700">
-                    {selectedPresensi.check_in
-                      ? selectedPresensi.check_in.substring(0, 5)
-                      : "-"}
+                    {selectedPresensi.check_in ? selectedPresensi.check_in.substring(0, 5) : "-"}
                   </p>
                 </div>
-                <div className="p-3 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50">
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
                   <p className="text-xs font-medium text-blue-600">CHECK-OUT</p>
                   <p className="text-lg font-bold text-blue-700">
-                    {selectedPresensi.check_out
-                      ? selectedPresensi.check_out.substring(0, 5)
-                      : "-"}
+                    {selectedPresensi.check_out ? selectedPresensi.check_out.substring(0, 5) : "-"}
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-gray-50">
@@ -953,89 +961,68 @@ function RiwayatPresensiPeserta() {
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-gray-50">
-                  <p className="text-xs text-gray-500">Lokasi / Device</p>
-                  <p className="text-sm font-semibold text-gray-800">
-                    {selectedPresensi.lokasi || "-"} •{" "}
-                    {selectedPresensi.device || "Web"}
-                  </p>
+                  <p className="text-xs text-gray-500 mb-1">Jenis Kehadiran</p>
+                  <div className="flex items-center gap-2">
+                    {getJenisIcon(selectedPresensi.jenis)}
+                    <p className="text-sm font-semibold text-gray-800">
+                      {selectedPresensi.jenis || "WFO"}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-gray-100">
+              <div className="pt-2">
+                <p className="text-xs text-gray-500 mb-1">Lokasi</p>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {selectedPresensi.lokasi || "-"}
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-gray-100">
                 <h4 className="flex items-center gap-2 mb-3 text-sm font-semibold text-gray-700">
                   <FileText size="14" className="text-teal-500" /> Daily Report
                 </h4>
                 {selectedPresensi.aktivitas && (
                   <div className="p-3 mb-3 border border-teal-100 rounded-lg bg-teal-50">
-                    <p className="mb-1 text-xs font-semibold text-teal-800">
-                      Aktivitas Hari Ini
-                    </p>
-                    <p className="text-sm text-gray-700">
-                      {selectedPresensi.aktivitas}
-                    </p>
+                    <p className="mb-1 text-xs font-semibold text-teal-800">Aktivitas Hari Ini</p>
+                    <p className="text-sm text-gray-700">{selectedPresensi.aktivitas}</p>
                   </div>
                 )}
-                {selectedPresensi.kendala &&
-                  selectedPresensi.kendala !== "Tidak ada" && (
-                    <div className="p-3 mb-3 border rounded-lg bg-amber-50 border-amber-100">
-                      <p className="mb-1 text-xs font-semibold text-amber-800">
-                        Kendala
-                      </p>
-                      <p className="text-sm text-gray-700">
-                        {selectedPresensi.kendala}
-                      </p>
-                    </div>
-                  )}
+                {selectedPresensi.kendala && selectedPresensi.kendala !== "Tidak ada" && (
+                  <div className="p-3 mb-3 border rounded-lg bg-amber-50 border-amber-100">
+                    <p className="mb-1 text-xs font-semibold text-amber-800">Kendala</p>
+                    <p className="text-sm text-gray-700">{selectedPresensi.kendala}</p>
+                  </div>
+                )}
                 {selectedPresensi.rencana && (
                   <div className="p-3 border border-blue-100 rounded-lg bg-blue-50">
-                    <p className="mb-1 text-xs font-semibold text-blue-800">
-                      Rencana Selanjutnya
-                    </p>
-                    <p className="text-sm text-gray-700">
-                      {selectedPresensi.rencana}
-                    </p>
+                    <p className="mb-1 text-xs font-semibold text-blue-800">Rencana Selanjutnya</p>
+                    <p className="text-sm text-gray-700">{selectedPresensi.rencana}</p>
                   </div>
                 )}
-                {!selectedPresensi.aktivitas &&
-                  !selectedPresensi.kendala &&
-                  !selectedPresensi.rencana && (
-                    <p className="text-sm italic text-gray-500">
-                      Belum ada daily report
-                    </p>
-                  )}
+                {!selectedPresensi.aktivitas && !selectedPresensi.kendala && !selectedPresensi.rencana && (
+                  <p className="text-sm italic text-gray-500">Belum ada daily report</p>
+                )}
               </div>
 
               {selectedPresensi.foto && (
-                <div className="pt-4 border-t border-gray-100">
+                <div className="pt-3 border-t border-gray-100">
                   <p className="flex items-center gap-2 mb-2 text-xs font-semibold text-gray-700">
                     <Camera size="12" className="text-teal-500" /> Foto Check-in
                   </p>
                   <img
                     src={selectedPresensi.foto}
                     alt="Selfie"
-                    className="object-cover w-20 h-20 border-2 border-teal-200 rounded-lg cursor-pointer hover:scale-105"
+                    className="object-cover w-20 h-20 border-2 border-teal-200 rounded-lg shadow-sm cursor-pointer hover:scale-105 transition-all"
                     onClick={() => window.open(selectedPresensi.foto, "_blank")}
                     onError={(e) => {
                       e.currentTarget.style.display = "none";
-                      e.currentTarget.nextElementSibling.style.display =
-                        "block";
+                      e.currentTarget.nextElementSibling.style.display = "block";
                     }}
                   />
-
-                  <div className="hidden text-xs italic text-red-500">
-                    Foto tidak dapat dimuat
-                  </div>
+                  <div className="hidden text-xs italic text-red-500">Foto tidak dapat dimuat</div>
                 </div>
               )}
-            </div>
-
-            <div className="sticky bottom-0 flex justify-end px-5 py-3 bg-white border-t border-gray-100 rounded-b-xl">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold"
-              >
-                Tutup
-              </button>
             </div>
           </div>
         </div>

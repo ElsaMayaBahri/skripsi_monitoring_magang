@@ -33,6 +33,57 @@ import {
   tandaiMateriSelesai,
 } from "../../api/peserta/materiService";
 
+// Base URL
+const BASE_URL = "http://localhost:8000";
+
+// Helper untuk mendeteksi tipe file dari nama file
+const detectFileType = (fileName) => {
+  if (!fileName) return "dokumen";
+  const ext = fileName.split(".").pop().toLowerCase();
+  const typeMap = {
+    pdf: "pdf",
+    mp4: "video",
+    mov: "video",
+    avi: "video",
+    webm: "video",
+    doc: "doc",
+    docx: "doc",
+    xls: "excel",
+    xlsx: "excel",
+    ppt: "ppt",
+    pptx: "ppt",
+    jpg: "image",
+    jpeg: "image",
+    png: "image",
+    gif: "image",
+    webp: "image",
+    zip: "archive",
+    rar: "archive",
+  };
+  return typeMap[ext] || "dokumen";
+};
+
+// Helper untuk mendapatkan URL file (sama dengan mentor)
+const getFileUrl = (item) => {
+  if (item.tipe_materi === "link") return item.link;
+
+  if (item.file_materi) {
+    let baseUrl = BASE_URL.replace(/\/$/, "");
+    const encodedPath = encodeURIComponent(item.file_materi);
+    return `${baseUrl}/api/storage/preview/${encodedPath}`;
+  }
+
+  return "#";
+};
+
+// Helper untuk mendapatkan URL download
+const getDownloadUrl = (item) => {
+  if (!item.file_materi) return "#";
+  let baseUrl = BASE_URL.replace(/\/$/, "");
+  const encodedPath = encodeURIComponent(item.file_materi);
+  return `${baseUrl}/api/storage/download/${encodedPath}`;
+};
+
 function MateriMentor() {
   const [loading, setLoading] = useState(true);
   const [materiList, setMateriList] = useState([]);
@@ -63,29 +114,33 @@ function MateriMentor() {
 
       if (response.success && response.data) {
         // Transform API response ke format yang digunakan frontend
-        const transformedMateri = response.data.map((item) => ({
-          id: item.id_materi,
-          judul: item.judul,
-          deskripsi: item.deskripsi || "Tidak ada deskripsi",
-          tipe: getFileType(item),
-          durasi: null,
-          file_size: null,
-          created_at: formatDate(item.created_at),
-          mentor: item.mentor?.user?.nama || item.mentor?.nama || "Mentor",
-          is_accessed: item.is_accessed || false,
-          file_url: getFileUrl(item),
-          file_type: getFileType(item),
-          file_name: getFileName(item),
-          link: item.link,
-          views: item.views || 0,
-          file_materi: item.file_materi,
-        }));
+        const transformedMateri = response.data.map((item) => {
+          const fileType = detectFileType(item.file_materi);
+          const tipeMateri = item.tipe_materi === "link" ? "link" : fileType;
+          
+          return {
+            id: item.id_materi,
+            judul: item.judul,
+            deskripsi: item.deskripsi || "Tidak ada deskripsi",
+            tipe: tipeMateri,
+            durasi: null,
+            file_size: null,
+            created_at: formatDate(item.created_at),
+            mentor: item.mentor?.user?.nama || item.mentor?.nama || "Mentor",
+            is_accessed: item.is_accessed || false,
+            file_url: getFileUrl(item),
+            download_url: getDownloadUrl(item),
+            file_type: fileType,
+            file_name: getFileName(item),
+            link: item.link,
+            views: item.views || 0,
+            file_materi: item.file_materi,
+            file_path: item.file_materi,
+          };
+        });
 
         setMateriList(transformedMateri);
         setFilteredMateri(transformedMateri);
-
-        // Load accessed status dari localStorage
-        loadAccessedStatus(transformedMateri);
       } else {
         setError(response.message || "Gagal memuat data materi");
       }
@@ -112,66 +167,12 @@ function MateriMentor() {
     });
   };
 
-  // Helper: Get file URL based on materi type
-const getFileUrl = (item) => {
-  if (item.tipe_materi === 'link') return item.link;
-  if (item.file_materi) {
-    const filename = item.file_materi.split('/').pop();
-    let baseUrl = 'http://localhost:8000';
-    if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) {
-      baseUrl = process.env.REACT_APP_API_URL;
-    }
-    baseUrl = baseUrl.replace(/\/$/, '');
-    // ✅ TAMBAHKAN /api
-    return `${baseUrl}/api/materi-file/${filename}`;
-  }
-  return '#';
-};
-
-  // Helper: Get file type
-  const getFileType = (item) => {
-    if (item.tipe_materi === "video") return "video";
-    if (item.tipe_materi === "link") return "link";
-    if (item.file_materi) {
-      const ext = item.file_materi.split(".").pop().toLowerCase();
-      const typeMap = {
-        pdf: "pdf",
-        doc: "doc",
-        docx: "doc",
-        xls: "excel",
-        xlsx: "excel",
-        ppt: "ppt",
-        pptx: "ppt",
-        mp4: "video",
-        mov: "video",
-        avi: "video",
-        webm: "video",
-      };
-      return typeMap[ext] || "dokumen";
-    }
-    return "dokumen";
-  };
-
   // Helper: Get file name
   const getFileName = (item) => {
     if (item.file_materi) {
       return item.file_materi.split("/").pop();
     }
     return item.judul;
-  };
-
-  // Load accessed status dari localStorage
-  const loadAccessedStatus = (materiList) => {
-    const savedAccessed = localStorage.getItem("materi_accessed_ids");
-    if (savedAccessed) {
-      const accessedIds = JSON.parse(savedAccessed);
-      const updatedMateri = materiList.map((m) => ({
-        ...m,
-        is_accessed: accessedIds.includes(m.id) || m.is_accessed,
-      }));
-      setMateriList(updatedMateri);
-      setFilteredMateri(updatedMateri);
-    }
   };
 
   // Filter materi berdasarkan search dan tipe
@@ -206,6 +207,8 @@ const getFileUrl = (item) => {
         return <FileSpreadsheet size="16" className="text-green-600" />;
       case "ppt":
         return <FileImage size="16" className="text-orange-600" />;
+      case "image":
+        return <FileImage size="16" className="text-purple-500" />;
       case "link":
         return <LinkIcon size="16" className="text-purple-500" />;
       default:
@@ -225,6 +228,8 @@ const getFileUrl = (item) => {
         return "Excel";
       case "ppt":
         return "PowerPoint";
+      case "image":
+        return "Gambar";
       case "link":
         return "Link";
       default:
@@ -244,6 +249,8 @@ const getFileUrl = (item) => {
         return "from-green-500 to-emerald-500";
       case "ppt":
         return "from-orange-500 to-red-500";
+      case "image":
+        return "from-purple-500 to-pink-500";
       case "link":
         return "from-purple-500 to-pink-500";
       default:
@@ -251,87 +258,67 @@ const getFileUrl = (item) => {
     }
   };
 
-  // Mark as accessed (local + API)
+  // Mark as accessed (API only - no localStorage)
   const markAsAccessed = async (id) => {
-    // Update local state
-    const updatedMateri = materiList.map((m) =>
-      m.id === id ? { ...m, is_accessed: true } : m,
-    );
-    setMateriList(updatedMateri);
-
-    // Save to localStorage
-    const accessedIds = updatedMateri
-      .filter((m) => m.is_accessed)
-      .map((m) => m.id);
-    localStorage.setItem("materi_accessed_ids", JSON.stringify(accessedIds));
-
     // Kirim ke backend jika menggunakan API real
     if (USE_REAL_API) {
       try {
         await tandaiMateriSelesai(id);
         console.log(`Materi ${id} marked as completed on server`);
+        
+        // Update local state after successful API call
+        const updatedMateri = materiList.map((m) =>
+          m.id === id ? { ...m, is_accessed: true } : m,
+        );
+        setMateriList(updatedMateri);
+        return true;
       } catch (err) {
         console.error("Failed to mark as completed on server:", err);
+        return false;
       }
+    }
+    return false;
+  };
+
+  const openMateri = async (materi) => {
+    if (materi.tipe === "link") {
+      window.open(materi.link, "_blank");
+    } else {
+      // Buka modal untuk preview
+      setSelectedMateri(materi);
+      setShowModal(true);
+      
+      // Dispatch event saat modal dibuka
+      window.dispatchEvent(new CustomEvent("preview-modal-open"));
+    }
+    
+    // Tandai sebagai diakses jika belum
+    if (!materi.is_accessed) {
+      await markAsAccessed(materi.id);
     }
   };
 
-const openMateri = (materi) => {
-  if (materi.tipe === 'link') {
-    window.open(materi.link, '_blank');
-  } else {
-    window.open(materi.file_url, '_blank');
-  }
-  // Juga tandai sebagai diakses jika perlu
-  if (!materi.is_accessed) markAsAccessed(materi.id);
-}
-
+  // Modal close dengan event dispatch
   const closeModal = () => {
     setShowModal(false);
     setSelectedMateri(null);
+    
+    // Dispatch event saat modal ditutup
+    window.dispatchEvent(new CustomEvent("preview-modal-close"));
   };
 
   const handleDownload = async (materi) => {
-    if (!materi.file_url || materi.file_url === "#") {
+    if (!materi.download_url || materi.download_url === "#") {
       alert("File tidak tersedia untuk diunduh");
       return;
     }
+    
     try {
-      const response = await fetch(materi.file_url);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = materi.file_name || materi.judul;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      // Gunakan download_url yang sudah dibuat
+      window.open(materi.download_url, "_blank");
     } catch (error) {
       console.error("Download gagal:", error);
       alert("Gagal mengunduh file. Silakan coba lagi.");
-    }
-  };
-
-  const handleMarkAsSelesai = async () => {
-    if (!selectedMateri) return;
-
-    setMarkingAsSelesai(true);
-    try {
-      if (USE_REAL_API) {
-        await tandaiMateriSelesai(selectedMateri.id);
-      }
-
-      // Update local state
-      await markAsAccessed(selectedMateri.id);
-      setSelectedMateri({ ...selectedMateri, is_accessed: true });
-
-      alert("Materi berhasil ditandai selesai!");
-    } catch (err) {
-      console.error("Error marking as completed:", err);
-      alert("Gagal menandai materi selesai. Silakan coba lagi.");
-    } finally {
-      setMarkingAsSelesai(false);
     }
   };
 
@@ -453,6 +440,12 @@ const openMateri = (materi) => {
               className={`px-3 py-1.5 rounded-xl text-xs font-medium transition ${selectedType === "pdf" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
             >
               PDF
+            </button>
+            <button
+              onClick={() => setSelectedType("image")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition ${selectedType === "image" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            >
+              Gambar
             </button>
             <button
               onClick={() => setSelectedType("link")}
@@ -623,160 +616,140 @@ const openMateri = (materi) => {
         </div>
       )}
 
-      {/* Modal Detail Materi */}
+      {/* Modal Detail Materi - FULLSCREEN CLEAN VERSION */}
       {showModal && selectedMateri && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[9999]"
           onClick={closeModal}
         >
           <div
-            className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl"
+            className="bg-white w-screen h-screen overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-teal-50/50 to-blue-50/50">
+            {/* Modal Header - Compact */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-teal-50/50 to-blue-50/50 flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center">
                   {getTypeIcon(selectedMateri.tipe)}
                 </div>
                 <div>
-                  <h2 className="font-bold text-gray-800 text-lg">
+                  <h2 className="font-bold text-gray-800">
                     {selectedMateri.judul}
                   </h2>
-                  <p className="text-xs text-gray-500">
-                    Oleh: {selectedMateri.mentor} • {selectedMateri.created_at}
+                  <p className="text-[10px] text-gray-500">
+                    {selectedMateri.mentor} • {selectedMateri.created_at}
                   </p>
                 </div>
               </div>
               <button
                 onClick={closeModal}
-                className="p-2 rounded-lg hover:bg-white/50 transition"
+                className="p-1.5 rounded-lg hover:bg-white/50 transition"
               >
-                <X size="20" className="text-gray-500" />
+                <X size="18" className="text-gray-500" />
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-              {/* Deskripsi */}
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-700 text-sm mb-2">
-                  📖 Deskripsi Materi
-                </h3>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  {selectedMateri.deskripsi}
-                </p>
+            {/* Deskripsi - Compact */}
+            {selectedMateri.deskripsi && selectedMateri.deskripsi !== "Tidak ada deskripsi" && (
+              <div className="bg-white px-5 py-2 border-b border-gray-200 flex-shrink-0">
+                <p className="text-gray-600 text-sm">{selectedMateri.deskripsi}</p>
               </div>
+            )}
 
-              {/* Konten Materi */}
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-700 text-sm mb-3">
-                  📄 Konten Materi
-                </h3>
+            {/* Konten Materi - FULLSCREEN tanpa whitespace */}
+            {selectedMateri.tipe === "pdf" && (
+              <div className="flex-1 w-full overflow-hidden bg-[#525659]">
+                <embed
+                  src={`${selectedMateri.file_url}#toolbar=1&navpanes=1&scrollbar=1`}
+                  type="application/pdf"
+                  className="w-full h-full"
+                />
+              </div>
+            )}
 
-                {/* Video */}
-                {selectedMateri.tipe === "video" && (
-                  <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden">
-                    {selectedMateri.file_url &&
-                    selectedMateri.file_url.includes("youtube.com") ? (
-                      <iframe
-                        src={selectedMateri.file_url}
-                        className="w-full h-full"
-                        title={selectedMateri.judul}
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    ) : (
-                      <video controls className="w-full h-full">
-                        <source src={selectedMateri.file_url} />
-                        Browser Anda tidak mendukung video tag.
-                      </video>
-                    )}
-                  </div>
-                )}
-
-                {/* PDF Preview */}
-                {selectedMateri.tipe === "pdf" && (
-                  <div className="h-[500px] border rounded-lg overflow-hidden">
+            {selectedMateri.tipe === "video" && (
+              <div className="flex-1 flex items-center justify-center bg-black">
+                <div className="w-full h-full max-w-full max-h-full">
+                  {selectedMateri.file_url && selectedMateri.file_url.includes("youtube.com") ? (
                     <iframe
-                      src={`${selectedMateri.file_url}#toolbar=1`}
+                      src={selectedMateri.file_url}
                       className="w-full h-full"
                       title={selectedMateri.judul}
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
                     />
-                  </div>
-                )}
-
-                {/* Link */}
-                {selectedMateri.tipe === "link" && (
-                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-6 text-center">
-                    <LinkIcon
-                      size="48"
-                      className="text-purple-400 mx-auto mb-3"
-                    />
-                    <p className="text-gray-600 mb-4">
-                      🔗 Materi berupa link eksternal
-                    </p>
-                    <a
-                      href={selectedMateri.link || selectedMateri.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all duration-200"
-                    >
-                      Buka Link
-                      <ExternalLink size="14" />
-                    </a>
-                  </div>
-                )}
-
-                {/* Dokumen (Word, Excel, PPT) */}
-{["doc", "excel", "ppt"].includes(selectedMateri.tipe) && (
-  <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-8 text-center border-2 border-dashed border-gray-200">
-    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-      {getTypeIcon(selectedMateri.tipe)}
-    </div>
-    <p className="text-gray-700 font-medium mb-1">
-      {selectedMateri.file_name || selectedMateri.judul}
-    </p>
-    <p className="text-xs text-gray-400 mb-4">
-      Pratinjau tidak tersedia untuk file ini. Silakan unduh untuk melihat.
-    </p>
-    <button 
-      onClick={() => handleDownload(selectedMateri)}
-      className="inline-flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all duration-200"
-    >
-      <Download size="16" />
-      Download File
-    </button>
-  </div>
-)}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-100 bg-gray-50">
-              {!selectedMateri.is_accessed && (
-                <button
-                  onClick={handleMarkAsSelesai}
-                  disabled={markingAsSelesai}
-                  className="px-5 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition flex items-center gap-2"
-                >
-                  {markingAsSelesai ? (
-                    <Loader2 size="16" className="animate-spin" />
                   ) : (
-                    <CheckCircle size="16" />
+                    <video controls className="w-full h-full">
+                      <source src={selectedMateri.file_url} />
+                      Browser Anda tidak mendukung video tag.
+                    </video>
                   )}
-                  Tandai Selesai
-                </button>
-              )}
+                </div>
+              </div>
+            )}
 
-              <button
-                onClick={closeModal}
-                className="px-5 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-              >
-                Tutup
-              </button>
-            </div>
+            {selectedMateri.tipe === "image" && (
+              <div className="flex-1 flex items-center justify-center bg-gray-900 p-4">
+                <img
+                  src={selectedMateri.file_url}
+                  alt={selectedMateri.judul}
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+                  onError={(e) => {
+                    e.target.src = "https://placehold.co/600x400?text=Gambar+Tidak+Dapat+Dimuat";
+                  }}
+                />
+              </div>
+            )}
+
+            {selectedMateri.tipe === "link" && (
+              <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-8">
+                <div className="text-center max-w-md">
+                  <LinkIcon size="64" className="text-purple-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                    Link Eksternal
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    Materi ini berupa link ke sumber eksternal
+                  </p>
+                  <a
+                    href={selectedMateri.link || selectedMateri.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl hover:shadow-lg transition-all duration-200"
+                  >
+                    Buka Link
+                    <ExternalLink size="16" />
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {["doc", "excel", "ppt", "archive", "dokumen"].includes(selectedMateri.tipe) && (
+              <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-8">
+                <div className="text-center max-w-md">
+                  <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                    {getTypeIcon(selectedMateri.tipe)}
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                    {getTypeLabel(selectedMateri.tipe)}
+                  </h3>
+                  <p className="text-gray-600 mb-2">
+                    {selectedMateri.file_name || selectedMateri.judul}
+                  </p>
+                  <p className="text-sm text-gray-400 mb-6">
+                    Pratinjau tidak tersedia untuk file ini. Silakan unduh untuk melihat.
+                  </p>
+                  <button 
+                    onClick={() => handleDownload(selectedMateri)}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl hover:shadow-lg transition-all duration-200"
+                  >
+                    <Download size="16" />
+                    Download File
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

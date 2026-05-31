@@ -1,6 +1,7 @@
+// frontend/src/pages/admin/Divisi.jsx
 import { useState, useEffect } from "react"
 import { useLocation } from "react-router-dom"
-import { getDivisi, createDivisi, updateDivisi, deleteDivisi } from "../../api/admin/divisiService"
+import { getDivisi, createDivisi, updateDivisi } from "../../api/admin/divisiService"
 import { getMentors } from "../../api/admin/dashboardService"
 import { getPeserta } from "../../api/admin/dashboardService"
 import { logActivity } from "../../utils/activityLogger"
@@ -9,7 +10,6 @@ import {
   Plus,
   Search,
   Edit2,
-  Trash2,
   Users,
   UserCheck,
   X,
@@ -55,9 +55,6 @@ function Divisi() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   const [successType, setSuccessType] = useState("success")
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const [form, setForm] = useState({
     nama_divisi: "",
@@ -233,69 +230,8 @@ function Divisi() {
     }
   }
 
-  const openDeleteModal = (item) => {
-    const stats = getStats(item.nama_divisi)
-    if (stats.peserta > 0 || stats.mentor > 0) {
-      setError(`Tidak dapat menghapus divisi "${item.nama_divisi}" karena masih memiliki ${stats.peserta} peserta dan ${stats.mentor} mentor. Nonaktifkan saja divisi ini melalui menu edit.`)
-      setTimeout(() => setError(""), 5000)
-      return
-    }
-    setDeleteTarget(item)
-    setShowDeleteModal(true)
-    setError("")
-  }
-
-  const confirmDelete = async () => {
-    if (!deleteTarget) return
-    
-    setDeleteLoading(true)
-    try {
-      console.log(`Attempting to delete divisi ID: ${deleteTarget.id_divisi}`)
-      
-      const response = await deleteDivisi(deleteTarget.id_divisi)
-      console.log("Delete response:", response)
-      
-      // Check if response indicates success
-      if (response && response.success === false) {
-        throw new Error(response.message || "Gagal menghapus divisi")
-      }
-      
-      logActivity("delete", "divisi", deleteTarget.nama_divisi)
-      
-      await loadData()
-      setShowDeleteModal(false)
-      setSuccessMessage(`Divisi "${deleteTarget.nama_divisi}" berhasil dihapus!`)
-      setSuccessType("delete")
-      setShowSuccessModal(true)
-      setDeleteTarget(null)
-      
-    } catch (err) {
-      console.error("Error deleting divisi:", err)
-      
-      let errorMessage = err.message || "Gagal menghapus divisi"
-      
-      if (err.response?.data?.message) {
-        errorMessage = err.response.data.message
-      } else if (err.response?.data?.error) {
-        errorMessage = err.response.data.error
-      } else if (err.response?.status === 400) {
-        errorMessage = `Divisi "${deleteTarget?.nama_divisi}" tidak dapat dihapus karena masih memiliki data terkait. Silahkan nonaktifkan divisi ini melalui menu edit.`
-      }
-      
-      setError(errorMessage)
-      setShowDeleteModal(false)
-      setDeleteTarget(null)
-      
-      // Scroll ke error message
-      setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100)
-    } finally {
-      setDeleteLoading(false)
-    }
-  }
-
   const handleModalClose = () => {
     setShowSuccessModal(false)
-    // Optional: reload data after modal closes
     loadData()
   }
 
@@ -378,8 +314,7 @@ function Divisi() {
                   <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 via-blue-800 to-indigo-800 bg-clip-text text-transparent">
                     Manajemen Divisi
                   </h1>
-                  <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                    <span className="w-1 h-1 bg-emerald-500 rounded-full"></span>
+                  <p className="text-xs text-slate-400">
                     Kelola divisi dan distribusi peserta serta mentor
                   </p>
                 </div>
@@ -413,76 +348,60 @@ function Divisi() {
           </div>
         )}
 
-        {/* STATS CARDS */}
+        {/* STATS CARDS - Minimalis tanpa garis bawah */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-full -mr-16 -mt-16"></div>
+          <div className="relative overflow-hidden bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="relative flex items-center justify-between">
               <div>
-                <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">{divisi.length}</p>
+                <p className="text-2xl font-bold text-slate-800">{divisi.length}</p>
                 <p className="text-xs text-slate-500 mt-0.5">Total Divisi</p>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Layers className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                <Layers className="w-5 h-5 text-blue-500" />
               </div>
-            </div>
-            <div className="mt-3 pt-2">
-              <div className="h-1 w-12 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"></div>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full -mr-16 -mt-16"></div>
+          <div className="relative overflow-hidden bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="relative flex items-center justify-between">
               <div>
-                <p className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">{totalPeserta}</p>
+                <p className="text-2xl font-bold text-slate-800">{totalPeserta}</p>
                 <p className="text-xs text-slate-500 mt-0.5">Total Peserta</p>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Users className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
+                <Users className="w-5 h-5 text-emerald-500" />
               </div>
-            </div>
-            <div className="mt-3 pt-2">
-              <div className="h-1 w-12 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full"></div>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-full -mr-16 -mt-16"></div>
+          <div className="relative overflow-hidden bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="relative flex items-center justify-between">
               <div>
-                <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">{totalMentor}</p>
+                <p className="text-2xl font-bold text-slate-800">{totalMentor}</p>
                 <p className="text-xs text-slate-500 mt-0.5">Total Mentor</p>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
-                <UserCheck className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+                <UserCheck className="w-5 h-5 text-purple-500" />
               </div>
-            </div>
-            <div className="mt-3 pt-2">
-              <div className="h-1 w-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-amber-500/10 to-orange-500/10 rounded-full -mr-16 -mt-16"></div>
+          <div className="relative overflow-hidden bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="relative flex items-center justify-between">
               <div>
-                <p className="text-3xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">{totalAktif}</p>
+                <p className="text-2xl font-bold text-slate-800">{totalAktif}</p>
                 <p className="text-xs text-slate-500 mt-0.5">Divisi Aktif</p>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
-                <Eye className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
+                <Eye className="w-5 h-5 text-amber-500" />
               </div>
-            </div>
-            <div className="mt-3 pt-2">
-              <div className="h-1 w-12 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full"></div>
             </div>
           </div>
         </div>
 
-        {/* SEARCH AND FILTER BAR */}
+        {/* SEARCH AND FILTER BAR - Balance antara search dan filter */}
         <div className="mb-6 flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
+          <div className="relative flex-[3]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
@@ -492,14 +411,14 @@ function Divisi() {
                 setSearch(e.target.value)
                 setCurrentPage(1)
               }}
-              className="w-full pl-10 pr-4 py-2.5 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 text-sm text-slate-700 shadow-sm"
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 text-sm text-slate-700 shadow-sm"
             />
           </div>
           
-          <div className="relative">
+          <div className="relative flex-1">
             <button
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-white hover:shadow-md transition-all duration-200"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-all duration-200 shadow-sm"
             >
               <Filter size={16} />
               <span>Sortir</span>
@@ -512,7 +431,7 @@ function Divisi() {
                   onClick={() => setShowFilterDropdown(false)}
                 />
                 <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden">
-                  <div className="p-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+                  <div className="p-3 border-b border-slate-100 bg-slate-50">
                     <p className="text-xs font-semibold text-slate-600 flex items-center gap-2">
                       <BarChart3 size={12} />
                       Urutkan Berdasarkan
@@ -522,7 +441,7 @@ function Divisi() {
                     <button
                       onClick={() => handleSort("nama")}
                       className={`w-full text-left px-3 py-2.5 rounded-xl text-sm flex items-center justify-between transition-all duration-200 ${
-                        sortBy === "nama" ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600" : "text-slate-600 hover:bg-slate-50"
+                        sortBy === "nama" ? "bg-blue-50 text-blue-600" : "text-slate-600 hover:bg-slate-50"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -537,7 +456,7 @@ function Divisi() {
                     <button
                       onClick={() => handleSort("peserta_terbanyak")}
                       className={`w-full text-left px-3 py-2.5 rounded-xl text-sm flex items-center justify-between transition-all duration-200 ${
-                        sortBy === "peserta_terbanyak" ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600" : "text-slate-600 hover:bg-slate-50"
+                        sortBy === "peserta_terbanyak" ? "bg-blue-50 text-blue-600" : "text-slate-600 hover:bg-slate-50"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -552,7 +471,7 @@ function Divisi() {
                     <button
                       onClick={() => handleSort("mentor_terbanyak")}
                       className={`w-full text-left px-3 py-2.5 rounded-xl text-sm flex items-center justify-between transition-all duration-200 ${
-                        sortBy === "mentor_terbanyak" ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600" : "text-slate-600 hover:bg-slate-50"
+                        sortBy === "mentor_terbanyak" ? "bg-blue-50 text-blue-600" : "text-slate-600 hover:bg-slate-50"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -564,63 +483,43 @@ function Divisi() {
                       )}
                     </button>
                   </div>
-                  <div className="p-3 border-t border-slate-100 bg-slate-50/50">
-                    <p className="text-[10px] text-slate-400 text-center">
-                      {sortBy === "peserta_terbanyak" && sortOrder === "desc" && "Menampilkan divisi dengan peserta terbanyak di atas (↑)"}
-                      {sortBy === "peserta_terbanyak" && sortOrder === "asc" && "Menampilkan divisi dengan peserta paling sedikit di atas (↓)"}
-                      {sortBy === "mentor_terbanyak" && sortOrder === "desc" && "Menampilkan divisi dengan mentor terbanyak di atas (↑)"}
-                      {sortBy === "mentor_terbanyak" && sortOrder === "asc" && "Menampilkan divisi dengan mentor paling sedikit di atas (↓)"}
-                      {sortBy === "nama" && sortOrder === "asc" && "Menampilkan divisi dari A-Z (↑)"}
-                      {sortBy === "nama" && sortOrder === "desc" && "Menampilkan divisi dari Z-A (↓)"}
-                    </p>
-                  </div>
                 </div>
               </>
             )}
           </div>
         </div>
 
-        {/* TABLE */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* TABLE - Compact dan clean */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-gradient-to-r from-slate-50 to-slate-100/50 border-b border-slate-200">
-                  <th className="text-left px-5 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Divisi</th>
-                  <th className="text-left px-5 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Deskripsi</th>
-                  <th className="text-center px-5 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <div className="flex items-center justify-center gap-1.5 cursor-pointer" onClick={() => handleSort("peserta_terbanyak")}>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Divisi</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Deskripsi</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    <div className="flex items-center justify-center gap-1.5 cursor-pointer">
                       <Users size={12} />
                       Peserta
-                      {sortBy === "peserta_terbanyak" && (
-                        <span className="text-blue-500">
-                          {sortOrder === "desc" ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                        </span>
-                      )}
                     </div>
                   </th>
-                  <th className="text-center px-5 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <div className="flex items-center justify-center gap-1.5 cursor-pointer" onClick={() => handleSort("mentor_terbanyak")}>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    <div className="flex items-center justify-center gap-1.5 cursor-pointer">
                       <UserCheck size={12} />
                       Mentor
-                      {sortBy === "mentor_terbanyak" && (
-                        <span className="text-blue-500">
-                          {sortOrder === "desc" ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                        </span>
-                      )}
                     </div>
                   </th>
-                  <th className="text-center px-5 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="text-center px-5 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Aksi</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {paginatedDivisi.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-5 py-12 text-center">
+                    <td colSpan="6" className="px-4 py-12 text-center">
                       <div className="flex flex-col items-center gap-3">
-                        <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl flex items-center justify-center">
-                          <Building2 size="32" className="text-slate-400" />
+                        <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">
+                          <Building2 size="28" className="text-slate-400" />
                         </div>
                         <p className="text-slate-500 font-medium">Belum ada data divisi</p>
                         <button
@@ -642,74 +541,59 @@ function Divisi() {
                   paginatedDivisi.map((d) => {
                     const isActive = d.status === "aktif"
                     const stats = d.stats
-                    const globalIndex = filteredDivisi.findIndex(item => item.id_divisi === d.id_divisi)
-                    const isTopRank = sortBy === "peserta_terbanyak" && sortOrder === "desc" && globalIndex < 3
                     
                     return (
-                      <tr key={d.id_divisi} className={`hover:bg-slate-50/50 transition-all duration-200 group ${isTopRank ? 'bg-gradient-to-r from-yellow-50/30 to-transparent' : ''}`}>
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`relative w-9 h-9 rounded-xl flex items-center justify-center shadow-md transition-all duration-300 ${
-                              isActive ? 'bg-gradient-to-br from-blue-500 to-indigo-500' : 'bg-gradient-to-br from-slate-400 to-slate-500'
+                      <tr key={d.id_divisi} className="hover:bg-slate-50/50 transition group">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                              isActive ? 'bg-blue-50' : 'bg-slate-100'
                             }`}>
-                              <Building2 size={16} className="text-white" />
+                              <Building2 size={14} className={isActive ? 'text-blue-500' : 'text-slate-400'} />
                             </div>
-                            <span className={`font-semibold text-slate-800 text-sm ${isTopRank ? 'text-blue-600' : ''}`}>
+                            <span className="font-medium text-slate-800 text-sm">
                               {d.nama_divisi}
                             </span>
                           </div>
                         </td>
-                        <td className="px-5 py-3.5">
-                          <p className="text-sm text-slate-500 line-clamp-2 max-w-xs">
+                        <td className="px-4 py-3">
+                          <p className="text-xs text-slate-400 line-clamp-2 max-w-xs">
                             {d.deskripsi || "-"}
                           </p>
                         </td>
-                        <td className="px-5 py-3.5 text-center">
-                          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-medium transition-all ${
-                            stats.peserta > 0 ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-400'
-                          }`}>
-                            <Users size={12} />
-                            <span className="text-sm font-bold">{stats.peserta}</span>
+                        <td className="px-4 py-3 text-center">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">
+                            <Users size={11} />
+                            <span>{stats.peserta}</span>
                           </div>
                         </td>
-                        <td className="px-5 py-3.5 text-center">
-                          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-medium transition-all ${
-                            stats.mentor > 0 ? 'bg-purple-50 text-purple-600' : 'bg-slate-50 text-slate-400'
-                          }`}>
-                            <UserCheck size={12} />
-                            <span className="text-sm font-bold">{stats.mentor}</span>
+                        <td className="px-4 py-3 text-center">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">
+                            <UserCheck size={11} />
+                            <span>{stats.mentor}</span>
                           </div>
                         </td>
-                        <td className="px-5 py-3.5 text-center">
+                        <td className="px-4 py-3 text-center">
                           {isActive ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-emerald-50 to-green-50 text-emerald-600 rounded-full text-xs font-medium border border-emerald-100">
-                              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-medium">
+                              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
                               Aktif
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-600 rounded-full text-xs font-medium border border-red-100">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-600 rounded-full text-xs font-medium">
                               <EyeOff size={10} />
                               Nonaktif
                             </span>
                           )}
                         </td>
-                        <td className="px-5 py-3.5 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              onClick={() => handleEdit(d)}
-                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200"
-                              title="Edit"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                            <button
-                              onClick={() => openDeleteModal(d)}
-                              className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200"
-                              title="Hapus"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => handleEdit(d)}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                            title="Edit"
+                          >
+                            <Edit2 size={14} />
+                          </button>
                         </td>
                       </tr>
                     )
@@ -721,7 +605,7 @@ function Divisi() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="px-5 py-3 border-t border-slate-100 flex justify-between items-center bg-gradient-to-r from-slate-50/30 to-white">
+            <div className="px-4 py-3 border-t border-slate-100 flex justify-between items-center bg-slate-50/30">
               <p className="text-[10px] text-slate-400">
                 Menampilkan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredDivisi.length)} dari {filteredDivisi.length} divisi
               </p>
@@ -744,9 +628,9 @@ function Divisi() {
                       <button
                         key={i}
                         onClick={() => setCurrentPage(pageNum)}
-                        className={`w-8 h-8 rounded-lg text-xs font-medium transition-all duration-200 ${
+                        className={`w-7 h-7 rounded-lg text-xs font-medium transition-all duration-200 ${
                           currentPage === pageNum
-                            ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md"
+                            ? "bg-blue-600 text-white shadow-sm"
                             : "text-slate-600 hover:bg-white hover:shadow-sm"
                         }`}
                       >
@@ -765,21 +649,6 @@ function Divisi() {
               </div>
             </div>
           )}
-        </div>
-
-        {/* INFO BANNER */}
-        <div className="mt-6 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-4 border border-blue-100">
-          <div className="flex items-start gap-3">
-            <div className="p-1.5 bg-white rounded-xl shadow-sm">
-              <Shield size={16} className="text-blue-500" />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs text-blue-800">
-                <strong className="font-semibold">Informasi:</strong> Divisi yang memiliki peserta atau mentor tidak dapat dihapus. 
-                Gunakan fitur <strong className="text-indigo-600">"Nonaktifkan"</strong> melalui menu Edit untuk menyembunyikan divisi dari form pendaftaran baru.
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* MODAL FORM */}
@@ -886,15 +755,6 @@ function Divisi() {
                       </div>
                     </label>
                   </div>
-                  <div className="mt-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
-                    <p className="text-[11px] text-blue-700 flex items-start gap-1.5">
-                      <Info size={12} className="flex-shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Catatan:</strong> Jika divisi dinonaktifkan, divisi ini tidak akan muncul di pilihan saat menambah/mengedit peserta atau mentor baru. 
-                        Data peserta dan mentor yang sudah terdaftar di divisi ini tetap aman dan tidak terpengaruh.
-                      </span>
-                    </p>
-                  </div>
                 </div>
               </div>
 
@@ -933,59 +793,6 @@ function Divisi() {
           </div>
         )}
 
-        {/* DELETE CONFIRMATION MODAL */}
-        {showDeleteModal && deleteTarget && (
-          <>
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-              <div className="w-full max-w-md pointer-events-auto">
-                <div className="relative bg-white rounded-2xl overflow-hidden shadow-2xl">
-                  <div className="h-1.5 bg-gradient-to-r from-red-500 via-rose-500 to-orange-500"></div>
-                  
-                  <div className="relative pt-6 pb-2 px-6 text-center">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-2xl mb-4">
-                      <Trash2 size={32} className="text-red-500" />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-800">Hapus Divisi?</h3>
-                    <p className="text-sm text-slate-500 mt-2">
-                      Apakah Anda yakin ingin menghapus divisi <br />
-                      <span className="font-semibold text-red-600">"{deleteTarget.nama_divisi}"</span>?
-                    </p>
-                    <div className="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-200">
-                      <p className="text-[10px] text-amber-700">
-                        ⚠️ Tindakan ini tidak dapat dibatalkan. Data yang terkait dengan divisi ini akan terpengaruh.
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="p-6 pt-4 flex gap-3">
-                    <button
-                      onClick={() => setShowDeleteModal(false)}
-                      className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 transition"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      onClick={confirmDelete}
-                      disabled={deleteLoading}
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-xl text-white font-semibold shadow-md hover:shadow-lg transition flex items-center justify-center gap-2"
-                    >
-                      {deleteLoading ? (
-                        <Loader2 size={16} className="animate-spin" />
-                      ) : (
-                        <>
-                          <Trash2 size={14} />
-                          Hapus
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
         {/* SUCCESS MODAL */}
         {showSuccessModal && (
           <>
@@ -993,25 +800,15 @@ function Divisi() {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
               <div className="w-full max-w-md pointer-events-auto">
                 <div className="relative bg-white rounded-2xl overflow-hidden shadow-2xl">
-                  <div className={`h-1.5 bg-gradient-to-r ${
-                    successType === "delete" 
-                      ? "from-red-500 via-rose-500 to-orange-500"
-                      : "from-emerald-500 via-teal-500 to-cyan-500"
-                  }`} />
+                  <div className="h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
                   
                   <div className="relative pt-8 pb-4 px-6 text-center">
-                    <div className={`inline-flex items-center justify-center w-20 h-20 rounded-2xl shadow-xl ${
-                      successType === "delete"
-                        ? "bg-gradient-to-br from-red-500 via-rose-500 to-orange-500"
-                        : "bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500"
-                    }`}>
+                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl shadow-xl bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500">
                       <CheckCircle size={42} className="text-white" strokeWidth={1.5} />
                     </div>
                     
                     <div className="mt-4">
-                      <h3 className="text-2xl font-bold text-slate-800">
-                        {successType === "delete" ? "Berhasil Dihapus!" : "Berhasil!"}
-                      </h3>
+                      <h3 className="text-2xl font-bold text-slate-800">Berhasil!</h3>
                       <p className="text-xs text-slate-500 mt-1">{successMessage}</p>
                     </div>
                   </div>

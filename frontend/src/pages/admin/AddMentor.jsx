@@ -1,10 +1,10 @@
+// frontend/src/pages/admin/AddMentor.jsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { createMentor } from "../../api/admin/mentorService";
 import { getDivisi } from "../../api/admin/divisiService";
 import { logActivity } from "../../utils/activityLogger";
 import {
-  ArrowLeft,
   UserPlus,
   Mail,
   Lock,
@@ -59,7 +59,6 @@ function AddMentor() {
     phone: "",
     id_divisi: "",
     jabatan: "",
-    status_akun: "aktif",
   });
 
   useEffect(() => {
@@ -78,7 +77,18 @@ function AddMentor() {
         divisiData = response;
       }
       
-      setDivisiList(divisiData);
+      // HANYA TAMPILKAN DIVISI DENGAN STATUS AKTIF
+      const activeDivisi = divisiData.filter(divisi => {
+        // Cek status dari berbagai kemungkinan format respons
+        const status = divisi.status || divisi.status_akun || divisi.is_active;
+        // Jika status undefined/null, anggap sebagai aktif (default)
+        if (status === undefined || status === null) return true;
+        // Filter hanya yang statusnya aktif
+        return status === "aktif" || status === "active" || status === true;
+      });
+      
+      console.log("Active divisions:", activeDivisi);
+      setDivisiList(activeDivisi);
     } catch (err) {
       console.error("Error loading divisi:", err);
       setError("Gagal memuat data divisi");
@@ -101,13 +111,6 @@ function AddMentor() {
 
   const handleBlur = (field) => {
     setTouched({ ...touched, [field]: true });
-  };
-
-  const handleToggle = () => {
-    setForm({ 
-      ...form, 
-      status_akun: form.status_akun === "aktif" ? "non_aktif" : "aktif" 
-    });
   };
 
   const isEmailValid = () => {
@@ -235,7 +238,6 @@ function AddMentor() {
         id_divisi: idDivisi,
         divisi: divisiName,
         jabatan: form.jabatan.trim(),
-        status: true
       };
       
       const response = await createMentor(mentorData);
@@ -247,7 +249,6 @@ function AddMentor() {
           email: form.email,
           divisi: divisiName,
           jabatan: form.jabatan,
-          status: "Aktif"
         });
         setSuccessMessage(response.message || "Mentor berhasil ditambahkan!");
         setShowSuccessModal(true);
@@ -284,14 +285,6 @@ function AddMentor() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-[1200px] mx-auto">
         <div className="mb-6">
-          <button
-            onClick={() => navigate("/admin/users")}
-            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 mb-3 transition text-sm group"
-          >
-            <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
-            Kembali ke Data Pengguna
-          </button>
-          
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-xl shadow-md">
               <UserPlus className="w-4 h-4 text-white" />
@@ -420,9 +413,6 @@ function AddMentor() {
                       {getFieldError('password')}
                     </p>
                   )}
-                  <p className="text-[9px] text-slate-400 mt-1">
-                    Password harus mengandung: huruf besar, huruf kecil, angka, dan minimal 8 karakter
-                  </p>
                 </div>
 
                 <div>
@@ -490,11 +480,9 @@ function AddMentor() {
                       {divisiLoading ? (
                         <option value="" disabled>Memuat divisi...</option>
                       ) : divisiList.length === 0 ? (
-                        <option value="" disabled>Tidak ada divisi tersedia</option>
+                        <option value="" disabled>Tidak ada divisi aktif tersedia</option>
                       ) : (
-                        divisiList
-                          .filter(d => d.status === "aktif" || d.status === 1 || d.status === "Aktif") // Filter divisi aktif
-                          .map((divisi) => (
+                        divisiList.map((divisi) => (
                           <option key={divisi.id_divisi || divisi.id} value={divisi.id_divisi || divisi.id}>
                             {divisi.nama_divisi || divisi.nama}
                           </option>
@@ -516,10 +504,16 @@ function AddMentor() {
                       {getFieldError('id_divisi')}
                     </p>
                   )}
+                  {!divisiLoading && divisiList.length === 0 && !form.id_divisi && (
+                    <p className="text-[10px text-amber-600 mt-1 flex items-center gap-1">
+                      <AlertTriangle size={10} />
+                      Belum ada divisi yang aktif. Silakan aktifkan divisi terlebih dahulu.
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {/* RIGHT COLUMN - Informasi Pribadi */}
+              {/* RIGHT COLUMN - Informasi Pribadi (sama seperti sebelumnya) */}
               <div className="space-y-5">
                 <div className="flex items-center gap-2 mb-1">
                   <div className="p-1 bg-emerald-100 rounded-lg">
@@ -596,7 +590,6 @@ function AddMentor() {
                       {getFieldError('phone')}
                     </p>
                   )}
-                  <p className="text-[10px] text-slate-400 mt-1">Hanya angka, 10-15 digit, tanpa 0 di depan</p>
                 </div>
 
                 <div>
@@ -632,28 +625,6 @@ function AddMentor() {
                     </p>
                   )}
                 </div>
-
-                <div className="flex justify-between items-center bg-slate-50 rounded-lg p-3 border border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <Shield size={14} className="text-slate-500" />
-                    <span className="text-sm font-medium text-slate-700">Status Akun</span>
-                    <span className="text-[10px] text-red-500">*</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleToggle}
-                    disabled={loading}
-                    className={`relative w-11 h-6 flex items-center rounded-full p-1 transition-all duration-300 ${
-                      form.status_akun === "aktif" ? "bg-emerald-500" : "bg-slate-300"
-                    }`}
-                  >
-                    <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transition-transform duration-300 ${
-                        form.status_akun === "aktif" ? "translate-x-5" : "translate-x-0"
-                      }`}
-                    ></div>
-                  </button>
-                </div>
               </div>
             </div>
 
@@ -673,11 +644,6 @@ function AddMentor() {
                   style={{ width: `${(completedCount / totalRequired) * 100}%` }}
                 />
               </div>
-              <p className="text-[10px] text-slate-400 mt-2">
-                {isFormComplete() 
-                  ? "✓ Semua data telah terisi, siap disimpan!" 
-                  : "⚠ Lengkapi semua field (*) untuk melanjutkan"}
-              </p>
             </div>
           </div>
 
@@ -715,20 +681,9 @@ function AddMentor() {
             </button>
           </div>
         </div>
-
-        <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100">
-          <div className="flex items-center gap-2">
-            <Zap size={14} className="text-amber-500" />
-            <p className="text-xs text-blue-700">
-              <strong className="font-semibold">Tips:</strong> Password minimal 8 karakter, harus mengandung huruf besar, huruf kecil, dan angka.
-              <span className="text-red-500 font-medium ml-1">Semua field wajib diisi</span>.
-              Nomor telepon hanya angka 10-15 digit tanpa 0 di depan.
-            </p>
-          </div>
-        </div>
       </div>
 
-      {/* SUCCESS MODAL */}
+      {/* SUCCESS MODAL (sama seperti sebelumnya) */}
       {showSuccessModal && successData && (
         <>
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={handleModalClose} />

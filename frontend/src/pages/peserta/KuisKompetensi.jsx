@@ -47,24 +47,28 @@ function KuisKompetensi() {
   const [timeLeft, setTimeLeft] = useState(null);
   const [quizStarted, setQuizStarted] = useState(false);
   const [backendError, setBackendError] = useState(false);
+  const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+  const [unansweredWarning, setUnansweredWarning] = useState(null);
 
-useEffect(() => {
-  setResult(null);
-  setAnswers({});
-  setRaguAnswers({});
-  setCurrentQuestion(0);
-  setQuizStarted(false);
-  setSubmitting(false);
-  setBackendError(false);
-  setTimeLeft(null);
+  useEffect(() => {
+    setResult(null);
+    setAnswers({});
+    setRaguAnswers({});
+    setCurrentQuestion(0);
+    setQuizStarted(false);
+    setSubmitting(false);
+    setBackendError(false);
+    setTimeLeft(null);
+    setShowConfirmSubmit(false);
+    setUnansweredWarning(null);
 
-  loadQuizDetail();
-}, [id]);
+    loadQuizDetail();
+  }, [id]);
 
-const loadQuizDetail = async () => {
-  setLoading(true);
-  setBackendError(false);
-  setQuiz(null);
+  const loadQuizDetail = async () => {
+    setLoading(true);
+    setBackendError(false);
+    setQuiz(null);
 
     try {
       const response = await getSoalKuisKompetensi(id);
@@ -135,18 +139,22 @@ const loadQuizDetail = async () => {
   };
 
   const handleSelectAnswer = (questionId, answerIndex) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: answerIndex }));
-    if (raguAnswers[questionId]) {
-      setRaguAnswers((prev) => {
-        const newRagu = { ...prev };
-        delete newRagu[questionId];
-        return newRagu;
-      });
-    }
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: answerIndex,
+    }));
   };
 
   const handleRagu = (questionId) => {
-    setRaguAnswers((prev) => ({ ...prev, [questionId]: !prev[questionId] }));
+    setRaguAnswers((prev) => {
+      const updated = { ...prev };
+      if (updated[questionId]) {
+        delete updated[questionId];
+      } else {
+        updated[questionId] = true;
+      }
+      return updated;
+    });
   };
 
   const handleNextQuestion = () => {
@@ -165,12 +173,78 @@ const loadQuizDetail = async () => {
     setCurrentQuestion(index);
   };
 
+  const getQuestionStatus = (questionId) => {
+    if (raguAnswers[questionId]) return "ragu";
+    if (answers[questionId] !== undefined) return "answered";
+    return "unanswered";
+  };
+
+  const checkAllAnswered = () => {
+    const unansweredQuestions = quiz.questions.filter(
+      (q) => answers[q.id] === undefined
+    );
+    const raguQuestions = Object.keys(raguAnswers);
+    return {
+      allAnswered: unansweredQuestions.length === 0,
+      noRagu: raguQuestions.length === 0,
+      unansweredQuestions,
+      raguQuestions,
+    };
+  };
+
+  const handleSubmitClick = () => {
+    const {
+      allAnswered,
+      noRagu,
+      unansweredQuestions,
+      raguQuestions,
+    } = checkAllAnswered();
+
+    if (!allAnswered) {
+      setUnansweredWarning({
+        type: "unanswered",
+        total: unansweredQuestions.length,
+      });
+      setTimeout(() => {
+        setUnansweredWarning(null);
+      }, 3000);
+      return;
+    }
+
+    if (!noRagu) {
+      setUnansweredWarning({
+        type: "ragu",
+        total: raguQuestions.length,
+      });
+      setTimeout(() => {
+        setUnansweredWarning(null);
+      }, 3000);
+      return;
+    }
+
+    // Dispatch event untuk menyembunyikan sidebar saat modal muncul
+    window.dispatchEvent(new CustomEvent("preview-modal-open"));
+    setShowConfirmSubmit(true);
+  };
+
+  const handleCancelSubmit = () => {
+    setShowConfirmSubmit(false);
+    // Dispatch event untuk menampilkan kembali sidebar
+    window.dispatchEvent(new CustomEvent("preview-modal-close"));
+  };
+
+  const handleConfirmSubmit = async () => {
+    setShowConfirmSubmit(false);
+    // Dispatch event untuk menampilkan kembali sidebar
+    window.dispatchEvent(new CustomEvent("preview-modal-close"));
+    await handleSubmit();
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
 
     try {
       if (!backendError) {
-        // Kirim jawaban ke backend, skor dihitung di sana
         const response = await submitJawabanKuisKompetensi(quiz.id, answers);
 
         if (response.success && response.data) {
@@ -182,14 +256,13 @@ const loadQuizDetail = async () => {
             isPassed: response.data.lulus,
             passing_score: response.data.passing_score,
             message: response.data.lulus
-              ? "Selamat! Anda telah berhasil lulus ujian kompetensi dengan gemilang!"
+              ? "Selamat! Anda telah berhasil lulus ujian kompetensi."
               : "Perlu belajar lebih giat lagi. Jangan menyerah, coba pelajari materi kembali!",
           });
         } else {
           throw new Error(response.message || "Submit gagal");
         }
       } else {
-        // Mode dummy (backend error): hitung skor lokal
         let score = 0;
         quiz.questions.forEach((q) => {
           if (answers[q.id] === q.correct) score++;
@@ -205,7 +278,7 @@ const loadQuizDetail = async () => {
           isPassed,
           passing_score: quiz.passing_score,
           message: isPassed
-            ? "Selamat! Anda telah berhasil lulus ujian kompetensi dengan gemilang!"
+            ? "Selamat! Anda telah berhasil lulus ujian kompetensi."
             : "Perlu belajar lebih giat lagi. Jangan menyerah, coba pelajari materi kembali!",
         });
       }
@@ -229,51 +302,47 @@ const loadQuizDetail = async () => {
     setTimeLeft(quiz.durasi * 60);
   };
 
-  const getQuestionStatus = (questionId) => {
-    if (answers[questionId] !== undefined) return "answered";
-    if (raguAnswers[questionId]) return "ragu";
-    return "unanswered";
-  };
-
   const answeredCount = Object.keys(answers).length;
-  const raguCount = Object.keys(raguAnswers).filter(
-    (id) => !answers[id],
-  ).length;
-  const unansweredCount = quiz ? quiz.questions.length - answeredCount : 0;
+  const raguCount = Object.keys(raguAnswers).length;
+  const unansweredCount = quiz
+    ? quiz.questions.filter(
+        (q) => answers[q.id] === undefined && !raguAnswers[q.id]
+      ).length
+    : 0;
 
   const getGrade = (score) => {
     if (score >= 90)
       return {
         label: "A+",
         color: "from-emerald-500 to-teal-500",
-        icon: <Crown size={16} />,
+        icon: <Crown size={14} />,
         text: "Excellent!",
       };
     if (score >= 80)
       return {
         label: "A",
         color: "from-emerald-400 to-teal-400",
-        icon: <Star size={16} />,
+        icon: <Star size={12} />,
         text: "Very Good!",
       };
     if (score >= 70)
       return {
         label: "B",
         color: "from-blue-500 to-cyan-500",
-        icon: <ThumbsUp size={16} />,
+        icon: <ThumbsUp size={12} />,
         text: "Good!",
       };
     if (score >= 60)
       return {
         label: "C",
         color: "from-amber-500 to-orange-500",
-        icon: <Medal size={16} />,
+        icon: <Medal size={12} />,
         text: "Keep Learning!",
       };
     return {
       label: "D",
       color: "from-red-500 to-rose-500",
-      icon: <Target size={16} />,
+      icon: <Target size={12} />,
       text: "Need Improvement",
     };
   };
@@ -393,30 +462,30 @@ const loadQuizDetail = async () => {
     );
   }
 
-  // HASIL KUIS - SUPER PREMIUM (DIPERKECIL)
+  // HASIL KUIS - FIXED VERSION (Lebar, tidak scroll, compact)
   if (result) {
     const grade = getGrade(result.score);
     const isPassed = result.isPassed;
     const percentage = (result.correct / result.total) * 100;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-100 p-5 md:p-6">
-        <div className="max-w-3xl mx-auto">
-          {/* Hero Section - Diperkecil */}
+      <div className="h-[calc(100vh-80px)] overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-100 p-4">
+        <div className="max-w-6xl mx-auto h-full flex flex-col">
+          {/* Hero Section - Compact - Tanpa Emoji */}
           <div
-            className={`relative overflow-hidden rounded-xl shadow-lg mb-5 ${isPassed ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600" : "bg-gradient-to-r from-red-600 via-orange-600 to-amber-600"}`}
+            className={`relative overflow-hidden rounded-xl shadow-lg mb-3 ${isPassed ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600" : "bg-gradient-to-r from-red-600 via-orange-600 to-amber-600"}`}
           >
             <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
-            <div className="relative p-5 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-xl backdrop-blur-sm mb-2 shadow-md">
+            <div className="relative p-4 text-center">
+              <div className="inline-flex items-center justify-center w-14 h-14 bg-white/20 rounded-xl backdrop-blur-sm mb-2 shadow-md">
                 {isPassed ? (
-                  <Trophy size="28" className="text-white" />
+                  <Trophy size="24" className="text-white" />
                 ) : (
-                  <Zap size="28" className="text-white" />
+                  <Zap size="24" className="text-white" />
                 )}
               </div>
-              <h1 className="text-xl font-bold text-white mb-1">
-                {isPassed ? "✨ SELAMAT! ✨" : "TINGKATKAN BELAJAR"}
+              <h1 className="text-lg font-bold text-white mb-0.5">
+                {isPassed ? "SELAMAT!" : "TINGKATKAN BELAJAR"}
               </h1>
               <p className="text-white/85 text-xs max-w-md mx-auto">
                 {result.message}
@@ -424,24 +493,24 @@ const loadQuizDetail = async () => {
             </div>
           </div>
 
-          {/* Score Card Utama - Diperkecil */}
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden mb-5">
-            <div className="p-5 text-center">
+          {/* Score Card Utama - Compact */}
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden mb-3">
+            <div className="p-4 text-center">
               {/* Nilai Utama dengan Circle Progress - Lebih kecil */}
-              <div className="relative inline-block mx-auto mb-4">
-                <svg className="w-28 h-28 transform -rotate-90">
+              <div className="relative inline-block mx-auto mb-3">
+                <svg className="w-24 h-24 transform -rotate-90">
                   <circle
-                    cx="56"
-                    cy="56"
-                    r="48"
+                    cx="48"
+                    cy="48"
+                    r="40"
                     fill="none"
                     stroke="#e2e8f0"
                     strokeWidth="8"
                   />
                   <circle
-                    cx="56"
-                    cy="56"
-                    r="48"
+                    cx="48"
+                    cy="48"
+                    r="40"
                     fill="none"
                     stroke={
                       isPassed
@@ -449,9 +518,9 @@ const loadQuizDetail = async () => {
                         : "url(#gradientWarning)"
                     }
                     strokeWidth="8"
-                    strokeDasharray={2 * Math.PI * 48}
+                    strokeDasharray={2 * Math.PI * 40}
                     strokeDashoffset={
-                      2 * Math.PI * 48 * (1 - result.score / 100)
+                      2 * Math.PI * 40 * (1 - result.score / 100)
                     }
                     strokeLinecap="round"
                     className="transition-all duration-1000 ease-out"
@@ -489,7 +558,7 @@ const loadQuizDetail = async () => {
 
               {/* Grade Badge - Lebih kecil */}
               <div
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r ${grade.color} text-white shadow-md mb-4`}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r ${grade.color} text-white shadow-md mb-3`}
               >
                 {grade.icon}
                 <span className="font-bold text-sm">{grade.label}</span>
@@ -542,9 +611,9 @@ const loadQuizDetail = async () => {
             </div>
           </div>
 
-          {/* Performance Card - Lebih kecil */}
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden mb-5">
-            <div className="p-4 border-b border-gray-100">
+          {/* Performance Card - Compact */}
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden mb-3">
+            <div className="p-3 border-b border-gray-100">
               <div className="flex items-center gap-2">
                 <TrendingUp size="14" className="text-teal-500" />
                 <h3 className="text-xs font-semibold text-gray-700">
@@ -552,8 +621,8 @@ const loadQuizDetail = async () => {
                 </h3>
               </div>
             </div>
-            <div className="p-4">
-              <div className="mb-3">
+            <div className="p-3">
+              <div className="mb-2">
                 <div className="flex justify-between text-[10px] mb-1">
                   <span className="text-gray-500">Penguasaan Materi</span>
                   <span className="font-semibold text-teal-600">
@@ -567,7 +636,7 @@ const loadQuizDetail = async () => {
                   ></div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-[10px]">
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
                 <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
                   <span className="text-gray-500">Tingkat Akurasi</span>
                   <span className="font-bold text-gray-800">
@@ -584,63 +653,47 @@ const loadQuizDetail = async () => {
             </div>
           </div>
 
-          {/* Rekomendasi & Tombol Aksi - Lebih kecil */}
-          <div className="bg-gradient-to-r from-slate-50 to-gray-50 rounded-xl p-4 border border-gray-100">
-            <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-              <div className="flex-1">
-                <p className="text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
-                  <Sparkles size="12" className="text-teal-500" />
-                  Rekomendasi Belajar
-                </p>
-                <p className="text-[11px] text-gray-500">
-                  {isPassed
-                    ? "Hebat! Pertahankan prestasi Anda. Lanjutkan ke kuis berikutnya."
-                    : "Jangan menyerah! Nilai Anda belum memenuhi passing grade. Silakan ulangi kuis ini."}
-                </p>
-              </div>
+          {/* Action Buttons Only - Dengan tombol lanjut ke kuis selanjutnya */}
+          <div className="flex flex-wrap gap-3 items-center justify-center pt-2">
+            {!isPassed && (
+              <button
+                onClick={handleRetakeQuiz}
+                className="px-5 py-2 rounded-lg bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition-all flex items-center gap-2 shadow-sm"
+              >
+                <RefreshCw size="16" />
+                Ulangi Kuis
+              </button>
+            )}
 
-              <div className="flex gap-2 flex-wrap justify-center">
-                {!isPassed && (
-                  <button
-                    onClick={handleRetakeQuiz}
-                    className="px-4 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-all flex items-center gap-1.5"
-                  >
-                    <RefreshCw size="12" />
-                    Ulangi Kuis
-                  </button>
-                )}
+            <button
+              onClick={() => navigate("/peserta/daftar-kuis-kompetensi")}
+              className="px-5 py-2 rounded-lg bg-gradient-to-r from-teal-500 to-blue-600 text-white text-sm font-semibold hover:shadow-md transition-all flex items-center gap-2 shadow-sm"
+            >
+              <BookOpen size="16" />
+              Daftar Kuis
+            </button>
 
-                <button
-                  onClick={() => navigate("/peserta/daftar-kuis-kompetensi")}
-                  className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-teal-500 to-blue-600 text-white text-xs font-semibold hover:shadow-md transition-all flex items-center gap-1.5"
-                >
-                  <BookOpen size="12" />
-                  Daftar Kuis
-                </button>
+            {isPassed && nextQuizId && (
+              <button
+                onClick={() =>
+                  navigate(`/peserta/kuis-kompetensi/${nextQuizId}`)
+                }
+                className="px-5 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:shadow-lg transition-all flex items-center gap-2 shadow-sm"
+              >
+                <ArrowRight size="16" />
+                Lanjut ke Kuis Selanjutnya
+              </button>
+            )}
 
-                {isPassed && nextQuizId && (
-                  <button
-                    onClick={() =>
-                      navigate(`/peserta/kuis-kompetensi/${nextQuizId}`)
-                    }
-                    className="px-4 py-1.5 rounded-lg border-2 border-teal-500 text-teal-600 text-xs font-semibold hover:bg-teal-50 transition-all flex items-center gap-1.5"
-                  >
-                    <ArrowRight size="12" />
-                    {`Lanjut ke Kuis ${nextQuizId}`}
-                  </button>
-                )}
-
-                {isPassed && !nextQuizId && (
-                  <button
-                    onClick={() => navigate("/peserta/daftar-kuis-kompetensi")}
-                    className="px-4 py-1.5 rounded-lg border-2 border-emerald-500 text-emerald-600 text-xs font-semibold hover:bg-emerald-50 transition-all flex items-center gap-1.5"
-                  >
-                    <CheckCircle size="12" />
-                    Selesai
-                  </button>
-                )}
-              </div>
-            </div>
+            {isPassed && !nextQuizId && (
+              <button
+                onClick={() => navigate("/peserta/daftar-kuis-kompetensi")}
+                className="px-5 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:shadow-md transition-all flex items-center gap-2 shadow-sm"
+              >
+                <CheckCircle size="16" />
+                Selesai
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -651,53 +704,51 @@ const loadQuizDetail = async () => {
   if (!quizStarted && !backendError) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-100 p-5 md:p-6">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="relative h-1.5 bg-gradient-to-r from-teal-500 via-blue-500 to-indigo-500"></div>
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
-                <Flag size="24" className="text-white" />
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="relative h-2 bg-gradient-to-r from-teal-500 via-blue-500 to-indigo-500"></div>
+            <div className="p-8 text-center">
+              <div className="w-20 h-20 mx-auto mb-5 bg-gradient-to-br from-teal-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <Flag size="32" className="text-white" />
               </div>
-              <h2 className="text-lg font-bold text-gray-800">{quiz.judul}</h2>
-              <p className="text-xs text-gray-500 mt-1">{quiz.deskripsi}</p>
+              <h2 className="text-2xl font-bold text-gray-800">{quiz.judul}</h2>
+              <p className="text-sm text-gray-500 mt-2 max-w-lg mx-auto">
+                {quiz.deskripsi}
+              </p>
 
-              <div className="grid grid-cols-4 gap-3 mt-4 p-3 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-3 gap-4 mt-6 p-5 bg-gray-50 rounded-xl">
                 <div>
-                  <p className="text-[10px] text-gray-500">Durasi</p>
-                  <p className="text-sm font-bold text-gray-800">
-                    {quiz.durasi} m
+                  <p className="text-xs text-gray-500">Durasi</p>
+                  <p className="text-xl font-bold text-gray-800">
+                    {quiz.durasi} menit
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-gray-500">Soal</p>
-                  <p className="text-sm font-bold text-gray-800">
-                    {quiz.questions.length}
+                  <p className="text-xs text-gray-500">Jumlah Soal</p>
+                  <p className="text-xl font-bold text-gray-800">
+                    {quiz.questions.length} soal
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-gray-500">Minimal</p>
-                  <p className="text-sm font-bold text-amber-600">
+                  <p className="text-xs text-gray-500">Nilai Minimal</p>
+                  <p className="text-xl font-bold text-amber-600">
                     {quiz.passing_score}%
                   </p>
                 </div>
-                <div>
-                  <p className="text-[10px] text-gray-500">Kesempatan</p>
-                  <p className="text-sm font-bold text-gray-800">1x</p>
-                </div>
               </div>
 
-              <div className="mt-5 flex gap-2 justify-center">
+              <div className="mt-8 flex gap-4 justify-center">
                 <button
                   onClick={() => navigate("/peserta/daftar-kuis-kompetensi")}
-                  className="px-4 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50"
+                  className="px-6 py-2.5 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition-all"
                 >
                   Batal
                 </button>
                 <button
                   onClick={handleStartQuiz}
-                  className="px-4 py-1.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-semibold shadow-md hover:shadow-lg flex items-center gap-1"
+                  className="px-8 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
                 >
-                  <Zap size="12" /> Mulai Kuis
+                  <Zap size="18" /> Mulai Kuis
                 </button>
               </div>
             </div>
@@ -715,79 +766,154 @@ const loadQuizDetail = async () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-100 p-5 md:p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left Panel - Grid Nomor Soal */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-md border border-gray-100 sticky top-6">
-              <div className="p-3 border-b border-gray-100">
-                <div className="flex items-center gap-1.5">
-                  <BookOpen size="14" className="text-teal-500" />
-                  <h3 className="font-semibold text-gray-700 text-sm">
-                    Navigasi Soal
-                  </h3>
+        {/* Warning Modal untuk jawaban belum lengkap - Tanpa Emoji */}
+        {unansweredWarning && (
+          <div className="fixed top-5 left-1/2 transform -translate-x-1/2 z-[10000] animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3">
+              <AlertCircle size="20" />
+              <span className="text-sm font-medium">
+                {unansweredWarning.type === "unanswered"
+                  ? `Masih ada ${unansweredWarning.total} soal yang belum dijawab`
+                  : `Masih ada ${unansweredWarning.total} soal yang masih ditandai ragu`}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Confirm Submit Modal */}
+        {showConfirmSubmit && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000]">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="text-center mb-4">
+                <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <AlertCircle size="28" className="text-amber-600" />
                 </div>
+                <h3 className="text-lg font-bold text-gray-800 mb-2">
+                  Konfirmasi Submit
+                </h3>
+                <p className="text-sm text-gray-500">
+                  Apakah Anda yakin ingin mengakhiri kuis dan menyerahkan semua jawaban?
+                  <br />
+                  <span className="text-amber-600 font-medium mt-2 block">
+                    Pastikan semua jawaban sudah benar sebelum submit!
+                  </span>
+                </p>
               </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCancelSubmit}
+                  className="flex-1 px-4 py-2 rounded-lg border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleConfirmSubmit}
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold hover:shadow-lg transition flex items-center justify-center gap-2"
+                >
+                  {submitting ? <Loader2 size="16" className="animate-spin" /> : <Send size="16" />}
+                  {submitting ? "Memproses..." : "Ya, Submit"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
-              <div className="p-3">
-                <div className="grid grid-cols-5 gap-1.5">
-                  {quiz.questions.map((q, idx) => {
-                    const status = getQuestionStatus(q.id);
-                    let bgColor = "bg-gray-100 text-gray-500 hover:bg-gray-200";
-                    if (status === "answered")
-                      bgColor = "bg-teal-500 text-white hover:bg-teal-600";
-                    if (status === "ragu")
-                      bgColor = "bg-amber-500 text-white hover:bg-amber-600";
-                    if (currentQuestion === idx)
-                      bgColor =
-                        "bg-gradient-to-r from-teal-600 to-blue-600 text-white ring-2 ring-teal-300";
-
-                    return (
-                      <button
-                        key={q.id}
-                        onClick={() => handleJumpToQuestion(idx)}
-                        className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all duration-200 ${bgColor}`}
-                      >
-                        {idx + 1}
-                      </button>
-                    );
-                  })}
+        {/* Grid Layout - Responsif saat modal muncul */}
+        <div
+          className={`grid gap-6 transition-all duration-300 ${
+            showConfirmSubmit
+              ? "grid-cols-1"
+              : "grid-cols-1 lg:grid-cols-4"
+          }`}
+        >
+          {/* Left Panel - Grid Nomor Soal (Hilang saat modal confirm submit) */}
+          {!showConfirmSubmit && (
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-xl shadow-md border border-gray-100 sticky top-6">
+                <div className="p-3 border-b border-gray-100">
+                  <div className="flex items-center gap-1.5">
+                    <BookOpen size="14" className="text-teal-500" />
+                    <h3 className="font-semibold text-gray-700 text-sm">
+                      Navigasi Soal
+                    </h3>
+                  </div>
                 </div>
 
-                <div className="mt-3 pt-2 border-t border-gray-100 space-y-1.5">
-                  <div className="flex items-center justify-between text-[10px]">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 rounded-full bg-teal-500"></div>
-                      <span className="text-gray-500">Terjawab</span>
-                    </div>
-                    <span className="font-semibold text-gray-700">
-                      {answeredCount}
-                    </span>
+                <div className="p-3">
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {quiz.questions.map((q, idx) => {
+                      const status = getQuestionStatus(q.id);
+                      
+                      let bgColor = "bg-gray-100 text-gray-500 hover:bg-gray-200";
+                      
+                      if (status === "ragu") {
+                        bgColor = "bg-amber-500 text-white hover:bg-amber-600";
+                      }
+                      else if (status === "answered") {
+                        bgColor = "bg-teal-500 text-white hover:bg-teal-600";
+                      }
+                      
+                      if (currentQuestion === idx) {
+                        if (status === "ragu") {
+                          bgColor = "bg-amber-500 text-white ring-2 ring-amber-300";
+                        } else {
+                          bgColor = "bg-gradient-to-r from-teal-600 to-blue-600 text-white ring-2 ring-teal-300";
+                        }
+                      }
+                      
+                      return (
+                        <button
+                          key={q.id}
+                          onClick={() => handleJumpToQuestion(idx)}
+                          className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all duration-200 ${bgColor}`}
+                        >
+                          {idx + 1}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="flex items-center justify-between text-[10px]">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                      <span className="text-gray-500">Ragu</span>
+
+                  <div className="mt-3 pt-2 border-t border-gray-100 space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-teal-500"></div>
+                        <span className="text-gray-500">Terjawab</span>
+                      </div>
+                      <span className="font-semibold text-gray-700">
+                        {answeredCount}
+                      </span>
                     </div>
-                    <span className="font-semibold text-gray-700">
-                      {raguCount}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-[10px]">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 rounded-full bg-gray-300"></div>
-                      <span className="text-gray-500">Kosong</span>
+                    <div className="flex items-center justify-between text-[10px]">
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                        <span className="text-gray-500">Ragu</span>
+                      </div>
+                      <span className="font-semibold text-gray-700">
+                        {raguCount}
+                      </span>
                     </div>
-                    <span className="font-semibold text-gray-700">
-                      {unansweredCount}
-                    </span>
+                    <div className="flex items-center justify-between text-[10px]">
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-gray-300"></div>
+                        <span className="text-gray-500">Kosong</span>
+                      </div>
+                      <span className="font-semibold text-gray-700">
+                        {unansweredCount}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Right Panel - Soal */}
-          <div className="lg:col-span-3">
+          {/* Right Panel - Soal (Lebar penuh saat modal confirm submit) */}
+          <div
+            className={`transition-all duration-300 ${
+              showConfirmSubmit ? "lg:col-span-4" : "lg:col-span-3"
+            }`}
+          >
             <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 mb-4">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-2">
@@ -830,15 +956,22 @@ const loadQuizDetail = async () => {
               <div className="relative h-1 bg-gradient-to-r from-teal-500 via-blue-500 to-indigo-500"></div>
               <div className="p-5">
                 <div className="flex items-start justify-between mb-4">
-                  <h3 className="text-sm font-bold text-gray-800 leading-relaxed">
+                  <h3 className="text-sm font-bold text-gray-800 leading-relaxed flex-1">
                     {question.text}
                   </h3>
                   <button
-                    onClick={() => handleRagu(question.id)}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all ${raguAnswers[question.id] ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRagu(question.id);
+                    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+                      raguAnswers[question.id]
+                        ? "bg-amber-100 text-amber-700 border border-amber-200"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200"
+                    }`}
                   >
                     <HelpCircle size="12" />
-                    {raguAnswers[question.id] ? "Batalkan" : "Ragu"}
+                    {raguAnswers[question.id] ? "Batalkan Ragu" : "Tandai Ragu"}
                   </button>
                 </div>
 
@@ -849,7 +982,11 @@ const loadQuizDetail = async () => {
                     return (
                       <label
                         key={idx}
-                        className={`flex items-start gap-2.5 p-3 rounded-lg border transition-all cursor-pointer ${isSelected ? "border-teal-500 bg-teal-50 shadow-sm" : "border-gray-200 hover:border-teal-300 hover:bg-gray-50"}`}
+                        className={`flex items-start gap-2.5 p-3 rounded-lg border transition-all cursor-pointer ${
+                          isSelected 
+                            ? "border-teal-500 bg-teal-50 shadow-sm" 
+                            : "border-gray-200 hover:border-teal-300 hover:bg-gray-50"
+                        }`}
                       >
                         <input
                           type="radio"
@@ -885,7 +1022,7 @@ const loadQuizDetail = async () => {
 
               {isLast ? (
                 <button
-                  onClick={handleSubmit}
+                  onClick={handleSubmitClick}
                   disabled={submitting}
                   className="px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg text-xs font-semibold shadow-md hover:shadow-lg flex items-center gap-1 disabled:opacity-50"
                 >
@@ -904,30 +1041,6 @@ const loadQuizDetail = async () => {
                   Selanjutnya <ChevronRight size="12" />
                 </button>
               )}
-            </div>
-
-            <div className="mt-3 p-2 bg-gray-50 rounded-lg">
-              <div className="flex items-center justify-center gap-3 text-[10px]">
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-teal-500"></div>
-                  <span className="text-gray-500">Terjawab</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                  <span className="text-gray-500">Ragu</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-gray-300"></div>
-                  <span className="text-gray-500">Kosong</span>
-                </div>
-                <div className="text-gray-300">|</div>
-                <div className="flex items-center gap-1">
-                  <BarChart3 size="10" className="text-teal-500" />
-                  <span className="text-gray-500">
-                    {Math.round((answeredCount / quiz.questions.length) * 100)}%
-                  </span>
-                </div>
-              </div>
             </div>
           </div>
         </div>

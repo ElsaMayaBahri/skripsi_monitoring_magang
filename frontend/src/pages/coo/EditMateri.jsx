@@ -16,7 +16,9 @@ import {
   Trash2,
   Loader2,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  ListOrdered,
+  FileType
 } from "lucide-react"
 
 function EditMateri() {
@@ -27,7 +29,8 @@ function EditMateri() {
     judul: "",
     deskripsi: "",
     divisi: "",
-    kategori: ""
+    kategori: "",
+    urutan: 1
   })
   const [existingFile, setExistingFile] = useState(null)
   const [newFile, setNewFile] = useState(null)
@@ -64,7 +67,8 @@ function EditMateri() {
           judul: materiItem.judul || materiItem.title || "",
           deskripsi: materiItem.deskripsi || materiItem.description || "",
           divisi: materiItem.divisi || "",
-          kategori: materiItem.kategori || ""
+          kategori: materiItem.kategori || "",
+          urutan: materiItem.urutan || materiItem.order || 1
         })
         
         if (materiItem.file_materi) {
@@ -73,7 +77,9 @@ function EditMateri() {
             path: materiItem.file_materi,
             url: cleanUrl(materiItem.file_materi),
             type: materiItem.kategori === "PDF" ? "application/pdf" : 
-                   materiItem.kategori === "Video" ? "video/mp4" : "application/octet-stream"
+                   materiItem.kategori === "Video" ? "video/mp4" :
+                   materiItem.kategori === "PPT" ? "application/vnd.ms-powerpoint" :
+                   materiItem.kategori === "Dokumen" ? "application/msword" : "application/octet-stream"
           })
         }
       } else if (response && response.data && !response.success) {
@@ -93,22 +99,37 @@ function EditMateri() {
     try {
       const response = await getDivisi()
       let divisiData = []
+      
       if (response && response.success && Array.isArray(response.data)) {
         divisiData = response.data
       } else if (Array.isArray(response)) {
         divisiData = response
       }
-      setDivisiList(divisiData)
-      console.log("Divisi list loaded:", divisiData)
+      
+      // Filter hanya divisi yang statusnya aktif
+      const activeDivisiList = divisiData.filter(divisi => {
+        const status = divisi.status || divisi.status_divisi || divisi.is_active || divisi.aktif
+        if (typeof status === 'string') {
+          return status.toLowerCase() === 'aktif'
+        }
+        if (typeof status === 'boolean') {
+          return status === true
+        }
+        return true
+      })
+      
+      setDivisiList(activeDivisiList)
+      console.log("Active divisi list loaded:", activeDivisiList)
     } catch (error) {
       console.error("Error fetch divisi:", error)
     }
   }
 
   const handleChange = (e) => {
+    const value = e.target.name === "urutan" ? parseInt(e.target.value) || 1 : e.target.value
     setForm({
       ...form,
-      [e.target.name]: e.target.value
+      [e.target.name]: value
     })
     if (error) setError("")
   }
@@ -122,9 +143,9 @@ function EditMateri() {
       return
     }
 
-    const allowedTypes = ['application/pdf', 'video/mp4']
-    if (!allowedTypes.includes(file.type)) {
-      setError("Format file harus PDF atau MP4")
+    const allowedTypes = ['application/pdf', 'video/mp4', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation']
+    if (!allowedTypes.includes(file.type) && !file.type.includes('pdf') && !file.type.includes('video') && !file.type.includes('powerpoint') && !file.type.includes('presentation') && !file.type.includes('document')) {
+      setError("Format file harus PDF, MP4, PPT, PPTX, DOC, atau DOCX")
       return
     }
 
@@ -164,6 +185,8 @@ function EditMateri() {
     const lowerType = (type || kategori || "").toLowerCase()
     if (lowerType.includes("pdf")) return { icon: FileText, color: "text-red-500", bg: "bg-red-50" }
     if (lowerType.includes("video") || lowerType.includes("mp4")) return { icon: Video, color: "text-blue-500", bg: "bg-blue-50" }
+    if (lowerType.includes("ppt") || lowerType.includes("powerpoint") || lowerType.includes("presentation")) return { icon: FileType, color: "text-orange-500", bg: "bg-orange-50" }
+    if (lowerType.includes("doc") || lowerType.includes("document") || lowerType.includes("word")) return { icon: File, color: "text-indigo-500", bg: "bg-indigo-50" }
     return { icon: File, color: "text-slate-500", bg: "bg-slate-100" }
   }
 
@@ -174,6 +197,16 @@ function EditMateri() {
     }
     if (!form.divisi) {
       setError("Divisi harus dipilih")
+      return
+    }
+    if (!form.urutan || form.urutan < 1) {
+      setError("Urutan materi harus diisi dengan angka positif")
+      return
+    }
+
+    // Validasi file untuk tipe non-Link
+    if (!existingFile && !newFile) {
+      setError("File materi harus diupload")
       return
     }
 
@@ -191,6 +224,7 @@ function EditMateri() {
       formData.append("deskripsi", form.deskripsi || "")
       formData.append("divisi", form.divisi)
       formData.append("kategori", form.kategori || "")
+      formData.append("urutan", form.urutan.toString())
       
       // Hanya append file jika ada file baru
       if (newFile && newFile.file) {
@@ -202,6 +236,7 @@ function EditMateri() {
         judul: form.judul,
         divisi: form.divisi,
         kategori: form.kategori,
+        urutan: form.urutan,
         hasFile: !!(newFile && newFile.file)
       })
 
@@ -257,7 +292,7 @@ function EditMateri() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
       <div className="p-5 lg:p-6 max-w-5xl mx-auto">
         
-        {/* HEADER - Tombol kembali ke materi sudah dihapus */}
+        {/* HEADER */}
         <div className="mb-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-br from-teal-600 via-cyan-700 to-blue-800 rounded-xl shadow-md">
@@ -269,7 +304,7 @@ function EditMateri() {
               </h1>
               <p className="text-xs text-slate-500 flex items-center gap-1.5">
                 <span className="w-1 h-1 bg-teal-500 rounded-full"></span>
-                Perbarui informasi dan file materi pelatihan
+                Perbarui informasi, urutan, dan file materi pelatihan
               </p>
             </div>
           </div>
@@ -361,18 +396,51 @@ function EditMateri() {
                       className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 bg-white"
                     >
                       <option value="">Pilih Divisi</option>
-                      {divisiList.map((div) => (
-                        <option key={div.id_divisi || div.id} value={div.nama_divisi || div.nama}>
-                          {div.nama_divisi || div.nama}
-                        </option>
-                      ))}
+                      {divisiList.map((div) => {
+                        const divisiId = div.id_divisi || div.id
+                        const divisiName = div.nama_divisi || div.nama
+                        return (
+                          <option key={divisiId} value={divisiName}>
+                            {divisiName}
+                          </option>
+                        )
+                      })}
                     </select>
                   </div>
+                  {divisiList.length === 0 && (
+                    <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      Tidak ada divisi aktif yang tersedia
+                    </p>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                    Kategori
+                    Urutan Materi <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <ListOrdered size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="number"
+                      name="urutan"
+                      min="1"
+                      step="1"
+                      placeholder="Contoh: 1, 2, 3, ..."
+                      value={form.urutan}
+                      onChange={handleChange}
+                      className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                    <AlertCircle size={10} />
+                    Urutan penampilan materi (semakin kecil angka, semakin awal ditampilkan)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                    Kategori <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -385,7 +453,8 @@ function EditMateri() {
                       <option value="">Pilih Kategori</option>
                       <option value="PDF">PDF</option>
                       <option value="Video">Video</option>
-                      <option value="Image">Image</option>
+                      <option value="PPT">PPT / PPTX</option>
+                      <option value="Dokumen">Dokumen (DOC / DOCX)</option>
                     </select>
                   </div>
                 </div>
@@ -399,7 +468,7 @@ function EditMateri() {
                   <UploadCloud size={12} className="text-emerald-600" />
                 </div>
                 <h3 className="text-sm font-semibold text-slate-700">File Materi</h3>
-                <span className="text-[10px] text-slate-400">(PDF, MP4 - maks 50MB)</span>
+                <span className="text-[10px] text-slate-400">(PDF, MP4, PPT, DOC - maks 50MB)</span>
               </div>
 
               {existingFile && !newFile && (
@@ -434,11 +503,11 @@ function EditMateri() {
                     type="file"
                     className="hidden"
                     onChange={handleFileChange}
-                    accept=".pdf,.mp4"
+                    accept=".pdf,.mp4,.ppt,.pptx,.doc,.docx"
                   />
                   <UploadCloud size={32} className="text-slate-400 mb-2" />
                   <p className="text-sm text-slate-600">Klik atau tarik file ke sini</p>
-                  <p className="text-[10px] text-slate-400 mt-1">PDF, MP4 (Maks. 50MB)</p>
+                  <p className="text-[10px] text-slate-400 mt-1">PDF, MP4, PPT, PPTX, DOC, DOCX (Maks. 50MB)</p>
                 </label>
               </div>
 

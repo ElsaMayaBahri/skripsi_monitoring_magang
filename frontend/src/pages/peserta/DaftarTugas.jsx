@@ -1,6 +1,7 @@
 // src/pages/peserta/DaftarTugas.jsx
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   ClipboardList,
   Search,
@@ -11,22 +12,24 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  Star,
-  Award,
-  Server,
-  Lock,
   Eye,
   Upload,
   Link as LinkIcon,
   X,
   Paperclip,
-  FolderOpen,
   Download,
   ExternalLink,
+  User,
+  FileWarning,
+  RotateCcw,
+  CalendarCheck,
+  FileCheck,
 } from "lucide-react";
+import { getPesertaTugas } from "../../api/peserta/tugasService";
 
 function DaftarTugas() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [tugasList, setTugasList] = useState([]);
   const [filteredTugas, setFilteredTugas] = useState([]);
@@ -35,57 +38,228 @@ function DaftarTugas() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTugas, setSelectedTugas] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const itemsPerPage = 6;
 
   useEffect(() => {
     loadTugasData();
   }, []);
 
+  useEffect(() => {
+    if (location.state?.refresh) {
+      loadTugasData();
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadTugasData();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
+  const formatDeadline = (deadlineString) => {
+    if (!deadlineString || deadlineString === "-" || deadlineString === null) return "-";
+    try {
+      let date;
+      if (typeof deadlineString === "string") {
+        if (deadlineString.includes(" ")) {
+          const [datePart] = deadlineString.split(" ");
+          const [year, month, day] = datePart.split("-");
+          date = new Date(year, month - 1, day);
+        } else {
+          date = new Date(deadlineString);
+        }
+      } else {
+        date = new Date(deadlineString);
+      }
+      if (isNaN(date.getTime())) return "-";
+      return date.toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      });
+    } catch (error) {
+      return "-";
+    }
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "-";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "-";
+      return date.toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch (error) {
+      return "-";
+    }
+  };
+
+  // Fungsi untuk mengecek apakah tugas terlambat (melewati deadline)
+  const isLateSubmission = (deadlineRaw, submittedAt) => {
+    if (!deadlineRaw || deadlineRaw === "-" || deadlineRaw === null) return false;
+    if (!submittedAt) return false;
+    
+    try {
+      const deadline = new Date(deadlineRaw);
+      const submitted = new Date(submittedAt);
+      
+      if (isNaN(deadline.getTime()) || isNaN(submitted.getTime())) return false;
+      
+      return submitted > deadline;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  const handleDownloadFile = (fileUrl) => {
+    if (!fileUrl) return;
+    
+    try {
+      let cleanPath = fileUrl;
+      if (cleanPath.startsWith('http://localhost:8000/storage/')) {
+        cleanPath = cleanPath.replace('http://localhost:8000/storage/', '');
+      } else if (cleanPath.startsWith('/storage/')) {
+        cleanPath = cleanPath.replace('/storage/', '');
+      } else if (cleanPath.startsWith('storage/')) {
+        cleanPath = cleanPath.replace('storage/', '');
+      }
+      
+      const downloadUrl = `http://localhost:8000/api/storage/download/${encodeURIComponent(cleanPath)}`;
+      window.location.href = downloadUrl;
+    } catch (error) {
+      console.error("Download error:", error);
+    }
+  };
+
+  const openPreview = (fileUrl, fileName) => {
+    if (!fileUrl) return;
+    
+    let cleanPath = fileUrl;
+    if (cleanPath.startsWith('http://localhost:8000/storage/')) {
+      cleanPath = cleanPath.replace('http://localhost:8000/storage/', '');
+    } else if (cleanPath.startsWith('/storage/')) {
+      cleanPath = cleanPath.replace('/storage/', '');
+    } else if (cleanPath.startsWith('storage/')) {
+      cleanPath = cleanPath.replace('storage/', '');
+    }
+    
+    const previewUrl = `http://localhost:8000/api/storage/preview/${encodeURIComponent(cleanPath)}`;
+    
+    window.dispatchEvent(new Event("preview-modal-open"));
+    
+    setPreviewFile({
+      url: previewUrl,
+      name: fileName || 'Preview',
+    });
+    setIsPreviewOpen(true);
+  };
+
+  const closePreview = () => {
+    setIsPreviewOpen(false);
+    setPreviewFile(null);
+    window.dispatchEvent(new Event("preview-modal-close"));
+  };
+
   const loadTugasData = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
+      const result = await getPesertaTugas();
+      console.log("📦 Raw API Response:", result);
 
-      const res = await fetch("http://localhost:8000/api/peserta/tugas", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-
-      const data = await res.json();
-      console.log("Tugas data:", data);
-
-      if (data.success && Array.isArray(data.data)) {
-        const transformed = data.data.map((t) => ({
-          id: t.id_pengumpulan,
-          id_tugas: t.id_tugas,
-          judul: t.tugas?.judul_tugas || t.judul_tugas || "Tanpa Judul",
-          deskripsi_singkat: (
-            t.tugas?.deskripsi ||
-            t.deskripsi ||
-            ""
-          ).substring(0, 100),
-          deskripsi_lengkap: t.tugas?.deskripsi || t.deskripsi || "-",
-          cara_pengerjaan: t.tugas?.cara_pengerjaan || "",
-          deadline: t.tugas?.deadline
-            ? new Date(t.tugas.deadline).toLocaleDateString("id-ID", {
-                day: "2-digit",
-                month: "long",
-                year: "numeric",
-              })
-            : "-",
-          deadline_raw: t.tugas?.deadline || null,
-          status: t.status || "pending",
-          submitted_at: t.tanggal_kumpul || null,
-          nilai: t.nilai || null,
-          catatan: t.catatan_mentor || null,
-          attachments: buildAttachments(t.tugas),
-        }));
+      if (result.success && Array.isArray(result.data)) {
+        const transformed = result.data.map((t) => {
+          const attachments = [];
+          
+          if (t.file_tugas_urls && Array.isArray(t.file_tugas_urls)) {
+            t.file_tugas_urls.forEach((url) => {
+              if (url && url !== "null" && url !== "undefined") {
+                attachments.push({
+                  type: "file",
+                  name: url.split("/").pop() || "File Tugas",
+                  url: url,
+                });
+              }
+            });
+          }
+          
+          if (t.file_tugas_links && Array.isArray(t.file_tugas_links)) {
+            t.file_tugas_links.forEach((link) => {
+              if (link && link !== "null" && link !== "undefined" && link.trim() !== "") {
+                attachments.push({
+                  type: "link",
+                  name: "Link Referensi",
+                  url: link,
+                  external: true,
+                });
+              }
+            });
+          }
+          
+          if (t.file_links && Array.isArray(t.file_links)) {
+            t.file_links.forEach((link) => {
+              if (link && link !== "null" && link !== "undefined" && link.trim() !== "") {
+                attachments.push({
+                  type: "link",
+                  name: "Link Referensi",
+                  url: link,
+                  external: true,
+                });
+              }
+            });
+          }
+          
+          if (t.link_materi && t.link_materi.trim() !== "") {
+            attachments.push({
+              type: "link",
+              name: "Link Materi",
+              url: t.link_materi,
+              external: true,
+            });
+          }
+          
+          // Cek apakah tugas dikumpulkan terlambat (tanpa mengubah status utama)
+          let isLate = false;
+          const submittedStatuses = ["dikumpulkan", "dikumpulkan_revisi", "selesai"];
+          if (submittedStatuses.includes(t.status) && t.tanggal_kumpul && t.deadline) {
+            isLate = isLateSubmission(t.deadline, t.tanggal_kumpul);
+          }
+          
+          return {
+            id: t.id_pengumpulan,
+            id_tugas: t.id_tugas,
+            judul: t.judul_tugas || "Tanpa Judul",
+            instruksi: t.deskripsi || "-",
+            cara_pengerjaan: t.cara_pengerjaan || "",
+            deadline_display: formatDeadline(t.deadline),
+            deadline_raw: t.deadline,
+            status: t.status,
+            isLate: isLate, // Flag untuk keterlambatan
+            submitted_at: t.tanggal_kumpul || null,
+            nilai: t.nilai || null,
+            dinilai_pada: t.dinilai_pada || null,
+            catatan_mentor: t.catatan_mentor || null,
+            attachments: attachments,
+            file_jawaban_url: t.file_jawaban_url || null,
+            link_jawaban: t.link_jawaban || null,
+            mentor_name: t.mentor_name || "Mentor",
+          };
+        });
         setTugasList(transformed);
         setFilteredTugas(transformed);
       } else {
-        console.error("Response tidak sesuai:", data);
+        console.error("Response tidak sesuai:", result);
         setTugasList([]);
         setFilteredTugas([]);
       }
@@ -98,47 +272,26 @@ function DaftarTugas() {
     }
   };
 
-  // Helper untuk build attachments dari data tugas
-  const buildAttachments = (tugas) => {
-    if (!tugas) return [];
-    const attachments = [];
-
-    if (tugas.file_tugas) {
-      attachments.push({
-        type: "pdf",
-        name: tugas.file_tugas.split("/").pop(),
-        url: `http://localhost:8000/storage/${tugas.file_tugas}`,
-        size: "",
-      });
-    }
-
-    if (tugas.file_link) {
-      attachments.push({
-        type: "link",
-        name: tugas.link_type || "Link Materi",
-        url: tugas.file_link,
-        external: true,
-      });
-    }
-
-    return attachments;
-  };
-
   useEffect(() => {
     let filtered = [...tugasList];
-
     if (searchTerm) {
       filtered = filtered.filter(
         (t) =>
           t.judul.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          t.deskripsi_singkat.toLowerCase().includes(searchTerm.toLowerCase()),
+          t.instruksi.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-
     if (filterStatus !== "all") {
-      filtered = filtered.filter((t) => t.status === filterStatus);
+      filtered = filtered.filter((t) => {
+        if (filterStatus === "dikumpulkan") {
+          return t.status === "dikumpulkan" || t.status === "dikumpulkan_revisi";
+        }
+        if (filterStatus === "revisi") {
+          return t.status === "revisi";
+        }
+        return t.status === filterStatus;
+      });
     }
-
     setFilteredTugas(filtered);
     setCurrentPage(1);
   }, [searchTerm, filterStatus, tugasList]);
@@ -156,32 +309,106 @@ function DaftarTugas() {
         return {
           bg: "bg-amber-100",
           text: "text-amber-700",
-          icon: AlertCircle,
+          icon: RotateCcw,
           label: "Perlu Revisi",
+        };
+      case "dikumpulkan_revisi":
+        return {
+          bg: "bg-amber-100",
+          text: "text-amber-700",
+          icon: RotateCcw,
+          label: "Review Revisi",
+        };
+      case "dikumpulkan":
+        return {
+          bg: "bg-blue-100",
+          text: "text-blue-700",
+          icon: Clock,
+          label: "Dikumpulkan",
         };
       default:
         return {
           bg: "bg-gray-100",
           text: "text-gray-600",
-          icon: Clock,
-          label: "Belum Dikumpulkan",
+          icon: FileWarning,
+          label: "Belum",
         };
     }
   };
 
-  const getDeadlineStatus = (deadline) => {
-    if (!deadline || deadline === "-")
-      return { text: "text-gray-500", label: "No deadline" };
+  const getDeadlineStatus = (deadlineRaw) => {
+    if (!deadlineRaw || deadlineRaw === "-" || deadlineRaw === null) {
+      return { text: "text-gray-500", label: "-", color: "gray" };
+    }
+    try {
+      let deadlineDate;
+      if (typeof deadlineRaw === "string") {
+        if (deadlineRaw.includes(" ")) {
+          const [datePart] = deadlineRaw.split(" ");
+          const [year, month, day] = datePart.split("-");
+          deadlineDate = new Date(year, month - 1, day);
+        } else {
+          deadlineDate = new Date(deadlineRaw);
+        }
+      } else {
+        deadlineDate = new Date(deadlineRaw);
+      }
+      if (isNaN(deadlineDate.getTime())) {
+        return { text: "text-gray-500", label: "-", color: "gray" };
+      }
 
-    const today = new Date();
-    const deadlineDate = new Date(deadline);
-    const diffDays = Math.ceil((deadlineDate - today) / (1000 * 60 * 60 * 24));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      deadlineDate.setHours(0, 0, 0, 0);
+      const diffDays = Math.ceil((deadlineDate - today) / (1000 * 60 * 60 * 24));
 
-    if (diffDays < 0) return { text: "text-red-600", label: "Terlewat" };
-    if (diffDays === 0) return { text: "text-red-500", label: "Hari ini!" };
-    if (diffDays <= 3)
-      return { text: "text-amber-600", label: `${diffDays} hari lagi` };
-    return { text: "text-gray-500", label: `${diffDays} hari` };
+      if (diffDays < 0) return { text: "text-red-600", label: "Terlewat", color: "red" };
+      if (diffDays === 0) return { text: "text-red-500", label: "Hari Ini!", color: "red" };
+      if (diffDays <= 3) return { text: "text-amber-600", label: `${diffDays} hari`, color: "amber" };
+      return { text: "text-green-600", label: `${diffDays} hari`, color: "green" };
+    } catch (error) {
+      return { text: "text-gray-500", label: "-", color: "gray" };
+    }
+  };
+
+  const getMainActionButton = (tugas) => {
+    const baseClass =
+      "flex-1 py-2 text-sm font-medium rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-sm";
+    
+    if (tugas.status === "selesai") {
+      return null;
+    }
+    if (tugas.status === "revisi") {
+      return {
+        text: "Kumpulkan Revisi",
+        icon: <RotateCcw size="16" />,
+        class: `${baseClass} bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:shadow-md`,
+        action: () => navigate(`/peserta/tugas/${tugas.id}/kumpul`, { 
+          state: { from: "daftar", isRevision: true, refresh: true } 
+        }),
+      };
+    }
+    if (
+      tugas.status === "dikumpulkan" ||
+      tugas.status === "dikumpulkan_revisi"
+    ) {
+      return {
+        text: "Lihat",
+        icon: <FileCheck size="16" />,
+        class: `${baseClass} bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100`,
+        action: () => navigate(`/peserta/tugas/${tugas.id}/kumpul`, { 
+          state: { from: "daftar", refresh: true } 
+        }),
+      };
+    }
+    return {
+      text: "Kumpulkan",
+      icon: <Upload size="16" />,
+      class: `${baseClass} bg-gradient-to-r from-teal-500 to-blue-600 text-white hover:shadow-lg`,
+      action: () => navigate(`/peserta/tugas/${tugas.id}/kumpul`, { 
+        state: { from: "daftar", refresh: true } 
+      }),
+    };
   };
 
   const openDetailModal = (tugas) => {
@@ -202,7 +429,6 @@ function DaftarTugas() {
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-
     if (totalPages <= maxVisible) {
       for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
@@ -225,66 +451,38 @@ function DaftarTugas() {
     return pages;
   };
 
-  const stats = {
-    total: tugasList.length,
-    pending: tugasList.filter((t) => t.status === "pending").length,
-    revisi: tugasList.filter((t) => t.status === "revisi").length,
-    selesai: tugasList.filter((t) => t.status === "selesai").length,
-  };
-
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-5 md:px-6 py-5 space-y-5 pb-10 min-h-screen">
-        <div className="flex items-center justify-center h-96">
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-full blur-xl opacity-30 animate-pulse"></div>
-            <div className="relative w-10 h-10 border-2 border-teal-400/30 border-t-teal-500 rounded-full animate-spin"></div>
-          </div>
+      <div className="max-w-7xl mx-auto px-5 md:px-6 py-5 min-h-screen flex items-center justify-center">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-full blur-xl opacity-30 animate-pulse"></div>
+          <div className="relative w-10 h-10 border-2 border-teal-400/30 border-t-teal-500 rounded-full animate-spin"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-5 md:px-6 py-5 space-y-5 pb-10 min-h-screen">
+    <div className="max-w-7xl mx-auto px-5 md:px-6 py-5 space-y-6 pb-10 min-h-screen bg-gray-50/50">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-500/10 via-blue-500/5 to-transparent p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-xl blur-md opacity-50"></div>
-              <div className="relative w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                <ClipboardList className="w-6 h-6 text-white" />
-              </div>
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-600 to-blue-700 p-6 shadow-xl">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+        <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2"></div>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg">
+              <ClipboardList className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-800 via-teal-800 to-blue-800 bg-clip-text text-transparent">
-                Daftar Tugas
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Tugas dari mentor yang perlu dikerjakan
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <div className="bg-white/60 rounded-xl px-3 py-1.5 text-center">
-              <p className="text-xs text-gray-500">Total</p>
-              <p className="font-bold text-gray-700">{stats.total}</p>
-            </div>
-            <div className="bg-amber-50/60 rounded-xl px-3 py-1.5 text-center">
-              <p className="text-xs text-amber-600">Belum</p>
-              <p className="font-bold text-amber-700">{stats.pending}</p>
-            </div>
-            <div className="bg-emerald-50/60 rounded-xl px-3 py-1.5 text-center">
-              <p className="text-xs text-emerald-600">Selesai</p>
-              <p className="font-bold text-emerald-700">{stats.selesai}</p>
+              <h1 className="text-2xl font-bold text-white">Daftar Tugas</h1>
+              <p className="text-sm text-white/80">Kerjakan dan kumpulkan tugas tepat waktu</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filter */}
-      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100 p-4">
+      {/* Filter Section */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -293,34 +491,31 @@ function DaftarTugas() {
               placeholder="Cari tugas..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-teal-400"
+              className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setFilterStatus("all")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition ${filterStatus === "all" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-            >
-              Semua ({stats.total})
-            </button>
-            <button
-              onClick={() => setFilterStatus("pending")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition ${filterStatus === "pending" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-            >
-              Belum ({stats.pending})
-            </button>
-            <button
-              onClick={() => setFilterStatus("revisi")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition ${filterStatus === "revisi" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-            >
-              Revisi ({stats.revisi})
-            </button>
-            <button
-              onClick={() => setFilterStatus("selesai")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition ${filterStatus === "selesai" ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-            >
-              Selesai ({stats.selesai})
-            </button>
+            {["all", "belum_dikumpulkan", "dikumpulkan", "revisi", "selesai"].map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilterStatus(status)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                  filterStatus === status
+                    ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {status === "all"
+                  ? "Semua"
+                  : status === "belum_dikumpulkan"
+                  ? "Belum"
+                  : status === "dikumpulkan"
+                  ? "Dikumpulkan"
+                  : status === "revisi"
+                  ? "Revisi"
+                  : "Selesai"}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -328,116 +523,94 @@ function DaftarTugas() {
       {/* Results Count */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500">
-          Menampilkan{" "}
-          <span className="font-semibold text-gray-700">
-            {currentItems.length}
-          </span>{" "}
-          dari{" "}
-          <span className="font-semibold text-gray-700">
-            {filteredTugas.length}
-          </span>{" "}
-          tugas
+          Menampilkan <span className="font-semibold text-gray-700">{currentItems.length}</span> dari{" "}
+          <span className="font-semibold text-gray-700">{filteredTugas.length}</span> tugas
         </p>
-        {filteredTugas.length > 0 && (
-          <p className="text-xs text-gray-400">
-            Halaman {currentPage} dari {totalPages}
-          </p>
-        )}
       </div>
 
       {/* Tugas Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {currentItems.map((tugas) => {
           const status = getStatusBadge(tugas.status);
           const StatusIcon = status.icon;
-          const deadlineStatus = getDeadlineStatus(
-            tugas.deadline_raw || tugas.deadline,
-          );
+          const deadlineStatus = getDeadlineStatus(tugas.deadline_raw);
+          const mainAction = getMainActionButton(tugas);
+
+          const getCardTopColor = () => {
+            if (tugas.status === "selesai") return "bg-gradient-to-r from-emerald-500 to-teal-500";
+            if (tugas.status === "revisi") return "bg-gradient-to-r from-amber-500 to-orange-500";
+            if (tugas.status === "dikumpulkan_revisi") return "bg-gradient-to-r from-amber-500 to-orange-500";
+            if (tugas.status === "dikumpulkan") return "bg-gradient-to-r from-blue-500 to-indigo-500";
+            return "bg-gradient-to-r from-teal-500 to-blue-600";
+          };
 
           return (
             <div
               key={tugas.id}
               className="group relative bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
             >
-              <div
-                className={`absolute top-0 left-0 right-0 h-1 ${
-                  tugas.status === "selesai"
-                    ? "bg-gradient-to-r from-emerald-500 to-teal-500"
-                    : tugas.status === "revisi"
-                      ? "bg-gradient-to-r from-amber-500 to-orange-500"
-                      : "bg-gradient-to-r from-teal-500 to-blue-600"
-                }`}
-              ></div>
+              <div className={`absolute top-0 left-0 right-0 h-1 ${getCardTopColor()}`}></div>
 
-              <div className="p-4">
+              <div className="p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
                       <FileText size="16" className="text-teal-600" />
                     </div>
-                    <span className="text-[10px] font-medium text-gray-500 uppercase">
-                      Tugas
-                    </span>
+                    <span className="text-xs font-medium text-gray-500">Tugas</span>
                   </div>
-                  <div
-                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full ${status.bg} ${status.text}`}
-                  >
-                    <StatusIcon size="8" />
-                    <span className="text-[8px] font-medium">
-                      {status.label}
-                    </span>
+                  <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full ${status.bg} ${status.text}`}>
+                    <StatusIcon size="12" />
+                    <span className="text-xs font-medium">{status.label}</span>
                   </div>
                 </div>
 
-                <h3 className="font-bold text-gray-800 text-base mb-1 line-clamp-1">
-                  {tugas.judul}
-                </h3>
-                <p className="text-xs text-gray-500 mb-3 line-clamp-2">
-                  {tugas.deskripsi_singkat}
-                </p>
+                <h3 className="font-bold text-gray-800 text-base mb-2 line-clamp-1">{tugas.judul}</h3>
+                
+                <div className="flex items-center gap-1.5 mb-3 text-xs text-gray-400">
+                  <User size="12" />
+                  <span>{tugas.mentor_name || "Mentor"}</span>
+                </div>
 
-                <div className="space-y-1 mb-3">
-                  <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                    <Calendar size="10" />
-                    <span>Deadline: {tugas.deadline}</span>
-                    <span className={`ml-1 ${deadlineStatus.text}`}>
-                      ({deadlineStatus.label})
-                    </span>
-                  </div>
-                  {tugas.nilai && (
-                    <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                      <Star size="10" className="text-amber-500" />
-                      <span>Nilai: {tugas.nilai}</span>
+                <div className="mb-4 p-2 rounded-lg bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Calendar size="14" className="text-gray-500" />
+                      <span className="text-xs text-gray-600">Deadline:</span>
                     </div>
-                  )}
+                    <div className="text-right">
+                      <span className="text-xs font-medium text-gray-700">{tugas.deadline_display}</span>
+                      <div className={`text-xs font-bold ${deadlineStatus.text}`}>{deadlineStatus.label}</div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex gap-2 mt-3">
+                {/* Indikator ringan untuk tugas yang dikumpulkan terlambat */}
+                {tugas.isLate && tugas.status === "selesai" && (
+                  <div className="mt-2 mb-3 text-xs text-amber-600 flex items-center gap-1">
+                    <Clock size="12" />
+                    <span>Dikumpulkan melewati deadline</span>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
                   <button
                     onClick={() => openDetailModal(tugas)}
-                    className="flex-1 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition flex items-center justify-center gap-1"
+                    className="flex-1 py-2 text-sm font-medium rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition flex items-center justify-center gap-2"
                   >
-                    <Eye size="12" />
+                    <Eye size="16" />
                     Detail
                   </button>
-                  <button
-                    onClick={() =>
-                      navigate(`/peserta/tugas/${tugas.id}/kumpul`)
-                    }
-                    className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition flex items-center justify-center gap-1 ${
-                      tugas.status === "selesai"
-                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                        : "bg-gradient-to-r from-teal-500 to-blue-600 text-white hover:shadow-md"
-                    }`}
-                    disabled={tugas.status === "selesai"}
-                  >
-                    <Upload size="12" />
-                    {tugas.status === "selesai"
-                      ? "Sudah Dikumpul"
-                      : tugas.status === "revisi"
-                        ? "Revisi"
-                        : "Kumpulkan"}
-                  </button>
+                  
+                  {mainAction && (
+                    <button
+                      onClick={mainAction.action}
+                      className={mainAction.class}
+                    >
+                      {mainAction.icon}
+                      {mainAction.text}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -446,12 +619,10 @@ function DaftarTugas() {
       </div>
 
       {filteredTugas.length === 0 && (
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-100 py-12 text-center">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 py-12 text-center">
           <ClipboardList size="48" className="text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 font-medium">Belum ada tugas</p>
-          <p className="text-sm text-gray-400 mt-1">
-            Tugas akan muncul setelah mentor memberikannya
-          </p>
+          <p className="text-sm text-gray-400 mt-1">Tugas akan muncul setelah mentor memberikannya</p>
         </div>
       )}
 
@@ -468,27 +639,26 @@ function DaftarTugas() {
           <div className="flex gap-1.5">
             {getPageNumbers().map((page, idx) =>
               page === "..." ? (
-                <span
-                  key={idx}
-                  className="w-9 h-9 flex items-center justify-center text-gray-400"
-                >
+                <span key={idx} className="w-9 h-9 flex items-center justify-center text-gray-400">
                   ...
                 </span>
               ) : (
                 <button
                   key={idx}
                   onClick={() => setCurrentPage(page)}
-                  className={`w-9 h-9 rounded-lg text-sm font-medium transition ${currentPage === page ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                  className={`w-9 h-9 rounded-lg text-sm font-medium transition ${
+                    currentPage === page
+                      ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md"
+                      : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
                 >
                   {page}
                 </button>
-              ),
+              )
             )}
           </div>
           <button
-            onClick={() =>
-              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-            }
+            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
             disabled={currentPage === totalPages}
             className="p-2 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
           >
@@ -499,10 +669,7 @@ function DaftarTugas() {
 
       {/* Modal Detail Tugas */}
       {showDetailModal && selectedTugas && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-          onClick={closeDetailModal}
-        >
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={closeDetailModal}>
           <div
             className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
@@ -513,129 +680,233 @@ function DaftarTugas() {
                   <FileText size="18" className="text-teal-600" />
                 </div>
                 <div>
-                  <h2 className="font-bold text-gray-800 text-lg">
-                    {selectedTugas.judul}
-                  </h2>
-                  <p className="text-xs text-gray-500">
-                    Deadline: {selectedTugas.deadline}
-                  </p>
+                  <h2 className="font-bold text-gray-800 text-lg">{selectedTugas.judul}</h2>
+                  <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                    <span className="flex items-center gap-1">
+                      <User size="12" /> {selectedTugas.mentor_name || "Mentor"}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Calendar size="12" /> Deadline: {selectedTugas.deadline_display}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <button
-                onClick={closeDetailModal}
-                className="p-2 rounded-lg hover:bg-white/50"
-              >
+              <button onClick={closeDetailModal} className="p-2 rounded-lg hover:bg-white/50">
                 <X size="20" className="text-gray-500" />
               </button>
             </div>
 
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)] space-y-6">
-              {/* Deskripsi Lengkap */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <FileText size="14" className="text-teal-600" />
-                  <h3 className="font-semibold text-gray-800">
-                    Deskripsi Tugas
-                  </h3>
-                </div>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  {selectedTugas.deskripsi_lengkap}
-                </p>
-              </div>
-
-              {/* Cara Pengerjaan */}
-              {selectedTugas.cara_pengerjaan && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <FolderOpen size="14" className="text-blue-600" />
-                    <h3 className="font-semibold text-gray-800">
-                      Cara Pengerjaan
-                    </h3>
-                  </div>
-                  <div className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">
-                    {selectedTugas.cara_pengerjaan}
+              {/* INFORMASI KETERLAMBATAN (hanya di detail, tanpa emoji) */}
+              {selectedTugas.isLate && selectedTugas.status === "selesai" && (
+                <div className="rounded-xl p-4 border border-amber-200 bg-amber-50">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                      <Clock size="16" className="text-amber-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-amber-800 text-sm">Dikumpulkan Melewati Deadline</h4>
+                      <p className="text-xs text-amber-700 mt-1">
+                        Tugas ini dikumpulkan setelah batas waktu yang ditentukan.
+                        {selectedTugas.submitted_at && (
+                          <> Dikumpulkan pada {formatDateTime(selectedTugas.submitted_at)}</>
+                        )}
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Lampiran dari Mentor */}
-              {selectedTugas.attachments &&
-                selectedTugas.attachments.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Paperclip size="14" className="text-purple-600" />
-                      <h3 className="font-semibold text-gray-800">
-                        Materi Pendukung
-                      </h3>
-                    </div>
-                    <div className="space-y-2">
-                      {selectedTugas.attachments.map((item, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                              {item.type === "link" || item.type === "video" ? (
-                                <LinkIcon
-                                  size="14"
-                                  className="text-purple-500"
-                                />
-                              ) : (
-                                <FileText size="14" className="text-teal-600" />
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-700">
-                                {item.name}
-                              </p>
-                              {item.size && (
-                                <p className="text-xs text-gray-400">
-                                  {item.size}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          {item.type === "link" || item.type === "video" ? (
-                            <a
-                              href={item.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg text-xs font-medium flex items-center gap-1"
-                            >
-                              <ExternalLink size="12" /> Buka Link
-                            </a>
-                          ) : (
-                            <a
-                              href={item.url}
-                              download
-                              className="px-3 py-1.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-medium flex items-center gap-1"
-                            >
-                              <Download size="12" /> Download
-                            </a>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+              {/* INSTRUKSI PENGERJAAN */}
+              <div className="bg-blue-50/30 rounded-xl p-5 border border-blue-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                    <FileText size="14" className="text-blue-600" />
+                  </div>
+                  <h3 className="font-semibold text-gray-800 text-base">Instruksi Pengerjaan</h3>
+                </div>
+                <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  {selectedTugas.instruksi}
+                </div>
+                {selectedTugas.cara_pengerjaan && (
+                  <div className="mt-3 pt-3 border-t border-blue-100">
+                    <p className="text-sm font-medium text-blue-800 mb-1">Cara Pengerjaan:</p>
+                    <p className="text-sm text-gray-600">{selectedTugas.cara_pengerjaan}</p>
                   </div>
                 )}
+              </div>
 
-              {/* Catatan Revisi */}
-              {selectedTugas.status === "revisi" && selectedTugas.catatan && (
-                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+              {/* FILE & LINK DARI MENTOR */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center">
+                    <Paperclip size="14" className="text-purple-600" />
+                  </div>
+                  <h3 className="font-semibold text-gray-800">Materi Penunjang</h3>
+                </div>
+                
+                {selectedTugas.attachments && selectedTugas.attachments.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedTugas.attachments.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 hover:bg-gray-100 transition"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                            {item.type === "link" ? (
+                              <LinkIcon size="14" className="text-purple-500" />
+                            ) : (
+                              <FileText size="14" className="text-teal-600" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700 truncate max-w-[300px]">
+                              {item.type === "link" ? item.url : item.name}
+                            </p>
+                            {item.type === "link" && (
+                              <p className="text-xs text-purple-500 truncate max-w-[300px]">{item.url}</p>
+                            )}
+                          </div>
+                        </div>
+                        {item.type === "link" ? (
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg text-xs font-medium flex items-center gap-1 hover:shadow-md transition"
+                          >
+                            <ExternalLink size="12" /> Buka
+                          </a>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleDownloadFile(item.url)}
+                              className="px-3 py-1.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg text-xs font-medium flex items-center gap-1 hover:shadow-md transition"
+                            >
+                              <Download size="12" /> Download
+                            </button>
+                            <button
+                              onClick={() => openPreview(item.url, item.name)}
+                              className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-medium flex items-center gap-1 hover:bg-gray-300 transition"
+                            >
+                              <Eye size="12" /> Preview
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 rounded-xl border border-gray-100">
+                    <p className="text-sm text-gray-400">Tidak ada materi penunjang</p>
+                  </div>
+                )}
+              </div>
+
+              {/* STATUS PENGUMPULAN */}
+              <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                    <Upload size="14" className="text-gray-600" />
+                  </div>
+                  <h3 className="font-semibold text-gray-800">Status Pengumpulan</h3>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">Status:</span>
+                    <div
+                      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full ${
+                        getStatusBadge(selectedTugas.status).bg
+                      } ${getStatusBadge(selectedTugas.status).text}`}
+                    >
+                      {React.createElement(getStatusBadge(selectedTugas.status).icon, { size: 12 })}
+                      <span className="text-xs font-medium">{getStatusBadge(selectedTugas.status).label}</span>
+                    </div>
+                  </div>
+
+                  {selectedTugas.submitted_at && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <CalendarCheck size="14" className="text-green-600" />
+                      <span className="text-gray-600">Dikumpulkan:</span>
+                      <span className="text-gray-700 font-medium">{formatDateTime(selectedTugas.submitted_at)}</span>
+                    </div>
+                  )}
+
+                  {(selectedTugas.file_jawaban_url || selectedTugas.link_jawaban) && (
+                    <div className="pt-2">
+                      <p className="text-xs text-gray-500 mb-2">Jawaban yang telah dikirim:</p>
+                      <div className="space-y-2">
+                        {selectedTugas.file_jawaban_url && (
+                          <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-gray-200">
+                            <div className="flex items-center gap-2">
+                              <FileText size="14" className="text-green-600" />
+                              <span className="text-sm text-gray-700">File Jawaban</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleDownloadFile(selectedTugas.file_jawaban_url)}
+                                className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-lg flex items-center gap-1"
+                              >
+                                <Download size="12" /> Download
+                              </button>
+                              <button
+                                onClick={() => openPreview(selectedTugas.file_jawaban_url, "jawaban_tugas")}
+                                className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg flex items-center gap-1"
+                              >
+                                <Eye size="12" /> Preview
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {selectedTugas.link_jawaban && (
+                          <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-gray-200">
+                            <div className="flex items-center gap-2">
+                              <LinkIcon size="14" className="text-purple-600" />
+                              <span className="text-sm text-gray-700 truncate max-w-[200px]">
+                                {selectedTugas.link_jawaban}
+                              </span>
+                            </div>
+                            <a
+                              href={selectedTugas.link_jawaban}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-lg flex items-center gap-1"
+                            >
+                              <ExternalLink size="12" /> Buka
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CATATAN MENTOR */}
+              {selectedTugas.catatan_mentor && (
+                <div className={`rounded-xl p-5 border ${
+                  selectedTugas.status === "revisi" 
+                    ? "bg-amber-50 border-amber-200" 
+                    : "bg-blue-50 border-blue-200"
+                }`}>
                   <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle size="14" className="text-amber-600" />
-                    <h3 className="font-semibold text-amber-800">
-                      Catatan Revisi
+                    <AlertCircle size="16" className={selectedTugas.status === "revisi" ? "text-amber-600" : "text-blue-600"} />
+                    <h3 className="font-semibold text-gray-800">
+                      {selectedTugas.status === "revisi" ? "Catatan Revisi" : "Catatan Mentor"}
                     </h3>
                   </div>
-                  <p className="text-sm text-amber-700">
-                    {selectedTugas.catatan}
+                  <p className={`text-sm ${
+                    selectedTugas.status === "revisi" ? "text-amber-700" : "text-gray-700"
+                  }`}>
+                    {selectedTugas.catatan_mentor}
                   </p>
                 </div>
               )}
             </div>
 
+            {/* Modal Footer */}
             <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-100 bg-gray-50">
               <button
                 onClick={closeDetailModal}
@@ -647,19 +918,44 @@ function DaftarTugas() {
                 <button
                   onClick={() => {
                     closeDetailModal();
-                    navigate(`/peserta/tugas/${selectedTugas.id}/kumpul`);
+                    navigate(`/peserta/tugas/${selectedTugas.id}/kumpul`, {
+                      state: { from: "detail", refresh: true, isRevision: selectedTugas.status === "revisi" }
+                    });
                   }}
                   className="px-5 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg hover:shadow-md transition flex items-center gap-2"
                 >
-                  <Upload size="14" />{" "}
+                  {selectedTugas.status === "revisi" ? <RotateCcw size="16" /> : <FileCheck size="16" />}
                   {selectedTugas.status === "revisi"
-                    ? "Unggah Revisi"
-                    : "Kumpulkan Tugas"}
+                    ? "Kumpulkan Revisi"
+                    : selectedTugas.status === "dikumpulkan" ||
+                      selectedTugas.status === "dikumpulkan_revisi"
+                    ? "Lihat Jawaban"
+                    : "Kumpulkan"}
                 </button>
               )}
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Preview Fullscreen */}
+      {isPreviewOpen && previewFile && createPortal(
+        <div className="fixed inset-0 z-[999999] bg-black">
+          <button
+            onClick={closePreview}
+            className="absolute top-4 right-4 z-[1000000] bg-white/20 hover:bg-white/30 rounded-lg p-2 text-white transition backdrop-blur-sm"
+            title="Tutup"
+          >
+            <X size="24" />
+          </button>
+          
+          <iframe
+            src={previewFile.url}
+            title={previewFile.name}
+            className="absolute inset-0 w-full h-full border-0"
+          />
+        </div>,
+        document.body
       )}
     </div>
   );

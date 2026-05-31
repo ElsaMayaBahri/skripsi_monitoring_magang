@@ -15,8 +15,6 @@ import {
   Link as LinkIcon,
   Send,
   ExternalLink,
-  Server,
-  Info,
   Flag,
   Target,
   XCircle,
@@ -24,7 +22,13 @@ import {
   AlertTriangle,
   Trash2,
   X,
+  Paperclip,
 } from "lucide-react";
+import { 
+  getPesertaTugasById, 
+  submitPesertaTugas, 
+  cancelPesertaTugas 
+} from "../../api/peserta/tugasService";
 
 function DetailTugas() {
   const { id } = useParams();
@@ -35,7 +39,6 @@ function DetailTugas() {
   const [cancelling, setCancelling] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [submissionLink, setSubmissionLink] = useState("");
-  const [submissionType, setSubmissionType] = useState("file");
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [cancelSuccess, setCancelSuccess] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
@@ -50,8 +53,17 @@ function DetailTugas() {
     if (!tugas || tugas?.status === "selesai") return;
 
     const calculateTimeLeft = () => {
+      if (!tugas?.deadline) {
+        return { isLate: false, text: "No deadline", hours: 0 };
+      }
+      
       const now = new Date();
       const deadlineDate = new Date(tugas.deadline);
+      
+      if (isNaN(deadlineDate.getTime())) {
+        return { isLate: false, text: "Invalid deadline", hours: 0 };
+      }
+      
       const diffMs = deadlineDate - now;
 
       if (diffMs <= 0) {
@@ -110,23 +122,18 @@ function DetailTugas() {
   const loadTugasDetail = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/peserta/tugas/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-      const data = await res.json();
-      console.log("Detail tugas:", data);
+      const result = await getPesertaTugasById(id);
+      console.log("Detail tugas result:", result);
 
-      if (data.success) {
-        setTugas(data.data);
+      if (result.success) {
+        setTugas(result.data);
       } else {
-        console.error("Gagal memuat detail tugas:", data.message);
+        console.error("Gagal memuat detail tugas:", result.message);
+        alert("Gagal memuat detail tugas: " + result.message);
       }
     } catch (err) {
       console.error("Error:", err);
+      alert("Terjadi kesalahan saat memuat detail tugas");
     } finally {
       setLoading(false);
     }
@@ -143,57 +150,46 @@ function DetailTugas() {
     }
   };
 
+  // 🔥 PERBAIKAN: Submit bisa file, link, atau keduanya
   const handleSubmit = async () => {
-    if (submissionType === "file" && !selectedFile) {
-      alert("Pilih file terlebih dahulu");
-      return;
-    }
-    if (submissionType === "link" && !submissionLink.trim()) {
-      alert("Masukkan link tugas terlebih dahulu");
+    // Validasi: minimal satu yang diisi (file atau link)
+    if (!selectedFile && !submissionLink.trim()) {
+      alert("Silakan upload file atau masukkan link tugas");
       return;
     }
 
     setUploading(true);
     try {
-      const token = localStorage.getItem("token");
       const formData = new FormData();
 
-      if (submissionType === "file" && selectedFile) {
+      // Kirim file jika ada
+      if (selectedFile) {
         formData.append("file_jawaban", selectedFile);
       }
-      if (submissionType === "link" && submissionLink) {
-        formData.append("link_jawaban", submissionLink);
+      
+      // Kirim link jika ada
+      if (submissionLink.trim()) {
+        formData.append("link_jawaban", submissionLink.trim());
       }
 
-      const res = await fetch(
-        `http://localhost:8000/api/peserta/tugas/${id}/submit`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-          body: formData,
-        },
-      );
+      const result = await submitPesertaTugas(id, formData);
+      console.log("Submit result:", result);
 
-      const data = await res.json();
-
-      if (data.success) {
+      if (result.success) {
         setTugas((prev) => ({
           ...prev,
-          status: data.data.status,
-          submitted_at: data.data.submitted_at,
-          file_url: data.data.file_url,
-          file_name: data.data.file_name,
-          submission_link: data.data.submission_link,
+          status: result.data?.status || "dikumpulkan",
+          submitted_at: result.data?.submitted_at || new Date().toISOString(),
+          file_url: result.data?.file_url || null,
+          file_name: result.data?.file_name || null,
+          submission_link: result.data?.submission_link || null,
         }));
         setUploadSuccess(true);
         setSelectedFile(null);
         setSubmissionLink("");
         setTimeout(() => setUploadSuccess(false), 3000);
       } else {
-        alert("Gagal mengumpulkan tugas: " + data.message);
+        alert("Gagal mengumpulkan tugas: " + result.message);
       }
     } catch (err) {
       console.error("Submit error:", err);
@@ -206,21 +202,10 @@ function DetailTugas() {
   const handleCancelSubmission = async () => {
     setCancelling(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `http://localhost:8000/api/peserta/tugas/${id}/cancel`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        },
-      );
+      const result = await cancelPesertaTugas(id);
+      console.log("Cancel result:", result);
 
-      const data = await res.json();
-
-      if (data.success) {
+      if (result.success) {
         setTugas((prev) => ({
           ...prev,
           status: "belum_dikumpulkan",
@@ -233,7 +218,7 @@ function DetailTugas() {
         setCancelSuccess(true);
         setTimeout(() => setCancelSuccess(false), 3000);
       } else {
-        alert("Gagal membatalkan: " + data.message);
+        alert("Gagal membatalkan: " + result.message);
       }
     } catch (err) {
       console.error("Cancel error:", err);
@@ -244,9 +229,12 @@ function DetailTugas() {
   };
 
   const getDeadlineColor = () => {
-    if (!tugas) return "text-gray-500";
+    if (!tugas || !tugas.deadline) return "text-gray-500";
     const now = new Date();
     const deadlineDate = new Date(tugas.deadline);
+    
+    if (isNaN(deadlineDate.getTime())) return "text-gray-500";
+    
     const isLate = now > deadlineDate;
     if (isLate) return "text-red-600";
     const diffMs = deadlineDate - now;
@@ -254,6 +242,38 @@ function DetailTugas() {
     if (diffHours <= 24) return "text-red-500";
     if (diffHours <= 72) return "text-amber-600";
     return "text-green-600";
+  };
+
+  const formatDeadline = (deadlineString) => {
+    if (!deadlineString) return "-";
+    try {
+      const date = new Date(deadlineString);
+      if (isNaN(date.getTime())) return "-";
+      return date.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+    } catch {
+      return "-";
+    }
+  };
+
+  const formatSubmittedAt = (dateString) => {
+    if (!dateString) return "-";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "-";
+      return date.toLocaleDateString("id-ID", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "-";
+    }
   };
 
   if (loading) {
@@ -272,11 +292,28 @@ function DetailTugas() {
   const isSubmitted = tugas?.submitted_at !== null;
   const isCompleted = tugas?.status === "selesai";
   const isRevision = tugas?.status === "revisi";
-  const hasSubmitted = isSubmitted && !isCompleted;
+  const isRevisionSubmitted = tugas?.status === "dikumpulkan_revisi";
+  
+  const hasSubmitted = 
+    (isSubmitted && 
+     tugas?.status !== "revisi" && 
+     !isCompleted) || 
+    tugas?.status === "dikumpulkan_revisi";
+  
   const deadlineColor = getDeadlineColor();
 
   return (
     <div className="max-w-7xl mx-auto px-5 md:px-6 py-5 space-y-5 pb-10 min-h-screen">
+      {/* Tombol Kembali */}
+      <div className="mb-2">
+        <button
+          onClick={() => navigate("/peserta/tugas", { state: { refresh: true } })}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-teal-600 transition-colors duration-200 group"
+        >
+          <ChevronLeft size="16" className="group-hover:-translate-x-0.5 transition-transform duration-200" />
+          <span>Kembali ke Daftar Tugas</span>
+        </button>
+      </div>
 
       {/* Upload Success Alert */}
       {uploadSuccess && (
@@ -285,7 +322,7 @@ function DetailTugas() {
             <CheckCircle size="16" className="text-white" />
           </div>
           <p className="text-sm text-emerald-700 font-medium">
-            Tugas berhasil dikumpulkan!
+            {isRevision ? "Revisi tugas berhasil dikirim!" : "Tugas berhasil dikumpulkan!"}
           </p>
         </div>
       )}
@@ -326,20 +363,28 @@ function DetailTugas() {
                 ? "bg-emerald-100/80 text-emerald-700"
                 : isRevision
                   ? "bg-amber-100/80 text-amber-700"
-                  : "bg-gray-100/80 text-gray-600"
+                  : isRevisionSubmitted
+                    ? "bg-orange-100/80 text-orange-700"
+                    : hasSubmitted
+                      ? "bg-blue-100/80 text-blue-700"
+                      : "bg-gray-100/80 text-gray-600"
             }`}
           >
             {isCompleted && <CheckCircle size="14" />}
             {isRevision && <AlertCircle size="14" />}
-            {!isCompleted && !isRevision && <Clock size="14" />}
+            {isRevisionSubmitted && <Clock size="14" />}
+            {hasSubmitted && !isCompleted && !isRevision && !isRevisionSubmitted && <Clock size="14" />}
+            {!hasSubmitted && !isRevision && !isCompleted && <Clock size="14" />}
             <span className="text-sm font-medium">
               {isCompleted
                 ? "Selesai"
                 : isRevision
                   ? "Perlu Revisi"
-                  : hasSubmitted
-                    ? "Menunggu Penilaian"
-                    : "Belum Dikumpulkan"}
+                  : isRevisionSubmitted
+                    ? "Revisi Sedang Ditinjau"
+                    : hasSubmitted
+                      ? "Menunggu Penilaian"
+                      : "Belum Dikumpulkan"}
             </span>
           </div>
         </div>
@@ -359,25 +404,28 @@ function DetailTugas() {
                 <h3 className="font-semibold text-gray-800">Deskripsi Tugas</h3>
               </div>
               <p className="text-gray-600 leading-relaxed">
-                {tugas?.deskripsi}
+                {tugas?.deskripsi || "Tidak ada deskripsi"}
               </p>
             </div>
           </div>
 
-          {/* Upload Section */}
+          {/* Upload Section - Disesuaikan untuk revisi */}
           {!isCompleted && (
             <div className="bg-white/70 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 overflow-hidden">
               <div className="relative h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
               <div className="p-6">
                 <h3 className="font-semibold text-gray-800 mb-5">
-                  {hasSubmitted
+                  {hasSubmitted && !isRevisionSubmitted
                     ? isRevision
                       ? "Unggah Revisi"
                       : "Tugas Terkirim"
-                    : "Kumpulkan Tugas"}
+                    : isRevisionSubmitted
+                      ? "Revisi Terkirim - Menunggu Review"
+                      : "Kumpulkan Tugas"}
                 </h3>
 
-                {hasSubmitted && !isRevision ? (
+                {/* Status sudah submit tapi belum revisi */}
+                {hasSubmitted && !isRevision && !isRevisionSubmitted && (
                   <div className="space-y-5">
                     <div className="flex items-center gap-4 p-5 rounded-xl bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200/50 backdrop-blur-sm">
                       <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center shadow-md">
@@ -388,16 +436,7 @@ function DetailTugas() {
                           Tugas Sudah Terkirim
                         </p>
                         <p className="text-xs text-blue-600 mt-1">
-                          {new Date(tugas.submitted_at).toLocaleDateString(
-                            "id-ID",
-                            {
-                              day: "numeric",
-                              month: "long",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )}
+                          {formatSubmittedAt(tugas?.submitted_at)}
                         </p>
                       </div>
                     </div>
@@ -409,7 +448,7 @@ function DetailTugas() {
                             <FileText size="14" className="text-teal-600" />
                           </div>
                           <span className="text-sm text-gray-700 font-medium">
-                            {tugas.file_name}
+                            {tugas.file_name || "File Tugas"}
                           </span>
                         </div>
                         <a
@@ -456,39 +495,88 @@ function DetailTugas() {
                       Batalkan Kirim
                     </button>
                   </div>
-                ) : (
+                )}
+
+                {/* Status revisi sudah dikirim - menunggu review */}
+                {isRevisionSubmitted && (
                   <div className="space-y-5">
-                    {/* Pilihan Tipe Pengumpulan */}
-                    <div className="flex gap-3 p-1.5 bg-gray-100/80 rounded-xl">
-                      <button
-                        onClick={() => setSubmissionType("file")}
-                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                          submissionType === "file"
-                            ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md"
-                            : "text-gray-600 hover:bg-gray-200/80"
-                        }`}
-                      >
-                        <Upload size="14" />
-                        Upload File
-                      </button>
-                      <button
-                        onClick={() => setSubmissionType("link")}
-                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                          submissionType === "link"
-                            ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md"
-                            : "text-gray-600 hover:bg-gray-200/80"
-                        }`}
-                      >
-                        <LinkIcon size="14" />
-                        Kirim Link
-                      </button>
+                    <div className="flex items-center gap-4 p-5 rounded-xl bg-gradient-to-r from-orange-50/80 to-amber-50/80 border border-orange-200/50 backdrop-blur-sm">
+                      <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center shadow-md">
+                        <Clock size="18" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-orange-800">
+                          Revisi Terkirim
+                        </p>
+                        <p className="text-xs text-orange-600 mt-1">
+                          Menunggu review dari mentor
+                        </p>
+                      </div>
                     </div>
 
+                    {tugas?.file_url && (
+                      <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100/50 border border-gray-200/50">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
+                            <FileText size="14" className="text-teal-600" />
+                          </div>
+                          <span className="text-sm text-gray-700 font-medium">
+                            {tugas.file_name || "File Revisi"}
+                          </span>
+                        </div>
+                        <a
+                          href={tugas.file_url}
+                          download
+                          className="p-2 rounded-xl bg-teal-500/10 text-teal-600 hover:bg-teal-500/20 transition-all duration-200"
+                        >
+                          <Download size="16" />
+                        </a>
+                      </div>
+                    )}
+
+                    {tugas?.submission_link && (
+                      <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100/50 border border-gray-200/50">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                            <LinkIcon size="14" className="text-purple-600" />
+                          </div>
+                          <span className="text-sm text-gray-700 truncate max-w-[200px] font-mono">
+                            {tugas.submission_link}
+                          </span>
+                        </div>
+                        <a
+                          href={tugas.submission_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 rounded-xl bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 transition-all duration-200"
+                        >
+                          <ExternalLink size="16" />
+                        </a>
+                      </div>
+                    )}
+
+                    <div className="p-4 rounded-xl bg-gray-50/50 text-center">
+                      <p className="text-xs text-gray-500">
+                        Revisi Anda telah terkirim. Mentor akan segera melakukan review ulang.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 🔥 PERBAIKAN: Form upload (belum submit atau revisi) - TAMPILKAN FILE DAN LINK BERSAMAAN */}
+                {!hasSubmitted && !isRevisionSubmitted && (
+                  <div className="space-y-5">
+                    {/* 🔥 HAPUS tombol switch type - langsung tampilkan keduanya */}
+                    
                     {/* Upload File */}
-                    {submissionType === "file" && (
-                      <div className="border-2 border-dashed border-gray-300/50 rounded-xl p-8 text-center transition-all duration-200 hover:border-teal-400 hover:bg-teal-50/30">
-                        <div className="w-16 h-16 bg-gradient-to-br from-teal-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <Upload size="24" className="text-teal-600" />
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <Paperclip size="14" className="inline mr-1" />
+                        File Jawaban 
+                      </label>
+                      <div className="border-2 border-dashed border-gray-300/50 rounded-xl p-6 text-center transition-all duration-200 hover:border-teal-400 hover:bg-teal-50/30">
+                        <div className="w-12 h-12 bg-gradient-to-br from-teal-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <Upload size="20" className="text-teal-600" />
                         </div>
                         <p className="text-sm text-gray-600 font-medium">
                           Klik atau drag file ke sini
@@ -500,32 +588,31 @@ function DetailTugas() {
                           type="file"
                           onChange={handleFileChange}
                           accept=".pdf,.doc,.docx,.zip,.rar,.7z"
-                          className="mt-4 text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-gradient-to-r file:from-teal-500 file:to-blue-600 file:text-white file:cursor-pointer hover:file:shadow-lg transition-all"
+                          className="mt-3 text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-gradient-to-r file:from-teal-500 file:to-blue-600 file:text-white file:cursor-pointer hover:file:shadow-lg transition-all"
                         />
                       </div>
-                    )}
+                    </div>
 
-                    {/* Kirim Link */}
-                    {submissionType === "link" && (
-                      <div className="space-y-3">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Link Tugas (Google Drive, GitHub, dll)
-                        </label>
-                        <input
-                          type="url"
-                          placeholder="https://drive.google.com/..."
-                          value={submissionLink}
-                          onChange={(e) => setSubmissionLink(e.target.value)}
-                          className="w-full px-4 py-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all"
-                        />
-                        <p className="text-xs text-gray-400">
-                          Masukkan link ke file tugas Anda
-                        </p>
-                      </div>
-                    )}
+                    {/* Input Link */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <LinkIcon size="14" className="inline mr-1" />
+                        Link Jawaban 
+                      </label>
+                      <input
+                        type="url"
+                        placeholder="https://drive.google.com/... atau https://github.com/..."
+                        value={submissionLink}
+                        onChange={(e) => setSubmissionLink(e.target.value)}
+                        className="w-full px-4 py-3 bg-gray-50/80 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 transition-all"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        Contoh: Google Drive, GitHub, atau link lainnya
+                      </p>
+                    </div>
 
-                    {/* Preview File */}
-                    {submissionType === "file" && selectedFile && (
+                    {/* 🔥 Preview File (jika ada file dipilih) */}
+                    {selectedFile && (
                       <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-200/50">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center">
@@ -544,16 +631,13 @@ function DetailTugas() {
                           onClick={() => setSelectedFile(null)}
                           className="p-1 rounded-lg hover:bg-white/50 transition"
                         >
-                          <X
-                            size="14"
-                            className="text-gray-400 hover:text-red-500"
-                          />
+                          <X size="14" className="text-gray-400 hover:text-red-500" />
                         </button>
                       </div>
                     )}
 
-                    {/* Preview Link */}
-                    {submissionType === "link" && submissionLink && (
+                    {/* 🔥 Preview Link (jika ada link diisi) */}
+                    {submissionLink && (
                       <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200/50">
                         <div className="flex items-center gap-3 flex-1">
                           <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
@@ -567,21 +651,22 @@ function DetailTugas() {
                           onClick={() => setSubmissionLink("")}
                           className="p-1 rounded-lg hover:bg-white/50 transition"
                         >
-                          <X
-                            size="14"
-                            className="text-gray-400 hover:text-red-500"
-                          />
+                          <X size="14" className="text-gray-400 hover:text-red-500" />
                         </button>
                       </div>
                     )}
 
+                    {/* Informasi bahwa bisa kirim keduanya */}
+                    <div className="p-3 rounded-xl bg-gray-50/50 text-center">
+                      <p className="text-xs text-gray-500">
+                        Anda bisa mengisi file, link, atau keduanya
+                      </p>
+                    </div>
+
+                    {/* 🔥 PERBAIKAN: Tombol Submit - disabled hanya jika kedua field kosong */}
                     <button
                       onClick={handleSubmit}
-                      disabled={
-                        uploading ||
-                        (submissionType === "file" && !selectedFile) ||
-                        (submissionType === "link" && !submissionLink.trim())
-                      }
+                      disabled={uploading || (!selectedFile && !submissionLink.trim())}
                       className="w-full py-3.5 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-xl font-semibold text-sm hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {uploading ? (
@@ -687,11 +772,7 @@ function DetailTugas() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className={`text-base font-bold ${deadlineColor}`}>
-                      {new Date(tugas?.deadline).toLocaleDateString("id-ID", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })}
+                      {formatDeadline(tugas?.deadline)}
                     </span>
                     <div
                       className={`px-2 py-0.5 rounded-lg text-[10px] font-medium ${
@@ -716,7 +797,7 @@ function DetailTugas() {
                 </div>
 
                 {/* Countdown Timer */}
-                {!isCompleted && timeLeft && (
+                {!isCompleted && timeLeft && timeLeft.text !== "No deadline" && timeLeft.text !== "Invalid deadline" && (
                   <div
                     className={`p-3 rounded-xl ${
                       timeLeft.isLate
@@ -787,9 +868,11 @@ function DetailTugas() {
                           ? "bg-emerald-500"
                           : isRevision
                             ? "bg-amber-500"
-                            : hasSubmitted
-                              ? "bg-blue-500"
-                              : "bg-gray-400"
+                            : isRevisionSubmitted
+                              ? "bg-orange-500"
+                              : hasSubmitted
+                                ? "bg-blue-500"
+                                : "bg-gray-400"
                       }`}
                     ></div>
                     <span className="text-xs font-medium text-gray-700">
@@ -797,9 +880,11 @@ function DetailTugas() {
                         ? "Tugas Selesai"
                         : isRevision
                           ? "Perlu Revisi"
-                          : hasSubmitted
-                            ? "Menunggu Penilaian"
-                            : "Belum Dikumpulkan"}
+                          : isRevisionSubmitted
+                            ? "Revisi Sedang Ditinjau"
+                            : hasSubmitted
+                              ? "Menunggu Penilaian"
+                              : "Belum Dikumpulkan"}
                     </span>
                   </div>
                 </div>
@@ -815,14 +900,7 @@ function DetailTugas() {
                       </p>
                     </div>
                     <p className="text-xs text-gray-700 font-medium">
-                      {new Date(tugas.submitted_at).toLocaleDateString(
-                        "id-ID",
-                        {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        },
-                      )}
+                      {formatSubmittedAt(tugas.submitted_at)}
                     </p>
                   </div>
                 )}
@@ -830,20 +908,6 @@ function DetailTugas() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Tombol Kembali */}
-      <div className="pt-6 border-t border-gray-200/50">
-        <button
-          onClick={() => navigate("/peserta/tugas")}
-          className="group inline-flex items-center gap-2 px-5 py-2.5 bg-white/80 backdrop-blur-md border border-gray-200 rounded-xl text-gray-600 hover:text-teal-600 hover:border-teal-200 transition-all duration-200 shadow-sm hover:shadow-md"
-        >
-          <ChevronLeft
-            size="14"
-            className="group-hover:-translate-x-0.5 transition-transform"
-          />
-          <span className="text-sm font-medium">Kembali ke Daftar Tugas</span>
-        </button>
       </div>
 
       {/* Premium Cancel Modal */}

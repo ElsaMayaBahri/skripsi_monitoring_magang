@@ -8,9 +8,9 @@ use Illuminate\Database\Eloquent\Model;
 class HariLibur extends Model
 {
     use HasFactory;
-    
+
     protected $table = 'hari_liburs';
-    protected $primaryKey = 'id_libur';
+    protected $primaryKey = 'id';
     
     protected $fillable = [
         'tanggal',
@@ -18,6 +18,6 @@ class HariLibur extends Model
     ];
     
     protected $casts = [
-        'tanggal' => 'date'
+        'tanggal' => 'date',
     ];
 }

@@ -20,6 +20,7 @@ class HariLiburController extends Controller
                 'data' => $hariLibur
             ]);
         } catch (\Exception $e) {
+            Log::error('Error fetching holidays: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
@@ -54,6 +55,7 @@ class HariLiburController extends Controller
                 'data' => $hariLibur
             ]);
         } catch (\Exception $e) {
+            Log::error('Error creating holiday: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
@@ -74,7 +76,7 @@ class HariLiburController extends Controller
             }
             
             $validator = Validator::make($request->all(), [
-                'tanggal' => 'required|date|unique:hari_liburs,tanggal,' . $id,
+                'tanggal' => 'required|date|unique:hari_liburs,tanggal,' . $id . ',id_libur',
                 'keterangan' => 'required|string|max:255'
             ]);
             
@@ -97,6 +99,7 @@ class HariLiburController extends Controller
                 'data' => $hariLibur
             ]);
         } catch (\Exception $e) {
+            Log::error('Error updating holiday: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
@@ -123,6 +126,7 @@ class HariLiburController extends Controller
                 'message' => 'Hari libur berhasil dihapus'
             ]);
         } catch (\Exception $e) {
+            Log::error('Error deleting holiday: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()

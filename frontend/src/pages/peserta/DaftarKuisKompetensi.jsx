@@ -10,6 +10,9 @@ import {
   BookOpen,
   Server,
   Award,
+  TrendingUp,
+  Lock,
+  PlayCircle,
 } from "lucide-react";
 import { getDaftarKuisKompetensi } from "../../api/peserta/quizKompetensiService";
 
@@ -18,7 +21,7 @@ function DaftarKuisKompetensi() {
   const [loading, setLoading] = useState(true);
   const [quizList, setQuizList] = useState([]);
   const [backendError, setBackendError] = useState(false);
-  const [debugInfo, setDebugInfo] = useState(null); // Untuk debugging
+  const [debugInfo, setDebugInfo] = useState(null);
 
   useEffect(() => {
     loadQuizList();
@@ -31,44 +34,33 @@ function DaftarKuisKompetensi() {
     try {
       const response = await getDaftarKuisKompetensi();
 
-      // DEBUG: Log response lengkap
       console.log("Full Response:", response);
       console.log("Response.data:", response.data);
-      console.log("Type of response.data:", typeof response.data);
-      console.log("Is array?", Array.isArray(response.data));
 
-      // Simpan debug info
       setDebugInfo(response.debug || null);
 
-      // PERBAIKAN: Cek struktur response dengan lebih baik
       if (response.success) {
         let quizData = [];
 
-        // Jika response.data adalah array
         if (Array.isArray(response.data)) {
           quizData = response.data;
-        }
-        // Jika response.data adalah object dengan property data
-        else if (
+        } else if (
           response.data &&
           typeof response.data === "object" &&
           Array.isArray(response.data.data)
         ) {
           quizData = response.data.data;
-        }
-        // Jika response.data adalah object biasa (bukan array)
-        else if (
+        } else if (
           response.data &&
           typeof response.data === "object" &&
           !Array.isArray(response.data)
         ) {
-          // Coba konversi object values ke array
           quizData = Object.values(response.data);
           console.log("Converted object to array:", quizData);
         }
 
         if (quizData.length > 0) {
-          const formattedData = quizData.map((item) => ({
+          const formattedData = quizData.map((item, idx) => ({
             id: item.id_kuis || item.id,
             id_kuis: item.id_kuis || item.id,
             judul: item.judul || item.title || "Tanpa Judul",
@@ -76,7 +68,7 @@ function DaftarKuisKompetensi() {
             durasi: item.durasi || 0,
             passing_score: item.passing_score || item.passing || 75,
             total_questions: item.total_soal || item.total_questions || 0,
-            level: item.level || 1,
+            level: item.level || idx + 1,
             is_completed: item.is_completed || item.sudah_dikerjakan || false,
             is_passed: item.is_passed || false,
             is_locked: item.is_locked || false,
@@ -87,8 +79,12 @@ function DaftarKuisKompetensi() {
             attempt: item.attempt || 0,
             tanggal_mulai: item.tanggal_mulai,
             tanggal_selesai: item.tanggal_selesai,
+            urutan: item.urutan || idx + 1,
           }));
 
+          // Urutkan berdasarkan level/urutan
+          formattedData.sort((a, b) => (a.level || 999) - (b.level || 999));
+          
           console.log("Formatted data:", formattedData);
           setQuizList(formattedData);
         } else {
@@ -114,58 +110,49 @@ function DaftarKuisKompetensi() {
       {
         id: 1,
         judul: "Fundamental JavaScript",
-        deskripsi:
-          "Uji pemahaman Anda tentang dasar-dasar JavaScript untuk kompetensi",
+        deskripsi: "Uji pemahaman Anda tentang dasar-dasar JavaScript",
         durasi: 30,
         passing_score: 70,
         total_questions: 10,
         is_completed: false,
         score: null,
+        level: 1,
+        is_locked: false,
       },
       {
         id: 2,
         judul: "React JS Dasar",
-        deskripsi: "Uji pemahaman Anda tentang React JS untuk ujian kompetensi",
+        deskripsi: "Uji pemahaman Anda tentang React JS",
         durasi: 45,
         passing_score: 75,
         total_questions: 15,
         is_completed: true,
         score: 85,
+        level: 2,
+        is_locked: false,
       },
       {
         id: 3,
         judul: "Tailwind CSS",
-        deskripsi:
-          "Uji pemahaman Anda tentang Tailwind CSS untuk ujian praktik",
+        deskripsi: "Uji pemahaman Anda tentang Tailwind CSS",
         durasi: 30,
         passing_score: 70,
         total_questions: 10,
         is_completed: false,
         score: null,
-      },
-      {
-        id: 4,
-        judul: "State Management Redux",
-        deskripsi: "Uji pemahaman Anda tentang Redux untuk manajemen state",
-        durasi: 45,
-        passing_score: 70,
-        total_questions: 12,
-        is_completed: false,
-        score: null,
-      },
-      {
-        id: 5,
-        judul: "Next.js Framework",
-        deskripsi: "Uji pemahaman Anda tentang Next.js untuk fullstack React",
-        durasi: 60,
-        passing_score: 75,
-        total_questions: 15,
-        is_completed: false,
-        score: null,
+        level: 3,
+        is_locked: true,
+        locked_message: "Selesaikan Level 2 terlebih dahulu",
       },
     ];
     setQuizList(dummyQuizList);
   };
+
+  // Hitung statistik
+  const totalQuizzes = quizList.length;
+  const completedQuizzes = quizList.filter((q) => q.is_completed).length;
+  const lockedQuizzes = quizList.filter((q) => q.is_locked).length;
+  const progressPercentage = totalQuizzes > 0 ? (completedQuizzes / totalQuizzes) * 100 : 0;
 
   if (loading) {
     return (
@@ -178,6 +165,9 @@ function DaftarKuisKompetensi() {
     );
   }
 
+  // Jika hanya 1 kuis, tampilkan dengan layout hero center
+  const isSingleQuiz = quizList.length === 1;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-100 p-5 md:p-6">
       {/* Header */}
@@ -188,16 +178,16 @@ function DaftarKuisKompetensi() {
               <ClipboardList className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-base font-bold">Daftar Kuis Kompetensi</h1>
+              <h1 className="text-base font-bold">Kuis Kompetensi</h1>
               <p className="text-white/80 text-xs mt-0.5">
-                Pilih kuis kompetensi yang ingin Anda kerjakan
+                Kerjakan kuis secara berurutan untuk menguji kompetensi Anda
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Debug Panel - Tambahkan untuk debugging */}
+      {/* Debug Panel */}
       {debugInfo && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs">
           <details>
@@ -218,207 +208,241 @@ function DaftarKuisKompetensi() {
             <Server size="18" className="text-amber-500 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-amber-800">
-                ⚠️ Catatan untuk Backend Developer
+                ⚠️ Mode Development - Data Dummy
               </p>
               <p className="text-xs text-amber-700 mt-1">
-                Halaman ini MASIH menggunakan DATA DUMMY. Backend perlu membuat
-                3 endpoint API:
+                Menampilkan data contoh untuk testing tampilan.
               </p>
-              <div className="bg-amber-100 rounded-md p-2 mt-2 font-mono text-xs">
-                <p>1. GET /api/peserta/kuis-kompetensi</p>
-                <p>2. GET /api/peserta/kuis-kompetensi/{`{id}`}/soal</p>
-                <p>3. POST /api/peserta/kuis-kompetensi/{`{id}`}/submit</p>
-              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Statistik Ringkasan */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl shadow-md p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-teal-100 flex items-center justify-center">
-              <ClipboardList size="16" className="text-teal-600" />
+      {/* Progress Bar */}
+      {totalQuizzes > 0 && (
+        <div className="bg-white rounded-xl shadow-md p-4 mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <TrendingUp size="14" className="text-teal-600" />
+              <span className="text-xs font-medium text-gray-600">
+                Progress Kuis
+              </span>
             </div>
-            <div>
-              <p className="text-xs text-gray-500">Total Kuis</p>
-              <p className="text-xl font-bold text-gray-800">
-                {quizList.length}
-              </p>
-            </div>
+            <span className="text-xs font-bold text-teal-600">
+              {completedQuizzes} dari {totalQuizzes} selesai
+            </span>
           </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-md p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-              <CheckCircle size="16" className="text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Kuis Selesai</p>
-              <p className="text-xl font-bold text-emerald-600">
-                {quizList.filter((q) => q.is_completed).length}
-              </p>
-            </div>
+          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-teal-500 to-blue-600 rounded-full transition-all duration-500"
+              style={{ width: `${progressPercentage}%` }}
+            ></div>
           </div>
+          <p className="text-[10px] text-gray-400 mt-2 text-center">
+            Kuis harus dikerjakan secara berurutan
+          </p>
         </div>
-        <div className="bg-white rounded-xl shadow-md p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-              <Clock size="16" className="text-amber-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Belum Dikerjakan</p>
-              <p className="text-xl font-bold text-amber-600">
-                {quizList.filter((q) => !q.is_completed).length}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
-      {/* Quiz Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {quizList.map((item) => (
-          <div
-            key={item.id}
-            className="group relative bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 to-blue-600"></div>
-
-            <div className="p-4">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center">
-                    <BookOpen size="14" className="text-teal-600" />
-                  </div>
-                </div>
-                {item.is_completed ? (
-                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100">
-                    <CheckCircle size="8" className="text-emerald-600" />
-                    <span className="text-[8px] font-medium text-emerald-600">
-                      Selesai
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100">
-                    <Clock size="8" className="text-amber-600" />
-                    <span className="text-[8px] font-medium text-amber-600">
-                      Belum
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <h3 className="font-bold text-gray-800 text-sm mb-1 line-clamp-1">
-                {item.judul}
-              </h3>
-              <p className="text-xs text-gray-500 mb-3 line-clamp-2">
-                {item.deskripsi}
-              </p>
-
-              <div className="mb-3 space-y-1">
-                <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-gray-500">Durasi</span>
-                  <span className="font-medium text-gray-700">
-                    {item.durasi} menit
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-gray-500">Soal</span>
-                  <span className="font-medium text-gray-700">
-                    {item.total_questions} soal
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-gray-500">Minimal</span>
-                  <span className="font-medium text-amber-600">
-                    {item.passing_score}%
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-gray-500">Materi</span>
-                  <span
-                    className={`font-medium ${
-                      item.materi_completed
-                        ? "text-emerald-600"
-                        : "text-red-500"
-                    }`}
-                  >
-                    {item.total_materi_selesai}/{item.total_materi} selesai
-                  </span>
-                </div>
-
-                {item.is_completed && item.score && (
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-gray-500">Nilai</span>
-                    <span className="font-bold text-emerald-600">
-                      {item.score}%
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {item.is_locked && (
-                <p className="mt-2 text-[10px] text-red-500">
-                  {item.locked_message}
-                </p>
-              )}
-
-              <button
-                onClick={() => {
-                  if (!item.is_locked) {
-                    navigate(`/peserta/kuis-kompetensi/${item.id}`);
-                  }
-                }}
-                className={`w-full py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-center gap-1 ${
-                  item.is_locked
-                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                    : item.is_passed
-                      ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                      : item.can_retake
-                        ? "bg-amber-500 text-white hover:bg-amber-600"
-                        : "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md hover:shadow-lg"
-                }`}
-                disabled={item.is_locked}
+      {/* Quiz Grid - Dengan layout yang lebih fokus */}
+      <div className={`${isSingleQuiz ? "max-w-2xl mx-auto" : "max-w-6xl mx-auto"}`}>
+        <div className={`
+          grid
+          gap-6
+          ${isSingleQuiz 
+            ? "grid-cols-1" 
+            : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+          }
+        `}>
+          {quizList.map((item, index) => {
+            const isNextQuiz = !item.is_locked && !item.is_completed && 
+              (index === 0 || quizList[index - 1]?.is_completed);
+            
+            return (
+              <div
+                key={item.id}
+                className={`
+                  group relative
+                  bg-white
+                  rounded-2xl
+                  shadow-lg
+                  border border-slate-100
+                  overflow-hidden
+                  transition-all duration-300
+                  hover:shadow-2xl
+                  hover:-translate-y-1
+                  ${isSingleQuiz ? "min-h-[380px]" : "min-h-[340px]"}
+                  ${item.is_locked ? "opacity-75" : ""}
+                `}
               >
-                {item.is_locked ? (
-                  <>
-                    <Clock size="12" />
-                    Terkunci
-                  </>
-                ) : item.is_passed ? (
-                  <>
-                    <CheckCircle size="12" />
-                    Lulus
-                  </>
-                ) : item.can_retake ? (
-                  <>
-                    <Zap size="12" />
-                    Ulangi Kuis
-                  </>
-                ) : (
-                  <>
-                    <Zap size="12" />
-                    Mulai Kuis
-                  </>
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-teal-500 to-blue-600"></div>
+                
+                {/* Locked overlay indicator */}
+                {item.is_locked && (
+                  <div className="absolute top-3 right-3">
+                    <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                      <Lock size="12" className="text-gray-500" />
+                    </div>
+                  </div>
                 )}
-              </button>
-            </div>
-          </div>
-        ))}
+
+                <div className="p-5 flex flex-col h-full">
+                  {/* Header Badge Level */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="px-3 py-1 rounded-full bg-gradient-to-r from-teal-100 to-blue-100 border border-teal-200">
+                      <span className="text-[10px] font-semibold text-teal-700 tracking-wide">
+                        LEVEL {item.level || index + 1}
+                      </span>
+                    </div>
+                    {item.is_completed ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100">
+                        <CheckCircle size="10" className="text-emerald-600" />
+                        <span className="text-[9px] font-medium text-emerald-600">
+                          Selesai
+                        </span>
+                      </div>
+                    ) : item.is_locked ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100">
+                        <Lock size="10" className="text-gray-500" />
+                        <span className="text-[9px] font-medium text-gray-500">
+                          Terkunci
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100">
+                        <Clock size="10" className="text-amber-600" />
+                        <span className="text-[9px] font-medium text-amber-600">
+                          Siap
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Title & Description */}
+                  <div className="mb-4">
+                    <h3 className="font-bold text-gray-800 text-lg mb-2 line-clamp-2">
+                      {item.judul}
+                    </h3>
+                    <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed">
+                      {item.deskripsi || "Tidak ada deskripsi"}
+                    </p>
+                  </div>
+
+                  {/* Quiz Details */}
+                  <div className="mb-4 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5 text-gray-500">
+                        <Clock size="12" />
+                        <span>Durasi</span>
+                      </div>
+                      <span className="font-semibold text-gray-700">
+                        {item.durasi} menit
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5 text-gray-500">
+                        <BookOpen size="12" />
+                        <span>Jumlah Soal</span>
+                      </div>
+                      <span className="font-semibold text-gray-700">
+                        {item.total_questions} soal
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5 text-gray-500">
+                        <Award size="12" />
+                        <span>Nilai Minimal</span>
+                      </div>
+                      <span className="font-semibold text-amber-600">
+                        {item.passing_score}%
+                      </span>
+                    </div>
+
+                    {item.is_completed && item.score && (
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-gray-100">
+                        <div className="flex items-center gap-1.5 text-gray-500">
+                          <CheckCircle size="12" />
+                          <span>Nilai Anda</span>
+                        </div>
+                        <span className={`font-bold ${item.score >= item.passing_score ? "text-emerald-600" : "text-red-600"}`}>
+                          {item.score}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Locked Message */}
+                  {item.is_locked && item.locked_message && (
+                    <div className="mb-3 p-2 bg-gray-50 rounded-lg border border-gray-100">
+                      <p className="text-[10px] text-gray-500 text-center">
+                        {item.locked_message}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Action Button */}
+                  <div className="mt-auto pt-2">
+                    <button
+                      onClick={() => {
+                        if (!item.is_locked && (isNextQuiz || item.can_retake)) {
+                          navigate(`/peserta/kuis-kompetensi/${item.id}`);
+                        }
+                      }}
+                      disabled={item.is_locked || (!isNextQuiz && !item.is_completed)}
+                      className={`
+                        w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 
+                        flex items-center justify-center gap-2
+                        ${item.is_locked 
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
+                          : item.is_completed && item.score >= item.passing_score
+                            ? "bg-emerald-100 text-emerald-700 cursor-not-allowed"
+                            : item.can_retake
+                              ? "bg-amber-500 text-white hover:bg-amber-600 shadow-md hover:shadow-lg"
+                              : "bg-gradient-to-r from-teal-500 to-blue-600 text-white hover:shadow-lg hover:shadow-teal-500/20"
+                        }
+                      `}
+                    >
+                      {item.is_locked ? (
+                        <>
+                          <Lock size="14" />
+                          Terkunci
+                        </>
+                      ) : item.is_completed && item.score >= item.passing_score ? (
+                        <>
+                          <CheckCircle size="14" />
+                          Lulus
+                        </>
+                      ) : item.can_retake ? (
+                        <>
+                          <Zap size="14" />
+                          Ulangi Kuis
+                        </>
+                      ) : (
+                        <>
+                          <PlayCircle size="14" />
+                          Mulai Kuis
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {quizList.length === 0 && !backendError && (
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 py-10 text-center">
-          <ClipboardList size="40" className="text-gray-300 mx-auto mb-2" />
-          <p className="text-gray-500 font-medium text-sm">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 py-16 text-center max-w-md mx-auto">
+          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ClipboardList size="32" className="text-gray-400" />
+          </div>
+          <p className="text-gray-500 font-medium text-base">
             Belum ada kuis tersedia
           </p>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-gray-400 mt-2">
             Kuis akan muncul setelah COO menambahkan kuis kompetensi
           </p>
         </div>

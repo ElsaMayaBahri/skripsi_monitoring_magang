@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Presensi;
 use App\Models\JamKerja;
 use App\Models\Peserta;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -93,15 +94,39 @@ class PresensiController extends Controller
     }
 
     /**
-     * Tentukan status kehadiran berdasarkan jenis dan keterlambatan.
+     * Tentukan status kehadiran berdasarkan status database, jenis kehadiran, dan keterlambatan.
      */
-    private function resolveStatus(string $jenisKehadiran, int $keterlambatan, int $batasTerlambat = 15): string
+    private function resolveStatus(
+        ?string $statusDatabase,
+        string $jenisKehadiran,
+        int $keterlambatan,
+        int $batasTerlambat = 15
+    ): string
     {
-        if ($jenisKehadiran === 'izin')  return 'Izin';
-        if ($jenisKehadiran === 'sakit') return 'Sakit';
+        // Prioritas ambil dari database
+        if (!empty($statusDatabase)) {
+            return match(strtolower($statusDatabase)) {
+                'hadir' => 'Hadir',
+                'terlambat' => 'Terlambat',
+                'izin' => 'Izin',
+                'sakit' => 'Sakit',
+                'alpha', 'tidak_hadir', 'tidak hadir' => 'Tidak Hadir',
+                default => ucfirst($statusDatabase)
+            };
+        }
 
-        // WFO / WFH
-        return $keterlambatan > $batasTerlambat ? 'Terlambat' : 'Hadir';
+        // Fallback otomatis
+        if ($jenisKehadiran === 'izin') {
+            return 'Izin';
+        }
+
+        if ($jenisKehadiran === 'sakit') {
+            return 'Sakit';
+        }
+
+        return $keterlambatan > $batasTerlambat
+            ? 'Terlambat'
+            : 'Hadir';
     }
 
     /**
@@ -119,6 +144,7 @@ class PresensiController extends Controller
         $keterlambatan = $this->calculateLateness($item->check_in, $jamMasuk);
 
         $status = $this->resolveStatus(
+            $item->status_kehadiran,
             $item->jenis_kehadiran ?? 'wfo',
             $keterlambatan,
             $batasMenit
@@ -127,12 +153,18 @@ class PresensiController extends Controller
         return [
             'id'           => $item->id_presensi,
             'peserta'      => [
-                'id'     => $peserta?->id_peserta,
-                'nama'   => $user?->nama ?? $peserta?->nama ?? '-',
-                'divisi' => $peserta?->divisi ?? '-',
+                'id'   => $peserta?->id_peserta,
+                'nama' => $user?->nama ?? $peserta?->nama ?? '-',
+                'divisi' => [
+                    'id_divisi'   => $peserta?->divisi?->id_divisi,
+                    'nama_divisi' => $peserta?->divisi?->nama_divisi ?? '-',
+                ],
             ],
             'nama'             => $user?->nama ?? $peserta?->nama ?? '-',
-            'divisi'           => $peserta?->divisi ?? '-',
+            'divisi'           => [
+                'id_divisi'   => $peserta?->divisi?->id_divisi,
+                'nama_divisi' => $peserta?->divisi?->nama_divisi ?? '-',
+            ],
             'tanggal'          => $item->tanggal instanceof \Illuminate\Support\Carbon
                 ? $item->tanggal->format('Y-m-d')
                 : $item->tanggal,
@@ -156,7 +188,16 @@ class PresensiController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = Presensi::with(['peserta.user']);
+            $query = Presensi::with([
+                'peserta.user',
+                'peserta.divisi'
+            ]);
+
+            // ========== PERBAIKAN: Tambahkan filter single date ==========
+            if ($request->filled('tanggal')) {
+                $query->whereDate('tanggal', $request->tanggal);
+            }
+            // ============================================================
 
             if ($request->filled('start_date')) {
                 $query->whereDate('tanggal', '>=', $request->start_date);
@@ -165,7 +206,9 @@ class PresensiController extends Controller
                 $query->whereDate('tanggal', '<=', $request->end_date);
             }
             if ($request->filled('divisi') && $request->divisi !== 'all') {
-                $query->whereHas('peserta', fn($q) => $q->where('divisi', $request->divisi));
+                $query->whereHas('peserta.divisi', function ($q) use ($request) {
+                    $q->where('nama_divisi', $request->divisi);
+                });
             }
 
             $data = $query->orderBy('tanggal', 'desc')
@@ -194,7 +237,10 @@ class PresensiController extends Controller
     public function show($id)
     {
         try {
-            $item = Presensi::with(['peserta.user'])->findOrFail($id);
+            $item = Presensi::with([
+                'peserta.user',
+                'peserta.divisi'
+            ])->findOrFail($id);
 
             return response()->json([
                 'success' => true,
@@ -216,6 +262,12 @@ class PresensiController extends Controller
     {
         try {
             $query = Presensi::query();
+
+            // ========== PERBAIKAN: Tambahkan filter single date ==========
+            if ($request->filled('tanggal')) {
+                $query->whereDate('tanggal', $request->tanggal);
+            }
+            // ============================================================
 
             if ($request->filled('start_date')) {
                 $query->whereDate('tanggal', '>=', $request->start_date);
@@ -254,7 +306,16 @@ class PresensiController extends Controller
     public function export(Request $request)
     {
         try {
-            $query = Presensi::with(['peserta.user']);
+            $query = Presensi::with([
+                'peserta.user',
+                'peserta.divisi'
+            ]);
+
+            // ========== PERBAIKAN: Tambahkan filter single date ==========
+            if ($request->filled('tanggal')) {
+                $query->whereDate('tanggal', $request->tanggal);
+            }
+            // ============================================================
 
             if ($request->filled('start_date')) {
                 $query->whereDate('tanggal', '>=', $request->start_date);
@@ -273,7 +334,7 @@ class PresensiController extends Controller
                     return [
                         'No'              => $idx + 1,
                         'Nama Peserta'    => $user?->nama ?? $peserta?->nama ?? '-',
-                        'Divisi'          => $peserta?->divisi ?? '-',
+                        'Divisi'          => $peserta?->divisi?->nama_divisi ?? '-',
                         'Tanggal'         => $item->tanggal,
                         'Jenis Kehadiran' => strtoupper($item->jenis_kehadiran ?? 'wfo'),
                         'Check-In'        => $item->check_in ?? '-',
@@ -291,6 +352,61 @@ class PresensiController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal export data presensi',
+            ], 500);
+        }
+    }
+
+    /**
+     * Daftar peserta yang belum absen hari ini - FIXED VERSION
+     */
+    public function belumAbsen(Request $request)
+    {
+        try {
+            $today = now('Asia/Jakarta')->toDateString();
+
+            // Ambil id_peserta yang SUDAH presensi hari ini
+            $sudahAbsen = Presensi::whereDate('tanggal', $today)
+                ->pluck('id_peserta')
+                ->toArray();
+
+            // Query untuk peserta yang BELUM absen
+            // Gunakan relasi user dan divisi untuk mendapatkan nama
+            $belumAbsen = Peserta::with(['user', 'divisi'])
+                ->whereNotIn('id_peserta', $sudahAbsen)
+                ->get()
+                ->map(function ($peserta) {
+                    return [
+                        'id_peserta' => $peserta->id_peserta,
+                        'nama' => $peserta->user?->nama ?? $peserta->user?->name ?? '-',
+                        'divisi' => $peserta->divisi?->nama_divisi ?? $peserta->divisi ?? '-',
+                        'email' => $peserta->user?->email ?? '-',
+                        'foto_profil' => $peserta->user?->foto_profil ?? null,
+                    ];
+                });
+
+            // Statistik
+            $totalPeserta = Peserta::count();
+            $totalSudahAbsen = count($sudahAbsen);
+            $totalBelumAbsen = $belumAbsen->count();
+
+            return response()->json([
+                'success' => true,
+                'data' => $belumAbsen,
+                'stats' => [
+                    'total_peserta' => $totalPeserta,
+                    'total_sudah_absen' => $totalSudahAbsen,
+                    'total_belum_absen' => $totalBelumAbsen,
+                    'persentase_kehadiran' => $totalPeserta > 0 
+                        ? round(($totalSudahAbsen / $totalPeserta) * 100) 
+                        : 0,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('PresensiController@belumAbsen: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengambil data peserta yang belum absen: ' . $e->getMessage(),
+                'data' => [],
             ], 500);
         }
     }
@@ -323,6 +439,7 @@ class PresensiController extends Controller
                     $keterlambatan = $this->calculateLateness($item->check_in, $jamMasuk);
 
                     $status = $this->resolveStatus(
+                        $item->status_kehadiran,
                         $item->jenis_kehadiran ?? 'wfo',
                         $keterlambatan,
                         $batasMenit
@@ -473,7 +590,7 @@ class PresensiController extends Controller
             $batasMenit = $this->parseBatasTerlambat($jamKerja?->batas_terlambat ?? 15);
 
             $keterlambatan   = $this->calculateLateness($checkInTime, $jamMasuk);
-            $statusKehadiran = $this->resolveStatus($jenisKehadiran, $keterlambatan, $batasMenit);
+            $statusKehadiran = $this->resolveStatus(null, $jenisKehadiran, $keterlambatan, $batasMenit);
 
             // Upload foto
             $fotoPath = null;

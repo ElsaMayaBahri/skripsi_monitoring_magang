@@ -16,13 +16,10 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  Zap,
   Users,
   CheckCircle,
   Loader2,
   BadgeCheck,
-  CalendarDays,
-  Clock,
   Rocket
 } from "lucide-react";
 
@@ -59,24 +56,31 @@ function EditMentor() {
       setError(null);
       try {
         // Load divisi list
-        const divisiResult = await getDivisi();
-        let divisiData = [];
-        if (divisiResult && divisiResult.success && Array.isArray(divisiResult.data)) {
-          divisiData = divisiResult.data;
-        } else if (Array.isArray(divisiResult)) {
-          divisiData = divisiResult;
-        }
-        setDivisiList(divisiData);
-        console.log("Divisi list loaded:", divisiData);
+        // Load divisi list - HANYA YANG AKTIF
+    const divisiResult = await getDivisi();
+    let divisiData = [];
+    if (divisiResult && divisiResult.success && Array.isArray(divisiResult.data)) {
+      divisiData = divisiResult.data;
+    } else if (Array.isArray(divisiResult)) {
+      divisiData = divisiResult;
+    }
+    
+        // Filter hanya divisi yang aktif
+        const activeDivisi = divisiData.filter(divisi => {
+          const status = divisi.status || divisi.status_akun || divisi.is_active;
+          if (status === undefined || status === null) return true;
+          return status === "aktif" || status === "active" || status === true;
+        });
+        
+        setDivisiList(activeDivisi);
+        console.log("Active divisions loaded:", activeDivisi);
+            const mentorId = parseInt(id);
+            if (isNaN(mentorId)) {
+              setError("ID Mentor tidak valid");
+              setLoading(false);
+              return;
+            }
 
-        const mentorId = parseInt(id);
-        if (isNaN(mentorId)) {
-          setError("ID Mentor tidak valid");
-          setLoading(false);
-          return;
-        }
-
-        // 🔥 PERBAIKAN: Ambil data mentor dari getMentors (tanpa getMentorById)
         console.log("Fetching mentors list...");
         const response = await getMentors();
         console.log("Mentors API response:", response);
@@ -200,82 +204,79 @@ function EditMentor() {
   };
 
   const handleSave = async () => {
-  setSaving(true);
-  setError(null);
+    setSaving(true);
+    setError(null);
 
-  if (!form.name || form.name.trim() === "") {
-    setError("Nama lengkap harus diisi");
-    setSaving(false);
-    return;
-  }
-
-  if (!form.email || form.email.trim() === "") {
-    setError("Email harus diisi");
-    setSaving(false);
-    return;
-  }
-
-  try {
-    // Gunakan id_user, bukan id_mentor
-    if (!originalUserId) {
-      setError("ID User tidak ditemukan");
+    if (!form.name || form.name.trim() === "") {
+      setError("Nama lengkap harus diisi");
       setSaving(false);
       return;
     }
 
-    // Data yang dikirim ke API
-    const updateData = {
-      email: form.email.trim(),
-      name: form.name.trim(),
-      phone: form.phone || "",
-      divisi: form.divisi_name || null,
-      jabatan: form.jabatan || null,
-      status: form.status === "aktif",
-    };
-    
-    console.log("📤 Sending update data to API with user_id:", originalUserId);
-    console.log("Update data:", JSON.stringify(updateData, null, 2));
-    
-    // GANTI: api.updateMentor -> updateMentor
-    const response = await updateMentor(originalUserId, updateData);
-    console.log("📥 API response:", response);
-    
-    if (response && response.success) {
-      logActivity("update", "mentor", form.name);
+    if (!form.email || form.email.trim() === "") {
+      setError("Email harus diisi");
+      setSaving(false);
+      return;
+    }
+
+    try {
+      if (!originalUserId) {
+        setError("ID User tidak ditemukan");
+        setSaving(false);
+        return;
+      }
+
+      const updateData = {
+        email: form.email.trim(),
+        name: form.name.trim(),
+        phone: form.phone || "",
+        divisi: form.divisi_name || null,
+        jabatan: form.jabatan || null,
+        status: form.status === "aktif",
+      };
       
-      setSuccessData({
-        name: form.name,
-        email: form.email,
-        role: "Mentor",
-        divisi: form.divisi_name || "-",
-        jabatan: form.jabatan || "-",
-        phone: form.phone || "-",
-        status: form.status === "aktif" ? "Aktif" : "Nonaktif"
-      });
-      setSuccessMessage(response.message || "Perubahan data mentor berhasil disimpan!");
-      setShowSuccessModal(true);
-    } else {
-      setError(response?.message || "Gagal menyimpan perubahan");
-    }
-    
-  } catch (err) {
-    console.error("Error saving data:", err);
-    let errorMessage = err.message || "Gagal menyimpan perubahan. Silakan coba lagi.";
+      console.log("📤 Sending update data to API with user_id:", originalUserId);
+      console.log("Update data:", JSON.stringify(updateData, null, 2));
+      
+      const response = await updateMentor(originalUserId, updateData);
+      console.log("📥 API response:", response);
+      
+      if (response && response.success) {
+        logActivity("update", "mentor", form.name);
+        
+        setSuccessData({
+          name: form.name,
+          email: form.email,
+          role: "Mentor",
+          divisi: form.divisi_name || "-",
+          jabatan: form.jabatan || "-",
+          phone: form.phone || "-",
+          status: form.status === "aktif" ? "Aktif" : "Nonaktif"
+        });
+        setSuccessMessage(response.message || "Perubahan data mentor berhasil disimpan!");
+        setShowSuccessModal(true);
+      } else {
+        setError(response?.message || "Gagal menyimpan perubahan");
+      }
+      
+    } catch (err) {
+      console.error("Error saving data:", err);
+      let errorMessage = err.message || "Gagal menyimpan perubahan. Silakan coba lagi.";
 
-    if (err.response?.data?.message) {
-      errorMessage = err.response.data.message;
-    } else if (err.response?.data?.errors) {
-      const errors = Object.values(err.response.data.errors).flat();
-      errorMessage = errors.join("\n");
-    } else if (err.response?.data?.error) {
-      errorMessage = err.response.data.error;
-    }
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.response?.data?.errors) {
+        const errors = Object.values(err.response.data.errors).flat();
+        errorMessage = errors.join("\n");
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      }
 
-    setError(errorMessage);
-  } finally {
-    setSaving(false);
-  }
-};
+      setError(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleModalClose = () => {
     setShowSuccessModal(false);
@@ -295,17 +296,10 @@ function EditMentor() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
-      <div className="p-5 lg:p-6 max-w-[1200px] mx-auto">
+      <div className="p-5 lg:p-6 max-w-[1000px] mx-auto">
         
+        {/* Header */}
         <div className="mb-6">
-          <button
-            onClick={() => navigate("/admin/users")}
-            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 mb-3 transition text-sm group"
-          >
-            <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
-            Kembali ke Data Pengguna
-          </button>
-          
           <div className="flex items-center gap-4">
             <div className="p-3 bg-gradient-to-br from-purple-600 via-pink-600 to-rose-600 rounded-xl shadow-lg">
               <User className="w-5 h-5 text-white" />
@@ -322,6 +316,7 @@ function EditMentor() {
           </div>
         </div>
 
+        {/* Main Form Card */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
           <div className="relative h-1.5 bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600"></div>
           
@@ -333,216 +328,189 @@ function EditMentor() {
           )}
 
           <div className="p-6 lg:p-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Grid Layout: 2 columns */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-5">
               
               {/* KOLOM KIRI - Informasi Akun */}
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <div className="p-1.5 bg-blue-100 rounded-lg">
                     <Mail size={14} className="text-blue-600" />
                   </div>
                   <h3 className="text-base font-semibold text-slate-700">Informasi Akun</h3>
-                  <span className="text-[10px] text-red-400 ml-auto">*Wajib</span>
                 </div>
                 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Email <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        name="email"
-                        type="email"
-                        placeholder="mentor@perusahaan.com"
-                        value={form.email}
-                        onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 transition-all bg-slate-50/50"
-                        required
-                      />
-                    </div>
+                {/* Email */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Email <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      name="email"
+                      type="email"
+                      placeholder="mentor@perusahaan.com"
+                      value={form.email}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 transition-all bg-slate-50/50"
+                      required
+                    />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        value="********"
-                        disabled
-                        className="w-full pl-4 pr-10 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                      >
-                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
-                      <Shield size={10} />
-                      Password tidak dapat diubah di sini.
-                    </p>
+                {/* Password (Disabled) */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value="********"
+                      disabled
+                      className="w-full pl-4 pr-10 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
                   </div>
+                  <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
+                    <Shield size={10} />
+                    Password tidak dapat diubah di sini
+                  </p>
+                </div>
 
-                  <div className="bg-gradient-to-r from-slate-50 to-white rounded-xl p-4 border border-slate-100">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <Shield size={16} className="text-slate-500" />
-                        <span className="text-sm font-semibold text-slate-700">Status Akun</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleToggleStatus}
-                        className={`relative w-12 h-6 flex items-center rounded-full p-1 transition-all duration-300 ${
-                          form.status === "aktif" ? "bg-emerald-500" : "bg-slate-300"
+                {/* Status Akun - Compact version */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Status Akun
+                  </label>
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Shield size={14} className="text-slate-500" />
+                      <span className="text-sm text-slate-700">
+                        {form.status === "aktif" ? "Aktif" : "Nonaktif"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleToggleStatus}
+                      className={`relative w-11 h-5 flex items-center rounded-full p-0.5 transition-all duration-300 ${
+                        form.status === "aktif" ? "bg-emerald-500" : "bg-slate-300"
+                      }`}
+                    >
+                      <div
+                        className={`bg-white w-4 h-4 rounded-full shadow-md transition-transform duration-300 ${
+                          form.status === "aktif" ? "translate-x-6" : "translate-x-0"
                         }`}
-                      >
-                        <div
-                          className={`bg-white w-4 h-4 rounded-full shadow-md transition-transform duration-300 ${
-                            form.status === "aktif" ? "translate-x-6" : "translate-x-0"
-                          }`}
-                        ></div>
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-2">
-                      {form.status === "aktif" ? "Akun aktif dan dapat digunakan" : "Akun nonaktif, tidak dapat digunakan"}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Role
-                    </label>
-                    <div className="relative">
-                      <Users size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        value="Mentor"
-                        disabled
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-100 text-slate-600 cursor-not-allowed font-medium"
-                      />
-                    </div>
+                      ></div>
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* KOLOM KANAN - Identitas */}
-              <div className="space-y-6">
+              {/* KOLOM KANAN - Identitas Diri */}
+              <div className="space-y-5">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <div className="p-1.5 bg-emerald-100 rounded-lg">
                     <User size={14} className="text-emerald-600" />
                   </div>
                   <h3 className="text-base font-semibold text-slate-700">Identitas Diri</h3>
-                  <span className="text-[10px] text-red-400 ml-auto">*Wajib</span>
                 </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Nama Lengkap <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        name="name"
-                        type="text"
-                        placeholder="Masukkan nama lengkap"
-                        value={form.name}
-                        onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 transition-all bg-slate-50/50"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Nomor Telepon / WhatsApp
-                    </label>
-                    <div className="relative">
-                      <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        name="phone"
-                        type="tel"
-                        placeholder="81234567890"
-                        value={form.phone}
-                        onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 transition-all bg-slate-50/50"
-                      />
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
-                      <Phone size={10} />
-                      Hanya angka, 10-15 digit, tanpa 0 di depan
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Jabatan / Posisi
-                    </label>
-                    <div className="relative">
-                      <Briefcase size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        name="jabatan"
-                        type="text"
-                        placeholder="Contoh: Senior Mentor, Tech Lead"
-                        value={form.jabatan}
-                        onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 transition-all bg-slate-50/50"
-                      />
-                    </div>
+                {/* Nama Lengkap */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Nama Lengkap <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      name="name"
+                      type="text"
+                      placeholder="Masukkan nama lengkap"
+                      value={form.name}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 transition-all bg-slate-50/50"
+                      required
+                    />
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* INFORMASI DIVISI */}
-            <div className="mt-8 pt-6 border-t border-slate-100">
-              <div className="flex items-center gap-2 pb-2 border-b border-slate-100 mb-4">
-                <div className="p-1.5 bg-amber-100 rounded-lg">
-                  <Building2 size={14} className="text-amber-600" />
-                </div>
-                <h3 className="text-base font-semibold text-slate-700">Informasi Divisi</h3>
-              </div>
-
-              <div className="max-w-md">
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                  Pilih Divisi Mentor
-                </label>
-                <div className="relative">
-                  <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <select
-                    name="divisi_name"
-                    value={form.divisi_name || ""}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 bg-white appearance-none"
-                  >
-                    <option value="">-- Pilih Divisi --</option>
-                    {divisiList.map((divisiItem) => (
-                      <option 
-                        key={divisiItem.id_divisi || divisiItem.id} 
-                        value={divisiItem.nama_divisi || divisiItem.nama}
-                      >
-                        {divisiItem.nama_divisi || divisiItem.nama}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                {/* Nomor Telepon */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Nomor Telepon / WhatsApp
+                  </label>
+                  <div className="relative">
+                    <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      name="phone"
+                      type="tel"
+                      placeholder="81234567890"
+                      value={form.phone}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 transition-all bg-slate-50/50"
+                    />
                   </div>
-                </div>
-                {form.divisi_name && (
-                  <p className="text-[10px] text-amber-600 mt-1.5 flex items-center gap-1">
-                    <Building2 size={10} />
-                    Divisi saat ini: {form.divisi_name}
+                  <p className="text-[10px] text-slate-400 mt-1.5">
+                    Hanya angka, 10-15 digit
                   </p>
-                )}
+                </div>
+
+                {/* Jabatan */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Jabatan / Posisi
+                  </label>
+                  <div className="relative">
+                    <Briefcase size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      name="jabatan"
+                      type="text"
+                      placeholder="Contoh: Senior Mentor, Tech Lead"
+                      value={form.jabatan}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 transition-all bg-slate-50/50"
+                    />
+                  </div>
+                </div>
+
+                {/* Divisi Mentor - langsung di sini, bukan section terpisah */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Divisi Mentor
+                  </label>
+                  <div className="relative">
+                    <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <select
+                      name="divisi_name"
+                      value={form.divisi_name || ""}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 bg-white appearance-none"
+                    >
+                      {/* HAPUS option "-- Pilih Divisi --" dari sini */}
+                      {divisiList.map((divisiItem) => (
+                        <option 
+                          key={divisiItem.id_divisi || divisiItem.id} 
+                          value={divisiItem.nama_divisi || divisiItem.nama}
+                        >
+                          {divisiItem.nama_divisi || divisiItem.nama}
+                        </option>
+                      ))}
+                    </select>
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -574,21 +542,6 @@ function EditMentor() {
                 </>
               )}
             </button>
-          </div>
-        </div>
-
-        {/* Tips Card */}
-        <div className="mt-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
-          <div className="flex items-start gap-3">
-            <div className="p-1.5 bg-white/50 rounded-lg">
-              <Zap size={16} className="text-amber-500" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-purple-800">Tips Pengisian Data</p>
-              <p className="text-xs text-purple-700 mt-0.5">
-                Pastikan memilih divisi yang sesuai untuk mentor. Data yang sudah disimpan dapat diedit kembali jika diperlukan.
-              </p>
-            </div>
           </div>
         </div>
       </div>

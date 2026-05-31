@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class LaporanAkhirController extends Controller
 {
@@ -54,17 +55,24 @@ class LaporanAkhirController extends Controller
                 $fileSize = null;
                 $uploadedAt = null;
                 $judul = null;
+                $deskripsi = null;
                 $catatan = null;
                 $nilai = null;
                 $dinilaiOleh = null;
                 $dinilaiPada = null;
+                $fileLaporan = null;
 
                 if ($laporan) {
                     $status = $laporan->status ?? 'pending';
-                    $fileUrl = $laporan->file_laporan ? Storage::url($laporan->file_laporan) : null;
+                    // PERBAIKAN: Gunakan asset() untuk absolute URL
+                    $fileUrl = $laporan->file_laporan
+                        ? asset('storage/' . $laporan->file_laporan)
+                        : null;
+                    $fileLaporan = $laporan->file_laporan;
                     $fileSize = $laporan->file_size;
                     $uploadedAt = $laporan->tanggal_upload ?? $laporan->created_at;
                     $judul = $laporan->judul;
+                    $deskripsi = $laporan->deskripsi;
                     $catatan = $laporan->catatan_mentor;
                     $nilai = $laporan->nilai_akhir;
                     $dinilaiOleh = $laporan->dinilai_oleh;
@@ -77,6 +85,8 @@ class LaporanAkhirController extends Controller
                     'peserta_nama' => $peserta->user->nama ?? 'Unknown',
                     'peserta_divisi' => $peserta->divisi ? $peserta->divisi->nama_divisi : '-',
                     'judul' => $judul,
+                    'deskripsi' => $deskripsi,
+                    'file_laporan' => $fileLaporan,
                     'file_url' => $fileUrl,
                     'file_size' => $fileSize,
                     'uploaded_at' => $uploadedAt,
@@ -179,7 +189,9 @@ class LaporanAkhirController extends Controller
                     'peserta_nama' => $laporan->peserta->user->nama ?? 'Unknown',
                     'peserta_divisi' => $laporan->peserta->divisi->nama_divisi ?? '-',
                     'judul' => $laporan->judul,
-                    'file_url' => $laporan->file_laporan ? Storage::url($laporan->file_laporan) : null,
+                    'deskripsi' => $laporan->deskripsi,
+                    'file_laporan' => $laporan->file_laporan,
+                    'file_url' => $laporan->file_laporan ? asset('storage/' . $laporan->file_laporan) : null,
                     'file_size' => $laporan->file_size,
                     'uploaded_at' => $laporan->tanggal_upload ?? $laporan->created_at,
                     'status' => $laporan->status,
@@ -397,6 +409,7 @@ class LaporanAkhirController extends Controller
                     'Nama Peserta' => $peserta->user->nama ?? 'Unknown',
                     'Divisi' => $peserta->divisi ? $peserta->divisi->nama_divisi : '-',
                     'Judul Laporan' => $laporan ? $laporan->judul : '-',
+                    'Deskripsi' => $laporan ? $laporan->deskripsi : '-',
                     'Tanggal Upload' => $laporan && $laporan->tanggal_upload ? $laporan->tanggal_upload->format('Y-m-d H:i') : ($laporan ? $laporan->created_at->format('Y-m-d H:i') : '-'),
                     'Status' => $laporan ? $this->getStatusText($laporan->status) : 'Belum Upload',
                     'Catatan Mentor' => $laporan ? $laporan->catatan_mentor : '-',
@@ -610,5 +623,230 @@ class LaporanAkhirController extends Controller
             'not_uploaded' => 'Belum Upload',
         ];
         return $statusMap[$status] ?? $status;
+    }
+
+    // ==================== PESERTA METHODS ====================
+
+    /**
+     * Get laporan akhir untuk peserta (logged in peserta)
+     * GET /api/peserta/laporan-akhir
+     */
+    public function getPesertaLaporan()
+    {
+        try {
+            $user = Auth::user();
+            
+            if ($user->role !== 'peserta') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+
+            $peserta = Peserta::where('id_user', $user->id_user)->first();
+            
+            if (!$peserta) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Data peserta tidak ditemukan'
+                ], 404);
+            }
+
+            $laporan = LaporanAkhir::where('id_peserta', $peserta->id_peserta)->first();
+            
+            if (!$laporan) {
+                return response()->json([
+                    'success' => true,
+                    'data' => null,
+                    'message' => 'Belum ada laporan'
+                ]);
+            }
+
+            // PERBAIKAN: Gunakan asset() untuk absolute URL
+            $fileUrl = $laporan->file_laporan
+                ? asset('storage/' . $laporan->file_laporan)
+                : null;
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id_laporan' => $laporan->id_laporan,
+                    'judul' => $laporan->judul,
+                    'deskripsi' => $laporan->deskripsi,
+                    'file_name' => basename($laporan->file_laporan),
+                    'file_laporan' => $laporan->file_laporan,
+                    'file_url' => $fileUrl,
+                    'file_size' => $laporan->file_size,
+                    'created_at' => $laporan->created_at,
+                    'tanggal_upload' => $laporan->tanggal_upload ?? $laporan->created_at,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Get Peserta Laporan Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Upload or update laporan akhir by peserta
+     * POST /api/peserta/laporan-akhir
+     */
+    public function storePesertaLaporan(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            
+            if ($user->role !== 'peserta') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+
+            $peserta = Peserta::where('id_user', $user->id_user)->first();
+            
+            if (!$peserta) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Data peserta tidak ditemukan'
+                ], 404);
+            }
+
+            $request->validate([
+                'judul' => 'required|string|max:255',
+                'deskripsi' => 'nullable|string',
+                'file' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
+            ]);
+
+            $laporan = LaporanAkhir::where('id_peserta', $peserta->id_peserta)->first();
+            
+            $filePath = null;
+            $fileSize = null;
+
+            if ($request->hasFile('file')) {
+                $file = $request->file('file');
+                $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+                $extension = $file->getClientOriginalExtension();
+                $fileName = time() . '_' . Str::slug($originalName) . '.' . $extension;
+                $filePath = $file->storeAs('laporan_akhir', $fileName, 'public');
+                $fileSize = $file->getSize();
+            }
+
+            if ($laporan) {
+                // Update existing laporan
+                if ($request->hasFile('file') && $laporan->file_laporan && Storage::disk('public')->exists($laporan->file_laporan)) {
+                    Storage::disk('public')->delete($laporan->file_laporan);
+                }
+
+                $laporan->update([
+                    'judul' => $request->judul,
+                    'deskripsi' => $request->deskripsi ?? $laporan->deskripsi,
+                    'file_laporan' => $filePath ?? $laporan->file_laporan,
+                    'file_size' => $fileSize ?? $laporan->file_size,
+                    'tanggal_upload' => now(),
+                ]);
+            } else {
+                // Create new laporan
+                $laporan = LaporanAkhir::create([
+                    'id_peserta' => $peserta->id_peserta,
+                    'judul' => $request->judul,
+                    'deskripsi' => $request->deskripsi,
+                    'file_laporan' => $filePath,
+                    'file_size' => $fileSize,
+                    'tanggal_upload' => now(),
+                ]);
+            }
+
+            // PERBAIKAN: Gunakan asset() untuk absolute URL pada response
+            $fileUrl = $laporan->file_laporan
+                ? asset('storage/' . $laporan->file_laporan)
+                : null;
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Laporan akhir berhasil ' . ($laporan->wasRecentlyCreated ? 'diupload' : 'diperbarui'),
+                'data' => [
+                    'id_laporan' => $laporan->id_laporan,
+                    'judul' => $laporan->judul,
+                    'deskripsi' => $laporan->deskripsi,
+                    'file_name' => basename($laporan->file_laporan),
+                    'file_laporan' => $laporan->file_laporan,
+                    'file_url' => $fileUrl,
+                    'created_at' => $laporan->created_at,
+                    'tanggal_upload' => $laporan->tanggal_upload,
+                ]
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validasi gagal',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Store Peserta Laporan Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyimpan laporan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete laporan akhir by peserta
+     * DELETE /api/peserta/laporan-akhir
+     */
+    public function deletePesertaLaporan()
+    {
+        try {
+            $user = Auth::user();
+            
+            if ($user->role !== 'peserta') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+
+            $peserta = Peserta::where('id_user', $user->id_user)->first();
+            
+            if (!$peserta) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Data peserta tidak ditemukan'
+                ], 404);
+            }
+
+            $laporan = LaporanAkhir::where('id_peserta', $peserta->id_peserta)->first();
+            
+            if (!$laporan) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Laporan tidak ditemukan'
+                ], 404);
+            }
+
+            if ($laporan->file_laporan && Storage::disk('public')->exists($laporan->file_laporan)) {
+                Storage::disk('public')->delete($laporan->file_laporan);
+            }
+
+            $laporan->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Laporan akhir berhasil dihapus'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Delete Peserta Laporan Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menghapus laporan: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

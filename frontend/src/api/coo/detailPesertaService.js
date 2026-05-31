@@ -1,203 +1,124 @@
+// src/api/coo/detailPesertaService.js
 import api from "../axios";
+import { getPeserta } from "../admin/dashboardService";
 
-// Flag untuk mode development - set ke false jika API sudah siap
-const USE_DUMMY = true;
-const SHOW_DUMMY_WARNING = true;
-
-// Data dummy untuk mock
-const getDummyDetailPeserta = (id) => ({
-  success: true,
-  data: {
-    id: parseInt(id),
-    nama: "Ahmad Rizki Pratama",
-    email: "ahmad.rizki@example.com",
-    divisi: "IT - Software Engineering",
-    status: "aktif",
-    mentor: "Budi Santoso, S.Kom",
-    tanggal_mulai: "2026-01-15",
-    tanggal_selesai: "2026-04-15",
-    phone: "081234567890",
-    foto: null
-  }
-});
-
-const getDummyRiwayatKehadiran = (id) => ({
-  success: true,
-  data: [
-    { date: "2026-05-01", status: "hadir", keterangan: "Hadir tepat waktu" },
-    { date: "2026-05-02", status: "hadir", keterangan: "Hadir tepat waktu" },
-    { date: "2026-05-03", status: "hadir", keterangan: "Hadir tepat waktu" },
-    { date: "2026-05-04", status: "izin", keterangan: "Izin sakit" },
-    { date: "2026-05-05", status: "hadir", keterangan: "Hadir tepat waktu" },
-    { date: "2026-05-06", status: "hadir", keterangan: "Hadir tepat waktu" },
-    { date: "2026-05-07", status: "hadir", keterangan: "Hadir tepat waktu" },
-    { date: "2026-05-08", status: "hadir", keterangan: "Hadir tepat waktu" },
-    { date: "2026-05-09", status: "hadir", keterangan: "Hadir tepat waktu" },
-    { date: "2026-05-10", status: "hadir", keterangan: "Hadir tepat waktu" }
-  ]
-});
-
-const getDummyProgressTugas = (id) => ({
-  success: true,
-  data: [
-    { id: 1, judul: "Membuat Landing Page", progress: 100, nilai: 90, deadline: "2026-05-10" },
-    { id: 2, judul: "Integrasi API Backend", progress: 85, nilai: 85, deadline: "2026-05-15" },
-    { id: 3, judul: "Membuat Dashboard Admin", progress: 70, nilai: 80, deadline: "2026-05-20" },
-    { id: 4, judul: "Testing & Debugging", progress: 50, nilai: null, deadline: "2026-05-25" },
-    { id: 5, judul: "Dokumentasi Proyek", progress: 30, nilai: null, deadline: "2026-05-30" }
-  ]
-});
-
-const getDummyHasilKuis = (id) => ({
-  success: true,
-  data: [
-    { id: 1, judul: "Quiz HTML & CSS", nilai: 85, tanggal: "2026-04-20", durasi: 30 },
-    { id: 2, judul: "Quiz JavaScript Dasar", nilai: 78, tanggal: "2026-04-25", durasi: 30 },
-    { id: 3, judul: "Quiz React.js", nilai: 92, tanggal: "2026-05-01", durasi: 45 },
-    { id: 4, judul: "Quiz Database & SQL", nilai: 70, tanggal: "2026-05-05", durasi: 30 },
-    { id: 5, judul: "Quiz Laravel", nilai: 88, tanggal: "2026-05-10", durasi: 45 }
-  ]
-});
-
-const getDummyLaporanAkhir = (id) => ({
-  success: true,
-  data: {
-    id: 1,
-    nilai_akhir: 85,
-    kesimpulan: "Peserta telah menyelesaikan magang dengan baik, mampu mengerjakan tugas-tugas yang diberikan dengan kualitas yang memuaskan.",
-    saran: "Perlu meningkatkan pemahaman tentang konsep database dan optimalisasi query.",
-    file_url: null
-  }
-});
-
-const getDummyStatistik = (id) => ({
-  success: true,
-  data: {
-    progress: 75,
-    kehadiran: 90,
-    rataNilai: 83,
-    totalTugas: 5,
-    totalKuis: 5,
-    nilaiTertinggi: 92,
-    peringkat: 5,
-    totalPeserta: 25
-  }
-});
-
-const getDummyAktivitas = (id, limit) => ({
-  success: true,
-  data: [
-    { type: "tugas", title: "Mengumpulkan Tugas", description: "Membuat Landing Page", time: "2 hari lalu", created_at: "2026-05-08" },
-    { type: "kuis", title: "Mengerjakan Kuis", description: "Quiz React.js - Skor 92", time: "5 hari lalu", created_at: "2026-05-05" },
-    { type: "tugas", title: "Mengumpulkan Tugas", description: "Integrasi API Backend", time: "1 minggu lalu", created_at: "2026-05-01" },
-    { type: "kehadiran", title: "Check-in", description: "Hadir tepat waktu", time: "1 hari lalu", created_at: "2026-05-09" }
-  ]
-});
-
-// Get detail peserta lengkap
+// Get detail peserta dari data yang sudah ada
 export const getDetailPeserta = async (id) => {
   try {
-    const response = await api.get(`/coo/peserta/${id}/detail`);
-    if (SHOW_DUMMY_WARNING && USE_DUMMY) {
-      console.log("✅ [Real Data] API getDetailPeserta berhasil");
+    // Ambil semua data peserta
+    const response = await getPeserta();
+    
+    let pesertaList = [];
+    if (response && response.success && Array.isArray(response.data)) {
+      pesertaList = response.data;
+    } else if (Array.isArray(response)) {
+      pesertaList = response;
+    } else if (response && Array.isArray(response.data)) {
+      pesertaList = response.data;
     }
-    return response.data;
+    
+    // Cari peserta berdasarkan ID
+    const peserta = pesertaList.find(p => {
+      const pesertaId = p.id_peserta || p.id;
+      return pesertaId == id;
+    });
+    
+    if (peserta) {
+      // Tentukan status dari status_magang atau user status
+      let status = "non_aktif";
+      if (peserta.status_magang === "aktif") {
+        status = "aktif";
+      } else if (peserta.user?.status_akun === "aktif" || peserta.user?.status_akun === "active") {
+        status = "aktif";
+      } else if (peserta.status === "aktif" || peserta.status === "active") {
+        status = "aktif";
+      }
+      
+      // Dapatkan nama mentor
+      let mentorName = "-";
+      if (peserta.mentor) {
+        if (typeof peserta.mentor === 'object') {
+          mentorName = peserta.mentor.user?.nama || peserta.mentor.nama || peserta.mentor.name || "-";
+        } else if (typeof peserta.mentor === 'string') {
+          mentorName = peserta.mentor;
+        }
+      } else if (peserta.id_mentor && mentorList) {
+        // Jika perlu cari dari list mentor
+        const foundMentor = mentorList.find(m => (m.id_mentor || m.id_user || m.id) == peserta.id_mentor);
+        if (foundMentor) {
+          mentorName = foundMentor.user?.nama || foundMentor.nama || foundMentor.name || "-";
+        }
+      }
+      
+      // Dapatkan nama divisi
+      let divisiName = "-";
+      if (peserta.divisi) {
+        if (typeof peserta.divisi === 'object') {
+          divisiName = peserta.divisi.nama_divisi || peserta.divisi.nama || "-";
+        } else if (typeof peserta.divisi === 'string') {
+          divisiName = peserta.divisi;
+        }
+      } else if (peserta.id_divisi && divisiList) {
+        const foundDivisi = divisiList.find(d => (d.id_divisi || d.id) == peserta.id_divisi);
+        if (foundDivisi) divisiName = foundDivisi.nama_divisi || foundDivisi.nama || "-";
+      }
+      
+      // Data dari database - LANGSUNG dari kolom tabel
+      const asalKampus = peserta.asal_kampus || peserta.user?.asal_kampus || "-";
+      const programStudi = peserta.prodi || peserta.user?.prodi || "-";
+      const nomorTelepon = peserta.user?.phone || peserta.user?.no_telepon || peserta.phone || "-";
+      const fotoProfil = peserta.user?.foto || peserta.foto || null;
+      
+      return {
+        success: true,
+        data: {
+          id: peserta.id_peserta || peserta.id,
+          nama: peserta.user?.nama || peserta.nama || peserta.name || "Tidak ada nama",
+          email: peserta.user?.email || peserta.email || "-",
+          divisi: divisiName,
+          status: status,
+          mentor: mentorName,
+          tanggal_mulai: peserta.tanggal_mulai || peserta.start_date,
+          tanggal_selesai: peserta.tanggal_selesai || peserta.end_date,
+          foto: fotoProfil,
+          phone: nomorTelepon,
+          asal_kampus: asalKampus,
+          prodi: programStudi
+        }
+      };
+    }
+    
+    throw new Error("Peserta tidak ditemukan");
   } catch (error) {
-    if (USE_DUMMY) {
-      console.warn(`⚠️ [Dummy Mode] API getDetailPeserta belum tersedia (${error.response?.status || error.message}), menggunakan dummy data`);
-      return getDummyDetailPeserta(id);
-    }
     console.error("Error getting detail peserta:", error);
     throw error;
   }
 };
 
-// Get riwayat kehadiran peserta
-export const getRiwayatKehadiran = async (id, params = {}) => {
-  try {
-    const response = await api.get(`/coo/peserta/${id}/kehadiran`, { params });
-    return response.data;
-  } catch (error) {
-    if (USE_DUMMY) {
-      console.warn(`⚠️ [Dummy Mode] API getRiwayatKehadiran belum tersedia, menggunakan dummy data`);
-      return getDummyRiwayatKehadiran(id);
-    }
-    console.error("Error getting riwayat kehadiran:", error);
-    throw error;
-  }
+// Fungsi-fungsi lain yang tidak digunakan (tetap disediakan untuk kompatibilitas)
+export const getRiwayatKehadiran = async (id) => {
+  return { success: true, data: [] };
 };
 
-// Get progress tugas peserta
 export const getProgressTugas = async (id) => {
-  try {
-    const response = await api.get(`/coo/peserta/${id}/progress-tugas`);
-    return response.data;
-  } catch (error) {
-    if (USE_DUMMY) {
-      console.warn(`⚠️ [Dummy Mode] API getProgressTugas belum tersedia, menggunakan dummy data`);
-      return getDummyProgressTugas(id);
-    }
-    console.error("Error getting progress tugas:", error);
-    throw error;
-  }
+  return { success: true, data: [] };
 };
 
-// Get hasil kuis peserta
 export const getHasilKuis = async (id) => {
-  try {
-    const response = await api.get(`/coo/peserta/${id}/hasil-kuis`);
-    return response.data;
-  } catch (error) {
-    if (USE_DUMMY) {
-      console.warn(`⚠️ [Dummy Mode] API getHasilKuis belum tersedia, menggunakan dummy data`);
-      return getDummyHasilKuis(id);
-    }
-    console.error("Error getting hasil kuis:", error);
-    throw error;
-  }
+  return { success: true, data: [] };
 };
 
-// Get laporan akhir peserta
 export const getLaporanAkhir = async (id) => {
-  try {
-    const response = await api.get(`/coo/peserta/${id}/laporan-akhir`);
-    return response.data;
-  } catch (error) {
-    if (USE_DUMMY) {
-      console.warn(`⚠️ [Dummy Mode] API getLaporanAkhir belum tersedia, menggunakan dummy data`);
-      return getDummyLaporanAkhir(id);
-    }
-    console.error("Error getting laporan akhir:", error);
-    throw error;
-  }
+  return { success: true, data: null };
 };
 
-// Get statistik ringkasan peserta
 export const getStatistikPeserta = async (id) => {
-  try {
-    const response = await api.get(`/coo/peserta/${id}/statistik`);
-    return response.data;
-  } catch (error) {
-    if (USE_DUMMY) {
-      console.warn(`⚠️ [Dummy Mode] API getStatistikPeserta belum tersedia, menggunakan dummy data`);
-      return getDummyStatistik(id);
-    }
-    console.error("Error getting statistik peserta:", error);
-    throw error;
-  }
+  return {
+    success: true,
+    data: { progress: 0, kehadiran: 0, rataNilai: 0, totalTugas: 0, totalKuis: 0 }
+  };
 };
 
-// Get aktivitas terbaru peserta
 export const getAktivitasTerbaru = async (id, limit = 10) => {
-  try {
-    const response = await api.get(`/coo/peserta/${id}/aktivitas`, { params: { limit } });
-    return response.data;
-  } catch (error) {
-    if (USE_DUMMY) {
-      console.warn(`⚠️ [Dummy Mode] API getAktivitasTerbaru belum tersedia, menggunakan dummy data`);
-      return getDummyAktivitas(id, limit);
-    }
-    console.error("Error getting aktivitas terbaru:", error);
-    throw error;
-  }
+  return { success: true, data: [] };
 };

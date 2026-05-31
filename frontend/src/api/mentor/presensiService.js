@@ -1,30 +1,87 @@
-import axiosInstance from "../axios"
+// src/api/mentor/presensiService.js
+import axiosInstance from "../axios";
 
-// Get attendance records for mentor's participants
+// Get all presensi for mentor
 export const getMentorPresensi = async (params = {}) => {
-  const queryString = new URLSearchParams(params).toString()
-  const response = await axiosInstance.get(`/mentor/presensi${queryString ? `?${queryString}` : ''}`)
-  return response.data
-}
+  try {
+    const queryString = new URLSearchParams(params).toString();
+    const response = await axiosInstance.get(`/mentor/presensi${queryString ? `?${queryString}` : ''}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching mentor presensi:", error);
+    return { success: false, data: [], message: error.message };
+  }
+};
 
-// Get attendance summary
+// Get presensi summary for mentor
 export const getMentorPresensiSummary = async (params = {}) => {
-  const queryString = new URLSearchParams(params).toString()
-  const response = await axiosInstance.get(`/mentor/presensi/summary${queryString ? `?${queryString}` : ''}`)
-  return response.data
-}
+  try {
+    const queryString = new URLSearchParams(params).toString();
+    const response = await axiosInstance.get(`/mentor/presensi/summary${queryString ? `?${queryString}` : ''}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching presensi summary:", error);
+    return { success: false, data: null };
+  }
+};
 
-// Export attendance report
-export const exportMentorPresensi = async (params = {}) => {
-  const queryString = new URLSearchParams(params).toString()
-  const response = await axiosInstance.get(`/mentor/presensi/export${queryString ? `?${queryString}` : ''}`, {
-    responseType: "blob",
-  })
-  return response.data
-}
+// Get presensi by date
+export const getPresensiByDate = async (date) => {
+  try {
+    const response = await axiosInstance.get(`/mentor/presensi/date/${date}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching presensi by date:", error);
+    return { success: false, data: [] };
+  }
+};
 
-// Get participant's daily report
-export const getDailyReportByPeserta = async (pesertaId, tanggal) => {
-  const response = await axiosInstance.get(`/daily-report/${pesertaId}?tanggal=${tanggal}`)
-  return response.data
-}
+// Get presensi by participant
+export const getPresensiByPeserta = async (pesertaId, params = {}) => {
+  try {
+    const queryString = new URLSearchParams(params).toString();
+    const response = await axiosInstance.get(`/mentor/presensi/peserta/${pesertaId}${queryString ? `?${queryString}` : ''}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching presensi by peserta:", error);
+    return { success: false, data: [] };
+  }
+};
+
+// Export presensi data
+export const exportPresensi = async (params = {}) => {
+  try {
+    const queryString = new URLSearchParams(params).toString();
+    const response = await axiosInstance.get(`/mentor/presensi/export${queryString ? `?${queryString}` : ''}`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error exporting presensi:", error);
+    throw error;
+  }
+};
+
+// Get presensi stats for dashboard
+export const getPresensiStats = async (params = {}) => {
+  try {
+    const queryString = new URLSearchParams(params).toString();
+    const response = await axiosInstance.get(`/mentor/presensi/stats${queryString ? `?${queryString}` : ''}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching presensi stats:", error);
+    return { success: false, data: null };
+  }
+};
+
+// Default export
+const presensiService = {
+  getMentorPresensi,
+  getMentorPresensiSummary,
+  getPresensiByDate,
+  getPresensiByPeserta,
+  exportPresensi,
+  getPresensiStats
+};
+
+export default presensiService;

@@ -5,7 +5,6 @@ import { getMentor as getMentors } from "../../api/admin/mentorService";
 import { getDivisi } from "../../api/admin/divisiService";  
 import { logActivity } from "../../utils/activityLogger";
 import {
-  ArrowLeft,
   Save,
   User,
   Mail,
@@ -17,20 +16,17 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  Zap,
   Users,
   BookOpen,
   School,
   CheckCircle,
   Loader2,
   BadgeCheck,
-  CalendarDays,
+  CalendarRange,
   Clock,
   Rocket,
   Calendar,
-  CalendarRange,
-  AlertTriangle,
-  Edit3
+  AlertTriangle
 } from "lucide-react";
 
 function EditPeserta() {
@@ -50,8 +46,6 @@ function EditPeserta() {
   const [successMessage, setSuccessMessage] = useState("");
   const [successData, setSuccessData] = useState(null);
 
-  const today = new Date().toISOString().split('T')[0];
-
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -67,21 +61,16 @@ function EditPeserta() {
     status: "aktif",
   });
 
-  // Fungsi untuk memformat tanggal ke YYYY-MM-DD
   const formatDateToYMD = (dateString) => {
     if (!dateString) return "";
-    
-    // Jika sudah dalam format YYYY-MM-DD
     if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}/)) {
       return dateString.split('T')[0];
     }
-    
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return "";
       return date.toISOString().split('T')[0];
     } catch (e) {
-      console.error("Error formatting date:", e);
       return "";
     }
   };
@@ -91,37 +80,50 @@ function EditPeserta() {
       setLoading(true);
       setError(null);
       try {
-        // Load divisi list
-        const divisiResult = await getDivisi();
-        let divisiData = [];
-        if (divisiResult && divisiResult.success && Array.isArray(divisiResult.data)) {
-          divisiData = divisiResult.data;
-        } else if (Array.isArray(divisiResult)) {
-          divisiData = divisiResult;
-        }
-        setDivisiList(divisiData);
-        console.log("Divisi list loaded:", divisiData);
-
-        // Load mentors list
-        const mentorResult = await getMentors();
-        let mentors = [];
-        if (mentorResult && mentorResult.success && Array.isArray(mentorResult.data)) {
-          mentors = mentorResult.data;
-        } else if (Array.isArray(mentorResult)) {
-          mentors = mentorResult;
-        }
-        
-        const formattedMentors = mentors.map(mentor => ({
-          id: mentor.id_mentor || mentor.id,
-          name: mentor.user?.nama || mentor.nama || mentor.name || "Mentor",
-          id_divisi: mentor.id_divisi || (mentor.divisi?.id_divisi) || null,
-          divisi_name: typeof mentor.divisi === 'string' ? mentor.divisi : mentor.divisi?.nama_divisi,
-        }));
-        setAllMentors(formattedMentors);
-        console.log("Mentors loaded:", formattedMentors);
+         const divisiResult = await getDivisi();
+    let divisiData = [];
+    if (divisiResult && divisiResult.success && Array.isArray(divisiResult.data)) {
+      divisiData = divisiResult.data;
+    } else if (Array.isArray(divisiResult)) {
+      divisiData = divisiResult;
+    }
+    
+    // HANYA TAMPILKAN DIVISI DENGAN STATUS AKTIF
+    const activeDivisi = divisiData.filter(divisi => {
+      const status = divisi.status || divisi.status_akun || divisi.is_active;
+      if (status === undefined || status === null) return true;
+      return status === "aktif" || status === "active" || status === true;
+    });
+    
+    setDivisiList(activeDivisi);
+    
+    // Filter mentors berdasarkan divisi aktif juga
+    const mentorResult = await getMentors();
+    let mentors = [];
+    if (mentorResult && mentorResult.success && Array.isArray(mentorResult.data)) {
+      mentors = mentorResult.data;
+    } else if (Array.isArray(mentorResult)) {
+      mentors = mentorResult;
+    }
+    
+    // Ambil ID divisi yang aktif untuk filter mentor
+    const activeDivisiIds = activeDivisi.map(d => d.id_divisi || d.id);
+    
+    const formattedMentors = mentors
+      .filter(mentor => {
+        // Filter mentor yang divisinya aktif
+        const mentorDivisiId = mentor.id_divisi || (mentor.divisi?.id_divisi);
+        return !mentorDivisiId || activeDivisiIds.includes(mentorDivisiId);
+      })
+      .map(mentor => ({
+        id: mentor.id_mentor || mentor.id,
+        name: mentor.user?.nama || mentor.nama || mentor.name || "Mentor",
+        id_divisi: mentor.id_divisi || (mentor.divisi?.id_divisi) || null,
+      }));
+      
+    setAllMentors(formattedMentors);
 
         const pesertaId = parseInt(id);
-        
         const pesertaResult = await getPeserta();
         
         let pesertaList = [];
@@ -131,49 +133,25 @@ function EditPeserta() {
           pesertaList = pesertaResult;
         }
         
-        console.log("All peserta:", pesertaList);
-        
         const peserta = pesertaList.find(p => (p.id_peserta || p.id) == pesertaId);
         
         if (peserta) {
-          console.log("Found peserta RAW data:", JSON.stringify(peserta, null, 2));
           const userData = peserta.user || {};
           
-          let storedMulai = "";
+          let storedMulai = formatDateToYMD(peserta.tanggal_mulai || peserta.start_date || peserta.tanggal_magang_mulai);
           let storedSelesai = "";
-          
-          // Cek berbagai kemungkinan nama field untuk tanggal mulai
-          if (peserta.tanggal_mulai) {
-            storedMulai = formatDateToYMD(peserta.tanggal_mulai);
-          } else if (peserta.start_date) {
-            storedMulai = formatDateToYMD(peserta.start_date);
-          } else if (peserta.tanggal_magang_mulai) {
-            storedMulai = formatDateToYMD(peserta.tanggal_magang_mulai);
-          }
-          
-          // Cek berbagai kemungkinan nama field untuk tanggal selesai
           if (peserta.tanggal_selesai && peserta.tanggal_selesai !== null && peserta.tanggal_selesai !== "") {
             storedSelesai = formatDateToYMD(peserta.tanggal_selesai);
           } else if (peserta.end_date && peserta.end_date !== null && peserta.end_date !== "") {
             storedSelesai = formatDateToYMD(peserta.end_date);
-          } else if (peserta.tanggal_magang_selesai && peserta.tanggal_magang_selesai !== null && peserta.tanggal_magang_selesai !== "") {
-            storedSelesai = formatDateToYMD(peserta.tanggal_magang_selesai);
           }
           
           let userStatus = "non_aktif";
           if (userData.status_akun === "aktif" || userData.status_akun === "active") {
             userStatus = "aktif";
-          } else if (userData.status_akun === "non_aktif" || userData.status_akun === "inactive") {
-            userStatus = "non_aktif";
-          } else if (peserta.status_akun === "aktif") {
-            userStatus = "aktif";
-          } else if (peserta.status === "aktif") {
+          } else if (peserta.status_akun === "aktif" || peserta.status === "aktif") {
             userStatus = "aktif";
           }
-          
-          console.log("Status from API:", userStatus);
-          console.log("Tanggal mulai (raw):", peserta.tanggal_mulai, "formatted:", storedMulai);
-          console.log("Tanggal selesai (raw):", peserta.tanggal_selesai, "formatted:", storedSelesai);
           
           setForm({
             name: userData.nama || userData.name || peserta.nama || "",
@@ -190,7 +168,6 @@ function EditPeserta() {
             status: userStatus,
           });
         } else if (existingUserData && existingUserData.id == pesertaId) {
-          console.log("Using existingUserData:", existingUserData);
           setForm({
             name: existingUserData.name || existingUserData.nama || "",
             email: existingUserData.email || "",
@@ -222,9 +199,7 @@ function EditPeserta() {
 
   const getFilteredMentors = () => {
     if (!form.id_divisi && !form.divisi) return [];
-    
     const selectedDivisiId = parseInt(form.id_divisi);
-    
     return allMentors.filter(mentor => {
       if (selectedDivisiId && mentor.id_divisi && parseInt(mentor.id_divisi) === selectedDivisiId) {
         return true;
@@ -268,6 +243,11 @@ function EditPeserta() {
         tanggal_mulai: value,
         tanggal_selesai: newSelesai,
       });
+    } else if (name === "status") {
+      setForm({
+        ...form,
+        status: value,
+      });
     } else {
       setForm({
         ...form,
@@ -288,7 +268,6 @@ function EditPeserta() {
     setSaving(true);
     setError(null);
 
-    // Validasi
     if (!form.name || form.name.trim() === "") {
       setError("Nama lengkap harus diisi");
       setSaving(false);
@@ -315,7 +294,6 @@ function EditPeserta() {
         return;
       }
 
-      // Data yang dikirim ke API
       const updateData = {
         nama: form.name.trim(),
         email: form.email.trim(),
@@ -324,16 +302,9 @@ function EditPeserta() {
         asal_kampus: form.kampus || "",
         prodi: form.prodi || "",
         tanggal_mulai: form.tanggal_mulai,
+        tanggal_selesai: form.tanggal_selesai || null,
       };
       
-      // Kirim tanggal_selesai jika ada, jika kosong kirim null
-      if (form.tanggal_selesai && form.tanggal_selesai !== "") {
-        updateData.tanggal_selesai = form.tanggal_selesai;
-      } else {
-        updateData.tanggal_selesai = null;
-      }
-      
-      // Kirim id_divisi jika ada
       if (form.id_divisi && form.id_divisi !== "") {
         const idDivisiNum = parseInt(form.id_divisi);
         if (!isNaN(idDivisiNum) && idDivisiNum > 0) {
@@ -341,7 +312,6 @@ function EditPeserta() {
         }
       }
       
-      // Kirim id_mentor jika ada
       if (form.mentor_id && form.mentor_id !== "") {
         const idMentorNum = parseInt(form.mentor_id);
         if (!isNaN(idMentorNum) && idMentorNum > 0) {
@@ -349,20 +319,15 @@ function EditPeserta() {
         }
       }
       
-      console.log("📤 Data yang akan dikirim ke API:", JSON.stringify(updateData, null, 2));
-      
       const response = await updatePeserta(pesertaId, updateData);
       
-      console.log("📥 API Response:", response);
-      
       if (response && response.success) {
-        // 🔥 LOG ACTIVITY - UPDATE PESERTA
         logActivity("update", "peserta", form.name);
         
         setSuccessData({
           name: form.name,
           email: form.email,
-          role: "Peserta",
+          role: "Peserta Magang",
           divisi: form.divisi || "-",
           mentor: form.mentor_name || "-",
           kampus: form.kampus || "-",
@@ -381,26 +346,20 @@ function EditPeserta() {
     } catch (err) {
       console.error("Error saving data:", err);
       let errorMessage = err.message || "Gagal menyimpan perubahan. Silakan coba lagi.";
-
       if (err.response?.data?.message) {
         errorMessage = err.response.data.message;
       } else if (err.response?.data?.errors) {
         const errors = Object.values(err.response.data.errors).flat();
         errorMessage = errors.join("\n");
-      } else if (err.response?.data?.error) {
-        errorMessage = err.response.data.error;
       }
-
       setError(errorMessage);
     } finally {
       setSaving(false);
     }
   };
 
-  // 🔥 PERBAIKAN: Hanya 1 fungsi untuk menutup modal dan navigasi
   const handleModalClose = () => {
     setShowSuccessModal(false);
-    // Navigasi ke halaman users dengan state message
     navigate("/admin/users", { state: { message: successMessage } });
   };
 
@@ -419,21 +378,13 @@ function EditPeserta() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
-      <div className="p-5 lg:p-6 max-w-[1400px] mx-auto">
+      <div className="p-5 lg:p-6 max-w-[1200px] mx-auto">
         
-        {/* Header */}
+        {/* HEADER */}
         <div className="mb-6">
-          <button
-            onClick={() => navigate("/admin/users")}
-            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 mb-3 transition text-sm group"
-          >
-            <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
-            Kembali ke Data Pengguna
-          </button>
-          
           <div className="flex items-center gap-4">
             <div className="p-3 bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 rounded-xl shadow-lg">
-              <Edit3 className="w-5 h-5 text-white" />
+              <User className="w-5 h-5 text-white" />
             </div>
             <div>
               <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-slate-800 via-emerald-800 to-teal-800 bg-clip-text text-transparent">
@@ -447,7 +398,7 @@ function EditPeserta() {
           </div>
         </div>
 
-        {/* Main Card */}
+        {/* Main Form Card */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
           <div className="relative h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500"></div>
           
@@ -459,167 +410,140 @@ function EditPeserta() {
           )}
 
           <div className="p-6 lg:p-8">
-            {/* Grid 2 Kolom Utama */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            {/* SECTION 1: Informasi Akun & Identitas - 2 Kolom */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-5">
               
-              {/* KOLOM KIRI - Informasi Akun */}
-              <div className="space-y-6">
+              {/* Kolom Kiri - Informasi Akun */}
+              <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <div className="p-1.5 bg-blue-100 rounded-lg">
                     <Mail size={14} className="text-blue-600" />
                   </div>
                   <h3 className="text-base font-semibold text-slate-700">Informasi Akun</h3>
-                  <span className="text-[10px] text-red-400 ml-auto">*Wajib</span>
                 </div>
                 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Email <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        name="email"
-                        type="email"
-                        placeholder="peserta@example.com"
-                        value={form.email}
-                        onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all bg-slate-50/50"
-                        required
-                      />
-                    </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Email <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      name="email"
+                      type="email"
+                      placeholder="peserta@example.com"
+                      value={form.email}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all bg-slate-50/50"
+                      required
+                    />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        value="********"
-                        disabled
-                        className="w-full pl-4 pr-10 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                      >
-                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
-                      <Shield size={10} />
-                      Password tidak dapat diubah di sini.
-                    </p>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value="********"
+                      disabled
+                      className="w-full pl-4 pr-10 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
                   </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Password tidak dapat diubah di sini</p>
+                </div>
 
-                  <div className="bg-gradient-to-r from-slate-50 to-white rounded-xl p-4 border border-slate-100">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <Shield size={16} className="text-slate-500" />
-                        <span className="text-sm font-semibold text-slate-700">Status Akun</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setForm({
-                            ...form,
-                            status: form.status === "aktif" ? "non_aktif" : "aktif",
-                          })
-                        }
-                        className={`relative w-12 h-6 flex items-center rounded-full p-1 transition-all duration-300 ${
-                          form.status === "aktif" ? "bg-emerald-500" : "bg-slate-300"
+                {/* Status Akun - Compact */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Status Akun
+                  </label>
+                  <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Shield size={14} className="text-slate-500" />
+                      <span className="text-sm text-slate-700">
+                        {form.status === "aktif" ? "Aktif" : "Nonaktif"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, status: form.status === "aktif" ? "non_aktif" : "aktif" })}
+                      className={`relative w-11 h-5 flex items-center rounded-full p-0.5 transition-all duration-300 ${
+                        form.status === "aktif" ? "bg-emerald-500" : "bg-slate-300"
+                      }`}
+                    >
+                      <div
+                        className={`bg-white w-4 h-4 rounded-full shadow-md transition-transform duration-300 ${
+                          form.status === "aktif" ? "translate-x-6" : "translate-x-0"
                         }`}
-                      >
-                        <div
-                          className={`bg-white w-4 h-4 rounded-full shadow-md transition-transform duration-300 ${
-                            form.status === "aktif" ? "translate-x-6" : "translate-x-0"
-                          }`}
-                        ></div>
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-2">
-                      {form.status === "aktif" ? "Akun aktif dan dapat digunakan" : "Akun nonaktif, tidak dapat digunakan"}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Role
-                    </label>
-                    <div className="relative">
-                      <Users size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        value="Peserta Magang"
-                        disabled
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-100 text-slate-600 cursor-not-allowed font-medium"
-                      />
-                    </div>
+                      ></div>
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* KOLOM KANAN - Identitas */}
-              <div className="space-y-6">
+              {/* Kolom Kanan - Identitas Diri */}
+              <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <div className="p-1.5 bg-emerald-100 rounded-lg">
                     <User size={14} className="text-emerald-600" />
                   </div>
                   <h3 className="text-base font-semibold text-slate-700">Identitas Diri</h3>
-                  <span className="text-[10px] text-red-400 ml-auto">*Wajib</span>
                 </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Nama Lengkap <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        name="name"
-                        type="text"
-                        placeholder="Masukkan nama lengkap"
-                        value={form.name}
-                        onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all bg-slate-50/50"
-                        required
-                      />
-                    </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Nama Lengkap <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      name="name"
+                      type="text"
+                      placeholder="Masukkan nama lengkap"
+                      value={form.name}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all bg-slate-50/50"
+                      required
+                    />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Nomor Telepon / WhatsApp
-                    </label>
-                    <div className="relative">
-                      <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        name="phone"
-                        type="tel"
-                        placeholder="81234567890"
-                        value={form.phone}
-                        onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all bg-slate-50/50"
-                      />
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
-                      <Phone size={10} />
-                      Hanya angka, 10-15 digit, tanpa 0 di depan
-                    </p>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Nomor Telepon / WhatsApp
+                  </label>
+                  <div className="relative">
+                    <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      name="phone"
+                      type="tel"
+                      placeholder="81234567890"
+                      value={form.phone}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all bg-slate-50/50"
+                    />
                   </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Hanya angka, 10-15 digit</p>
                 </div>
               </div>
             </div>
 
-            {/* Section 2: Informasi Akademik & Magang */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8 pt-6 border-t border-slate-100">
+            {/* SECTION 2: Akademik & Penempatan - 2 Kolom */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-5 mt-8 pt-6 border-t border-slate-100">
               
-              {/* Informasi Akademik */}
-              <div className="space-y-6">
+              {/* Kolom Kiri - Informasi Akademik */}
+              <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <div className="p-1.5 bg-purple-100 rounded-lg">
                     <GraduationCap size={14} className="text-purple-600" />
@@ -627,45 +551,43 @@ function EditPeserta() {
                   <h3 className="text-base font-semibold text-slate-700">Informasi Akademik</h3>
                 </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Asal Kampus / Universitas
-                    </label>
-                    <div className="relative">
-                      <School size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        name="kampus"
-                        type="text"
-                        placeholder="Nama Universitas"
-                        value={form.kampus}
-                        onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all bg-slate-50/50"
-                      />
-                    </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Asal Kampus / Universitas
+                  </label>
+                  <div className="relative">
+                    <School size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      name="kampus"
+                      type="text"
+                      placeholder="Nama Universitas"
+                      value={form.kampus}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all bg-slate-50/50"
+                    />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Program Studi
-                    </label>
-                    <div className="relative">
-                      <BookOpen size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        name="prodi"
-                        type="text"
-                        placeholder="Program Studi"
-                        value={form.prodi}
-                        onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all bg-slate-50/50"
-                      />
-                    </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Program Studi
+                  </label>
+                  <div className="relative">
+                    <BookOpen size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      name="prodi"
+                      type="text"
+                      placeholder="Program Studi"
+                      value={form.prodi}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all bg-slate-50/50"
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Informasi Magang & Mentor */}
-              <div className="space-y-6">
+              {/* Kolom Kanan - Penempatan Magang */}
+              <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                   <div className="p-1.5 bg-amber-100 rounded-lg">
                     <Briefcase size={14} className="text-amber-600" />
@@ -673,76 +595,71 @@ function EditPeserta() {
                   <h3 className="text-base font-semibold text-slate-700">Penempatan Magang</h3>
                 </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Divisi Penempatan
-                    </label>
-                    <div className="relative">
-                      <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <select
-                        name="divisi"
-                        value={form.divisi || ""}
-                        onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 bg-white appearance-none"
-                      >
-                        <option value="">Pilih Divisi</option>
-                        {divisiList.map((divisiItem) => (
-                          <option 
-                            key={divisiItem.id_divisi || divisiItem.id} 
-                            value={divisiItem.nama_divisi || divisiItem.nama}
-                          >
-                            {divisiItem.nama_divisi || divisiItem.nama}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                      Mentor Pembimbing
-                    </label>
-                    <div className="relative">
-                      <Users size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <select
-                        name="mentor_id"
-                        value={form.mentor_id || ""}
-                        onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 bg-white appearance-none"
-                        disabled={!form.id_divisi && !form.divisi}
-                      >
-                        <option value="">
-                          {!form.id_divisi && !form.divisi 
-                            ? "✗ Pilih divisi terlebih dahulu" 
-                            : filteredMentors.length === 0 
-                              ? "✗ Tidak ada mentor di divisi ini" 
-                              : "✓ Pilih Mentor"}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Divisi Penempatan
+                  </label>
+                  <div className="relative">
+                    <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <select
+                      name="divisi"
+                      value={form.divisi || ""}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 bg-white appearance-none"
+                    >
+                      {/* HAPUS option "Pilih Divisi" dari sini */}
+                      {divisiList.map((divisiItem) => (
+                        <option 
+                          key={divisiItem.id_divisi || divisiItem.id} 
+                          value={divisiItem.nama_divisi || divisiItem.nama}
+                        >
+                          {divisiItem.nama_divisi || divisiItem.nama}
                         </option>
-                        {filteredMentors.map((mentor) => (
-                          <option key={mentor.id} value={mentor.id}>
-                            {mentor.name}
-                          </option>
-                        ))}
-                      </select>
+                      ))}
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
                     </div>
-                    {form.mentor_name && !form.mentor_id && (
-                      <p className="text-[10px] text-amber-600 mt-1.5 flex items-center gap-1">
-                        <AlertTriangle size={10} />
-                        Mentor sebelumnya: {form.mentor_name}
-                      </p>
-                    )}
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Mentor Pembimbing
+                  </label>
+                  <div className="relative">
+                    <Users size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <select
+                      name="mentor_id"
+                      value={form.mentor_id || ""}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 bg-white appearance-none"
+                      disabled={!form.id_divisi && !form.divisi}
+                    >
+                      <option value="">
+                        {!form.id_divisi && !form.divisi 
+                          ? "Pilih divisi terlebih dahulu" 
+                          : filteredMentors.length === 0 
+                            ? "Tidak ada mentor di divisi ini" 
+                            : "Pilih Mentor"}
+                      </option>
+                      {filteredMentors.map((mentor) => (
+                        <option key={mentor.id} value={mentor.id}>
+                          {mentor.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {form.mentor_name && !form.mentor_id && (
+                    <p className="text-[10px] text-amber-600 mt-1">Mentor sebelumnya: {form.mentor_name}</p>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Section 3: Periode Magang - WAJIB */}
+            {/* SECTION 3: Periode Magang - Full Width */}
             <div className="mt-8 pt-6 border-t border-slate-100">
               <div className="flex items-center gap-2 pb-2 border-b border-slate-100 mb-4">
                 <div className="p-1.5 bg-cyan-100 rounded-lg">
@@ -783,16 +700,20 @@ function EditPeserta() {
                       value={form.tanggal_selesai}
                       onChange={handleChange}
                       className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all bg-slate-50/50"
-                      placeholder="Kosongkan jika masih berlangsung"
                     />
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">*Kosongkan jika magang masih berlangsung</p>
                 </div>
               </div>
 
-              {/* Informasi durasi magang */}
+              {/* Durasi Magang Info */}
               {form.tanggal_mulai && (
-                <div className={`mt-4 p-4 rounded-xl border ${form.tanggal_selesai && isTanggalValid() ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'}`}>
+                <div className={`mt-4 p-4 rounded-xl border ${
+                  form.tanggal_selesai && isTanggalValid() 
+                    ? 'bg-emerald-50 border-emerald-200' 
+                    : form.tanggal_selesai && !isTanggalValid()
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-blue-50 border-blue-200'
+                }`}>
                   <div className="flex items-center gap-3">
                     {form.tanggal_selesai && isTanggalValid() ? (
                       <>
@@ -860,29 +781,14 @@ function EditPeserta() {
             </button>
           </div>
         </div>
-
-        {/* Tips Card */}
-        <div className="mt-6 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-4 border border-emerald-100">
-          <div className="flex items-start gap-3">
-            <div className="p-1.5 bg-white/50 rounded-lg">
-              <Zap size={16} className="text-amber-500" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-emerald-800">Tips Pengisian Data</p>
-              <p className="text-xs text-emerald-700 mt-0.5">
-                Kosongkan tanggal selesai jika magang masih berlangsung. Data yang sudah disimpan dapat diedit kembali jika diperlukan.
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
 
-      {/* 🔥 SUCCESS MODAL - HANYA SATU MODAL */}
+      {/* SUCCESS MODAL */}
       {showSuccessModal && successData && (
         <>
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={handleModalClose} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-            <div className="w-full max-w-lg pointer-events-auto">
+            <div className="w-full max-w-md pointer-events-auto">
               <div className="relative bg-white rounded-2xl overflow-hidden shadow-2xl">
                 <div className="h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500"></div>
                 
@@ -923,48 +829,55 @@ function EditPeserta() {
                   </div>
                   
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100">
+                    <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100 col-span-2">
                       <Mail size={12} className="text-blue-500" />
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1">
                         <p className="text-[9px] text-slate-400">Email</p>
                         <p className="text-[11px] font-medium text-slate-700 truncate">{successData.email}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100">
-                      <Phone size={12} className="text-green-500" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[9px] text-slate-400">No. Telepon</p>
-                        <p className="text-[11px] font-medium text-slate-700 truncate">{successData.phone}</p>
-                      </div>
-                    </div>
+                    
                     <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100">
                       <School size={12} className="text-purple-500" />
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1">
                         <p className="text-[9px] text-slate-400">Kampus</p>
                         <p className="text-[11px] font-medium text-slate-700 truncate">{successData.kampus}</p>
                       </div>
                     </div>
+
                     <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100">
                       <BookOpen size={12} className="text-amber-500" />
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1">
                         <p className="text-[9px] text-slate-400">Program Studi</p>
                         <p className="text-[11px] font-medium text-slate-700 truncate">{successData.prodi}</p>
                       </div>
                     </div>
+
                     <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100">
                       <Building2 size={12} className="text-indigo-500" />
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1">
                         <p className="text-[9px] text-slate-400">Divisi</p>
                         <p className="text-[11px] font-medium text-slate-700 truncate">{successData.divisi}</p>
                       </div>
                     </div>
+
                     <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100">
                       <Users size={12} className="text-rose-500" />
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1">
                         <p className="text-[9px] text-slate-400">Mentor</p>
                         <p className="text-[11px] font-medium text-slate-700 truncate">{successData.mentor}</p>
                       </div>
                     </div>
+
+                    {successData.phone && successData.phone !== "-" && (
+                      <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100 col-span-2">
+                        <Phone size={12} className="text-green-500" />
+                        <div className="flex-1">
+                          <p className="text-[9px] text-slate-400">No. Telepon</p>
+                          <p className="text-[11px] font-medium text-slate-700 truncate">{successData.phone}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="mt-3 p-3 bg-cyan-50 rounded-xl border border-cyan-100">

@@ -743,19 +743,19 @@ function Quiz() {
           </div>
         </div>
 
-        {/* LEVEL ROADMAP */}
-        <div className="mb-8 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 rounded-2xl p-5 border border-indigo-100">
-          <div className="flex items-center gap-2 mb-4">
-            <Target size={18} className="text-indigo-600" />
-            <h3 className="font-semibold text-slate-800">
+        {/* LEVEL ROADMAP - RESIZED SMALLER */}
+        <div className="mb-8 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 rounded-xl p-3 border border-indigo-100">
+          <div className="flex items-center gap-2 mb-2">
+            <Target size={14} className="text-indigo-600" />
+            <h3 className="font-semibold text-slate-800 text-sm">
               Roadmap Kuis Bertingkat
             </h3>
-            <span className="text-xs text-slate-400 ml-2">
+            <span className="text-[10px] text-slate-400 ml-1">
               Peserta harus lulus level sebelumnya untuk melanjutkan
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-1">
             {[1, 2, 3].map((level) => {
               const hasQuiz = filtered.some((q) => q.level === level);
               const quizCount = filtered.filter(
@@ -765,25 +765,25 @@ function Quiz() {
               return (
                 <div
                   key={level}
-                  className="flex flex-col items-center flex-1 min-w-[80px]"
+                  className="flex flex-col items-center flex-1 min-w-[60px]"
                 >
                   <div
-                    className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${
+                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${
                       hasQuiz
-                        ? `bg-gradient-to-r ${getLevelColor(level)} text-white shadow-lg`
+                        ? `bg-gradient-to-r ${getLevelColor(level)} text-white shadow-md`
                         : "bg-slate-200 text-slate-400"
                     }`}
                   >
-                    {getLevelIcon(level, 24)}
+                    {getLevelIcon(level, 16)}
                   </div>
-                  <span className="text-xs font-semibold mt-2 text-slate-700">
+                  <span className="text-[10px] font-semibold mt-1 text-slate-700">
                     Level {level}
                   </span>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-[9px] text-slate-400">
                     {quizCount} kuis
                   </span>
                   {level < 3 && (
-                    <div className="hidden lg:block w-full h-0.5 bg-gradient-to-r from-indigo-300 to-purple-300 mt-2"></div>
+                    <div className="hidden lg:block w-full h-0.5 bg-gradient-to-r from-indigo-300 to-purple-300 mt-1"></div>
                   )}
                 </div>
               );
@@ -943,12 +943,12 @@ function Quiz() {
                               </div>
                             </td>
                             <td className="text-center px-6 py-4">
-                              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">
-                                <Clock size={12} className="text-slate-500" />
-                                <span className="text-xs font-medium text-slate-600">
-                                  {q.durasi} menit
-                                </span>
-                              </div>
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm whitespace-nowrap min-w-[90px] justify-center">
+                              <Clock size={12} className="text-slate-500 flex-shrink-0" />
+                              <span className="text-xs font-medium text-slate-600 whitespace-nowrap">
+                                {q.durasi} menit
+                              </span>
+                            </div>
                             </td>
                             <td className="text-center px-6 py-4">
                               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 shadow-sm">

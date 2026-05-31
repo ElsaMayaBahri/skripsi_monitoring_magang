@@ -1,7 +1,6 @@
 // src/api/mentor/materiMentorService.js
 import axiosInstance from "../axios"
 
-// Gunakan axiosInstance untuk semua fungsi, bukan api
 export const getMentorMateri = async (params = {}) => {
   try {
     const response = await axiosInstance.get('/mentor/materi', { params });
@@ -33,8 +32,12 @@ export const createMentorMateri = async (formData) => {
   }
 };
 
+// PERBAIKAN: Gunakan PUT dengan FormData (dengan _method PUT)
 export const updateMentorMateri = async (id, formData) => {
   try {
+    // Tambahkan _method=PUT ke FormData untuk Laravel
+    formData.append('_method', 'PUT');
+    
     const response = await axiosInstance.post(`/mentor/materi/${id}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -42,6 +45,7 @@ export const updateMentorMateri = async (id, formData) => {
     });
     return response.data;
   } catch (error) {
+    console.error('Error in updateMentorMateri:', error);
     throw error;
   }
 };

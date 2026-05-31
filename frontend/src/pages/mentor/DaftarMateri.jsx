@@ -1,5 +1,6 @@
 // src/pages/mentor/DaftarMateri.jsx
 import React, { useState, useEffect } from "react";
+import ReactDOM from "react-dom";
 import { Link } from "react-router-dom";
 import {
   BookOpen,
@@ -46,12 +47,29 @@ const getFileNameFromPath = (filePath) => {
   return parts[parts.length - 1];
 };
 
-// Fungsi untuk membuat URL file yang benar
+// Fungsi untuk membuat URL file yang benar - dengan urldecode
 const getFileUrl = (filePath) => {
   if (!filePath) return null;
   const fileName = getFileNameFromPath(filePath);
   if (!fileName) return null;
-  return `${BASE_URL}/api/materi-file/${fileName}`;
+  const encodedFileName = encodeURIComponent(fileName);
+  return `${BASE_URL}/api/materi-file/${encodedFileName}`;
+};
+
+// Fungsi untuk preview file (menggunakan route storage preview)
+const getPreviewUrl = (filePath) => {
+  if (!filePath) return null;
+  const fullPath = filePath;
+  const encodedPath = encodeURIComponent(fullPath);
+  return `${BASE_URL}/api/storage/preview/${encodedPath}`;
+};
+
+// Fungsi untuk download file
+const getDownloadUrl = (filePath) => {
+  if (!filePath) return null;
+  const fullPath = filePath;
+  const encodedPath = encodeURIComponent(fullPath);
+  return `${BASE_URL}/api/storage/download/${encodedPath}`;
 };
 
 // Deteksi kategori file berdasarkan ekstensi
@@ -117,7 +135,8 @@ function DaftarMateri() {
       if (response && response.success && response.data) {
         const transformed = response.data.map(item => {
           const fileName = getFileNameFromPath(item.file_materi);
-          const fileUrl = getFileUrl(item.file_materi);
+          const previewUrl = getPreviewUrl(item.file_materi);
+          const downloadUrl = getDownloadUrl(item.file_materi);
           const kategori = detectKategori(fileName, item.tipe_materi, item.link);
           
           return {
@@ -127,7 +146,8 @@ function DaftarMateri() {
             tipe: item.tipe_materi || item.tipe || "dokumen",
             link: item.link,
             file_materi: item.file_materi,
-            file_url: fileUrl,
+            file_url: previewUrl,
+            file_download_url: downloadUrl,
             file_name: fileName,
             created_at: item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
             views: item.views || 0,
@@ -188,25 +208,23 @@ function DaftarMateri() {
     }
   };
 
+  // 🔥 PERBAIKAN: Fungsi untuk membuka preview dengan event trigger
   const handlePreview = (item) => {
     setPreview(item);
     setIsFullscreen(false);
-    // Mencegah scroll pada body saat modal preview terbuka
-    document.body.style.overflow = 'hidden';
-    // Trigger event untuk menyembunyikan sidebar
-    window.dispatchEvent(new CustomEvent('preview-modal-open'));
+    // Trigger event untuk menyembunyikan sidebar dan topbar
+    window.dispatchEvent(new Event("preview-modal-open"));
   };
 
+  // 🔥 PERBAIKAN: Fungsi untuk menutup preview
   const closePreview = () => {
     setPreview(null);
     setIsFullscreen(false);
     if (document.fullscreenElement) {
       document.exitFullscreen();
     }
-    // Mengembalikan scroll body
-    document.body.style.overflow = '';
-    // Trigger event untuk menampilkan kembali sidebar
-    window.dispatchEvent(new CustomEvent('preview-modal-close'));
+    // Trigger event untuk menampilkan kembali sidebar dan topbar
+    window.dispatchEvent(new Event("preview-modal-close"));
   };
 
   const toggleFullscreen = () => {
@@ -223,7 +241,6 @@ function DaftarMateri() {
     setIsFullscreen(!isFullscreen);
   };
 
-  // Listen untuk fullscreen change
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -337,7 +354,7 @@ function DaftarMateri() {
       if (kategori === "PDF" && fileUrl) {
         return (
           <embed
-            src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+            src={fileUrl}
             type="application/pdf"
             className="w-full h-full"
           />
@@ -404,7 +421,7 @@ function DaftarMateri() {
           </p>
         </div>
         <button 
-          onClick={() => downloadFile(fileUrl, item.judul)} 
+          onClick={() => downloadFile(item.file_download_url || item.file_url, item.judul)} 
           className="px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2"
         >
           <Download size={18} /> Download File
@@ -435,7 +452,6 @@ function DaftarMateri() {
   const totalDokumen = materi.filter(m => m.tipe === "dokumen").length;
   const totalVideo = materi.filter(m => m.tipe === "video").length;
   const totalLink = materi.filter(m => m.tipe === "link").length;
-  const totalViews = materi.reduce((sum, m) => sum + (m.views || 0), 0);
 
   if (loading) {
     return (
@@ -480,7 +496,7 @@ function DaftarMateri() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-slate-100 shadow-lg">
               <div className="flex items-center justify-between">
                 <div><p className="text-xs text-slate-500">Total Materi</p><p className="text-2xl font-bold text-slate-800">{totalMateri}</p></div>
@@ -495,9 +511,6 @@ function DaftarMateri() {
             </div>
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-slate-100 shadow-lg">
               <div className="flex items-center justify-between"><div><p className="text-xs text-slate-500">Link</p><p className="text-2xl font-bold text-slate-700">{totalLink}</p></div><div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center"><LinkIcon size="16" className="text-green-600" /></div></div>
-            </div>
-            <div className="bg-gradient-to-br from-teal-500 to-blue-600 rounded-2xl p-4 shadow-lg">
-              <div className="flex items-center justify-between"><div><p className="text-xs text-white/80">Total Dilihat</p><p className="text-2xl font-bold text-white">{totalViews}</p></div><div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><TrendingUp size="16" className="text-white" /></div></div>
             </div>
           </div>
 
@@ -674,14 +687,6 @@ function DaftarMateri() {
               </div>
             </div>
           )}
-
-          {/* Info */}
-          <div className="mt-8 bg-gradient-to-r from-teal-50/80 via-blue-50/80 to-transparent rounded-2xl p-5 border border-teal-100">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 bg-white rounded-xl shadow-md"><Shield size="16" className="text-teal-500" /></div>
-              <div><p className="text-sm font-bold text-teal-800">Informasi Materi</p><p className="text-xs text-teal-700 mt-1">Klik pada card materi untuk melihat preview lengkap. File PDF, Video, dan Image dapat dilihat langsung.</p></div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -717,8 +722,8 @@ function DaftarMateri() {
         </div>
       )}
 
-      {/* PREVIEW MODAL - TANPA TOMBOL KEMBALI */}
-      {preview && (
+      {/* 🔥 PERBAIKAN: PREVIEW MODAL MENGGUNAKAN PORTAL - Fullscreen, tidak ketutup sidebar */}
+      {preview && ReactDOM.createPortal(
         <div 
           style={{
             position: 'fixed',
@@ -735,7 +740,7 @@ function DaftarMateri() {
           }} 
           className="animate-in fade-in duration-200"
         >
-          {/* Header Preview - Tanpa tombol kembali */}
+          {/* Header Preview */}
           <div className="bg-gradient-to-r from-slate-900 to-slate-800 backdrop-blur-md px-6 py-4 flex justify-between items-center shadow-xl border-b border-white/20 flex-shrink-0">
             <div className="flex items-center gap-3 flex-1 min-w-0">
               {(() => {
@@ -768,7 +773,7 @@ function DaftarMateri() {
                   <span className="text-sm font-medium hidden sm:inline">Buka Link</span>
                 </a>
               ) : (
-                <button onClick={() => downloadFile(preview.file_url, preview.judul)} className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all text-white shadow-md flex items-center gap-2">
+                <button onClick={() => downloadFile(preview.file_download_url || preview.file_url, preview.judul)} className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all text-white shadow-md flex items-center gap-2">
                   <Download size={18} />
                   <span className="text-sm font-medium hidden sm:inline">Download</span>
                 </button>
@@ -787,7 +792,8 @@ function DaftarMateri() {
           >
             {getPreviewContent(preview)}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <style>{`

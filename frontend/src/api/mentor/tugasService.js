@@ -46,34 +46,77 @@ export const deleteMentorTugas = async (id) => {
   return response.data;
 };
 
-// Send reminder to participants (untuk semua tugas)
-export const sendTugasReminder = async (tugasId = null) => {
-  // Menggunakan endpoint /tugas/reminder (tanpa mentor prefix) sesuai route di backend
-  const url = tugasId ? `/tugas/${tugasId}/reminder` : "/tugas/reminder";
-  const response = await axiosInstance.post(url);
+// Send reminder for all tasks
+export const sendTugasReminder = async () => {
+  const response = await axiosInstance.post("/mentor/tugas/reminder");
   return response.data;
 };
 
-// Send reminder untuk tugas tertentu
+// Send reminder for specific task
 export const sendTugasReminderById = async (tugasId) => {
-  const response = await axiosInstance.post(`/tugas/${tugasId}/reminder`);
+  const response = await axiosInstance.post(`/mentor/tugas/${tugasId}/reminder`);
   return response.data;
 };
 
-// Get task submissions
+// Get task submissions by tugas ID
 export const getTugasSubmissions = async (tugasId) => {
   const response = await axiosInstance.get(`/mentor/tugas/${tugasId}/submissions`);
   return response.data;
 };
 
-// Update submission (review/revisi/selesai)
+// Get all submissions for a specific participant - DIPERBAIKI
+export const getMentorTugasSubmissions = async (pesertaId) => {
+  try {
+    // Gunakan endpoint yang sudah ditambahkan di backend
+    const response = await axiosInstance.get(`/mentor/tugas/submissions`, {
+      params: { id_peserta: pesertaId }
+    });
+    
+    console.log(`Submissions for peserta ${pesertaId}:`, response.data);
+    
+    if (response.data && response.data.success) {
+      return response.data;
+    }
+    
+    return { success: true, data: [] };
+  } catch (error) {
+    console.error(`Error fetching tugas submissions for peserta ${pesertaId}:`, error);
+    return { success: false, data: [], message: error.message };
+  }
+};
+
+// Get participant's task progress summary
+export const getPesertaTugasProgress = async (pesertaId) => {
+  try {
+    const response = await axiosInstance.get(`/mentor/peserta/${pesertaId}/tugas-progress`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching tugas progress:", error);
+    return {
+      success: false,
+      data: {
+        progress: 0,
+        tugas_selesai: 0,
+        total_tugas: 0
+      }
+    };
+  }
+};
+
+// Update submission
 export const updateTugasSubmission = async (submissionId, data) => {
   const response = await axiosInstance.put(`/mentor/tugas/submissions/${submissionId}`, data);
   return response.data;
 };
 
-// Export semua fungsi
-export default {
+// Get peserta by mentor
+export const getPesertaByMentor = async () => {
+  const response = await axiosInstance.get("/mentor/peserta");
+  return response.data;
+};
+
+// Default export
+const tugasService = {
   getMentorTugas,
   getMentorTugasById,
   createMentorTugas,
@@ -82,5 +125,10 @@ export default {
   sendTugasReminder,
   sendTugasReminderById,
   getTugasSubmissions,
-  updateTugasSubmission
+  getMentorTugasSubmissions,
+  getPesertaTugasProgress,
+  updateTugasSubmission,
+  getPesertaByMentor
 };
+
+export default tugasService;

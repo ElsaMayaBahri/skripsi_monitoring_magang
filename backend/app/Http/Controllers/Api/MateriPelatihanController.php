@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\MateriPelatihan;
+use App\Models\AksesMateriKompetensi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -18,7 +19,25 @@ class MateriPelatihanController extends Controller
     public function index()
     {
         try {
-            $materi = MateriPelatihan::orderBy('created_at', 'desc')->get();
+            // Cek apakah relasi aksesMateriKompetensi ada
+            $hasRelation = method_exists(MateriPelatihan::class, 'aksesMateriKompetensi');
+            
+            if ($hasRelation) {
+                $materi = MateriPelatihan::withCount([
+                    'aksesMateriKompetensi as views'
+                ])
+                ->orderBy('divisi', 'asc')
+                ->orderBy('urutan', 'asc')
+                ->get();
+            } else {
+                $materi = MateriPelatihan::orderBy('divisi', 'asc')
+                    ->orderBy('urutan', 'asc')
+                    ->get();
+                // Tambahkan views default 0
+                foreach ($materi as $item) {
+                    $item->views = 0;
+                }
+            }
 
             // Tambahkan URL file yang bisa diakses
             $materi = $materi->map(function ($item) {
@@ -33,7 +52,7 @@ class MateriPelatihanController extends Controller
             Log::error('Error index materi: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal mengambil data materi',
+                'message' => 'Gagal mengambil data materi: ' . $e->getMessage(),
                 'data' => []
             ], 500);
         }
@@ -47,6 +66,7 @@ class MateriPelatihanController extends Controller
         if ($materi->file_materi) {
             // Get filename from path
             $filename = basename($materi->file_materi);
+            // Gunakan endpoint preview untuk materi pelatihan
             $materi->file_materi_url = url('/api/materi-file/' . $filename);
             $materi->file_url = url('/api/materi-file/' . $filename);
             $materi->file_preview_url = url('/api/materi-file/' . $filename);
@@ -56,6 +76,53 @@ class MateriPelatihanController extends Controller
             $materi->file_preview_url = null;
         }
         return $materi;
+    }
+
+    /**
+     * Preview file materi (for thumbnail and embed)
+     */
+    public function previewFile($filename)
+    {
+        try {
+            // Cari file di storage/app/public/materi/
+            $paths = [
+                storage_path('app/public/materi/' . $filename),
+                storage_path('app/public/' . $filename),
+            ];
+
+            $filePath = null;
+            foreach ($paths as $path) {
+                if (file_exists($path)) {
+                    $filePath = $path;
+                    break;
+                }
+            }
+
+            if (!$filePath) {
+                Log::warning('File not found: ' . $filename);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File tidak ditemukan'
+                ], 404);
+            }
+
+            // Get mime type
+            $mime = mime_content_type($filePath);
+            
+            // Return file with proper headers
+            return response()->file($filePath, [
+                'Content-Type' => $mime,
+                'Access-Control-Allow-Origin' => '*',
+                'Access-Control-Expose-Headers' => 'Content-Disposition',
+                'Cache-Control' => 'public, max-age=3600',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error preview file: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menampilkan file: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -77,19 +144,18 @@ class MateriPelatihanController extends Controller
             $validator = Validator::make($request->all(), [
                 'judul' => 'required|string|max:150',
                 'deskripsi' => 'nullable|string',
-                'divisi' => 'nullable|string|max:100',
+                'divisi' => 'required|string|max:100',
                 'kategori' => 'nullable|string|max:50',
-                'urutan' => 'nullable|integer|min:1|max:100',
                 'file' => [
                     'required',
                     'file',
                     'max:51200',
                     function ($attribute, $value, $fail) {
-                        $allowedExtensions = ['pdf', 'mp4', 'ppt', 'pptx', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
+                        $allowedExtensions = ['pdf', 'mp4', 'ppt', 'pptx', 'doc', 'docx'];
                         $extension = strtolower($value->getClientOriginalExtension());
 
                         if (!in_array($extension, $allowedExtensions)) {
-                            $fail('Format file harus PDF, MP4, PPT, PPTX, DOC, DOCX, JPG, JPEG, atau PNG.');
+                            $fail('Format file harus PDF, MP4, PPT, PPTX, DOC, atau DOCX.');
                         }
                     },
                 ],
@@ -132,13 +198,21 @@ class MateriPelatihanController extends Controller
                 ], 500);
             }
 
+            // Ambil urutan terbesar berdasarkan DIVISI yang SAMA
+            $maxUrutan = MateriPelatihan::where('divisi', $request->divisi)
+                ->max('urutan');
+            
+            // Jika belum ada data di divisi tersebut maka mulai dari 1
+            $nextUrutan = ($maxUrutan ?? 0) + 1;
+
             $materi = MateriPelatihan::create([
                 'judul' => $request->judul,
                 'deskripsi' => $request->deskripsi,
                 'divisi' => $request->divisi,
                 'kategori' => $request->kategori,
-                'urutan' => $request->urutan ?? 1,
+                'urutan' => $nextUrutan,
                 'file_materi' => $filePath,
+                'views' => 0,
             ]);
 
             $materi = $this->addFileUrl($materi);
@@ -163,7 +237,17 @@ class MateriPelatihanController extends Controller
     public function show($id)
     {
         try {
-            $materi = MateriPelatihan::findOrFail($id);
+            $hasRelation = method_exists(MateriPelatihan::class, 'aksesMateriKompetensi');
+            
+            if ($hasRelation) {
+                $materi = MateriPelatihan::withCount([
+                    'aksesMateriKompetensi as views'
+                ])->findOrFail($id);
+            } else {
+                $materi = MateriPelatihan::findOrFail($id);
+                $materi->views = $materi->views ?? 0;
+            }
+            
             $materi->increment('views');
             $materi = $this->addFileUrl($materi);
 
@@ -193,16 +277,17 @@ class MateriPelatihanController extends Controller
                 'deskripsi' => 'nullable|string',
                 'divisi' => 'nullable|string|max:100',
                 'kategori' => 'nullable|string|max:50',
+                'urutan' => 'nullable|integer|min:1|max:100',
                 'file' => [
                     'nullable',
                     'file',
                     'max:51200',
                     function ($attribute, $value, $fail) {
                         if ($value) {
-                            $allowedExtensions = ['pdf', 'mp4', 'ppt', 'pptx', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
+                            $allowedExtensions = ['pdf', 'mp4', 'ppt', 'pptx', 'doc', 'docx'];
                             $extension = strtolower($value->getClientOriginalExtension());
                             if (!in_array($extension, $allowedExtensions)) {
-                                $fail('Format file harus PDF, MP4, PPT, PPTX, DOC, DOCX, JPG, JPEG, atau PNG.');
+                                $fail('Format file harus PDF, MP4, PPT, PPTX, DOC, atau DOCX.');
                             }
                         }
                     },
@@ -235,6 +320,7 @@ class MateriPelatihanController extends Controller
             if ($request->has('deskripsi')) $materi->deskripsi = $request->deskripsi;
             if ($request->has('divisi')) $materi->divisi = $request->divisi;
             if ($request->has('kategori')) $materi->kategori = $request->kategori;
+            if ($request->has('urutan')) $materi->urutan = $request->urutan;
 
             $materi->save();
             $materi = $this->addFileUrl($materi);
@@ -261,6 +347,15 @@ class MateriPelatihanController extends Controller
         try {
             $materi = MateriPelatihan::findOrFail($id);
 
+            // Cek apakah tabel akses_materi_kompetensi ada
+            if (class_exists('App\Models\AksesMateriKompetensi')) {
+                try {
+                    AksesMateriKompetensi::where('id_materi_pelatihan', $id)->delete();
+                } catch (\Exception $e) {
+                    Log::warning('Could not delete related access records: ' . $e->getMessage());
+                }
+            }
+
             if ($materi->file_materi && Storage::disk('public')->exists($materi->file_materi)) {
                 Storage::disk('public')->delete($materi->file_materi);
             }
@@ -286,9 +381,23 @@ class MateriPelatihanController extends Controller
     public function getByDivisi($divisi)
     {
         try {
-            $materi = MateriPelatihan::where('divisi', $divisi)
-                ->orderBy('created_at', 'desc')
-                ->get();
+            $hasRelation = method_exists(MateriPelatihan::class, 'aksesMateriKompetensi');
+            
+            if ($hasRelation) {
+                $materi = MateriPelatihan::where('divisi', $divisi)
+                    ->withCount([
+                        'aksesMateriKompetensi as views'
+                    ])
+                    ->orderBy('urutan', 'asc')
+                    ->get();
+            } else {
+                $materi = MateriPelatihan::where('divisi', $divisi)
+                    ->orderBy('urutan', 'asc')
+                    ->get();
+                foreach ($materi as $item) {
+                    $item->views = 0;
+                }
+            }
 
             $materi = $materi->map(function ($item) {
                 return $this->addFileUrl($item);

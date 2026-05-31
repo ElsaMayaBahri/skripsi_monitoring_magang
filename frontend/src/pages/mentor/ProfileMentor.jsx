@@ -1,44 +1,284 @@
-import { useState, useEffect } from "react"
+// src/pages/mentor/ProfileMentor.jsx
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { User, Mail, Phone, MapPin, Calendar, Shield, Edit2, Save, X, Briefcase, Clock, CheckCircle, AlertCircle, Users, BookOpen, Star } from "lucide-react"
+import {
+  User, Mail, Phone, Shield, Edit2, X, Camera, CheckCircle,
+  AlertCircle, Key, Lock, Eye, EyeOff, RefreshCw, Verified, Briefcase, Award,
+  Trash2, Building2
+} from "lucide-react"
+import axiosInstance from "../../api/axios"
+
+// Helper function untuk mendapatkan URL foto profil
+const getPhotoUrl = (path) => {
+  if (!path) return null
+  if (path.startsWith('http')) return path
+  const cleanPath = path.replace(/^\/+/, "")
+  return `http://localhost:8000/storage/${cleanPath}`
+}
+
+// Reusable CardField Component
+function CardField({ icon, label, value, editable, name, onChange, type = "text" }) {
+  return (
+    <div className="bg-gradient-to-br from-gray-50/50 to-white rounded-lg p-4 border border-gray-100">
+      <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
+        {icon} {label}
+      </label>
+      {editable ? (
+        <input
+          type={type}
+          name={name}
+          value={value || ""}
+          onChange={onChange}
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all text-sm"
+        />
+      ) : (
+        <p className="text-gray-800 font-medium text-sm">{value || "-"}</p>
+      )}
+    </div>
+  )
+}
 
 function ProfileMentor() {
   const navigate = useNavigate()
+  const fileInputRef = useRef(null)
+  
   const [user, setUser] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [formData, setFormData] = useState({})
   const [originalData, setOriginalData] = useState({})
   const [loading, setLoading] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   const [errorMessage, setErrorMessage] = useState("")
+  const [profileImage, setProfileImage] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [isLoadingData, setIsLoadingData] = useState(true)
+  
+  // State untuk password
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: "",
+    new_password: "",
+    new_password_confirmation: ""
+  })
+  const [passwordLoading, setPasswordLoading] = useState(false)
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user")
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser)
-      setUser(parsedUser)
-      setFormData(parsedUser)
-      setOriginalData(parsedUser)
-    }
+    fetchUserData()
   }, [])
+
+  const fetchUserData = async () => {
+    setIsLoadingData(true)
+    try {
+      // 🔥 PRIORITAS: Ambil data dari endpoint /mentor/profile SAJA
+      const mentorResponse = await axiosInstance.get("/mentor/profile")
+      console.log("Mentor profile response:", mentorResponse.data)
+      
+      if (mentorResponse.data && mentorResponse.data.success && mentorResponse.data.data) {
+        const mentorData = mentorResponse.data.data
+        
+        console.log("Mentor data detail:", mentorData)
+        console.log("Divisi from API:", mentorData.divisi)
+        
+        setUser({
+          nama: mentorData.nama || "Mentor",
+          email: mentorData.email || "",
+          no_telepon: mentorData.no_telepon || "",
+          foto_profil: mentorData.foto_profil || null,
+          status_akun: mentorData.status_akun || "aktif"
+        })
+        
+        setFormData({
+          nama: mentorData.nama || "",
+          email: mentorData.email || "",
+          no_telepon: mentorData.no_telepon || "",
+          jabatan: mentorData.jabatan || "Mentor",
+          divisi: mentorData.divisi || "-",
+          foto_profil: mentorData.foto_profil || ""
+        })
+        
+        setOriginalData({
+          nama: mentorData.nama || "",
+          email: mentorData.email || "",
+          no_telepon: mentorData.no_telepon || "",
+          jabatan: mentorData.jabatan || "Mentor",
+          divisi: mentorData.divisi || "-",
+          foto_profil: mentorData.foto_profil || ""
+        })
+        
+        if (mentorData.foto_profil) {
+          setImagePreview(getPhotoUrl(mentorData.foto_profil))
+        }
+      } else {
+        // Fallback ke endpoint /me jika mentor/profile gagal
+        const userResponse = await axiosInstance.get("/me")
+        console.log("Fallback user response:", userResponse.data)
+        
+        if (userResponse.data && userResponse.data.success && userResponse.data.user) {
+          const userData = userResponse.data.user
+          
+          setUser({
+            nama: userData.nama || "Mentor",
+            email: userData.email || "",
+            no_telepon: userData.no_telepon || "",
+            foto_profil: userData.foto_profil || null,
+            status_akun: userData.status_akun || "aktif"
+          })
+          
+          setFormData({
+            nama: userData.nama || "",
+            email: userData.email || "",
+            no_telepon: userData.no_telepon || "",
+            jabatan: "Mentor",
+            divisi: "-",
+            foto_profil: userData.foto_profil || ""
+          })
+          
+          setOriginalData({
+            nama: userData.nama || "",
+            email: userData.email || "",
+            no_telepon: userData.no_telepon || "",
+            jabatan: "Mentor",
+            divisi: "-",
+            foto_profil: userData.foto_profil || ""
+          })
+          
+          if (userData.foto_profil) {
+            setImagePreview(getPhotoUrl(userData.foto_profil))
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error)
+      setErrorMessage("Gagal memuat data profil")
+    } finally {
+      setIsLoadingData(false)
+    }
+  }
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
+  const handlePasswordChange = (e) => {
+    const { name, value } = e.target
+    setPasswordForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleImageClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleImageChange = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    
+    if (file.size > 2 * 1024 * 1024) {
+      setErrorMessage("Ukuran foto maksimal 2MB")
+      setTimeout(() => setErrorMessage(""), 3000)
+      return
+    }
+    
+    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp']
+    if (!validTypes.includes(file.type)) {
+      setErrorMessage("Format foto harus JPG, JPEG, PNG, GIF, atau WEBP")
+      setTimeout(() => setErrorMessage(""), 3000)
+      return
+    }
+    
+    const reader = new FileReader()
+    reader.onloadend = () => setImagePreview(reader.result)
+    reader.readAsDataURL(file)
+    setProfileImage(file)
+    await uploadImage(file)
+  }
+
+  const uploadImage = async (file) => {
+    setUploadingImage(true)
+    try {
+      const formDataPhoto = new FormData()
+      formDataPhoto.append('foto_profil', file)
+      formDataPhoto.append('_method', 'PUT')
+      
+      const response = await axiosInstance.post('/profile', formDataPhoto, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      
+      console.log("Upload response:", response.data)
+      
+      if (response.data && response.data.success) {
+        const photoPath = response.data.user?.foto_profil || response.data.foto_profil
+        setUser(prev => ({ ...prev, foto_profil: photoPath }))
+        setFormData(prev => ({ ...prev, foto_profil: photoPath }))
+        setOriginalData(prev => ({ ...prev, foto_profil: photoPath }))
+        setSuccessMessage("Foto profil berhasil diupdate!")
+        setTimeout(() => setSuccessMessage(""), 3000)
+        setImagePreview(null)
+        setProfileImage(null)
+        
+        await fetchUserData()
+      }
+    } catch (error) {
+      console.error("Upload error:", error)
+      setErrorMessage(error.response?.data?.message || "Gagal upload foto")
+      setTimeout(() => setErrorMessage(""), 3000)
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const handleRemovePhoto = async () => {
+    if (!window.confirm("Apakah Anda yakin ingin menghapus foto profil?")) return
+    
+    setUploadingImage(true)
+    try {
+      const response = await axiosInstance.put('/profile', {
+        foto_profil: null
+      })
+      
+      if (response.data && response.data.success) {
+        setUser(prev => ({ ...prev, foto_profil: null }))
+        setFormData(prev => ({ ...prev, foto_profil: null }))
+        setOriginalData(prev => ({ ...prev, foto_profil: null }))
+        setImagePreview(null)
+        setSuccessMessage("Foto profil berhasil dihapus!")
+        setTimeout(() => setSuccessMessage(""), 3000)
+        await fetchUserData()
+      }
+    } catch (error) {
+      setErrorMessage(error.response?.data?.message || "Gagal menghapus foto")
+      setTimeout(() => setErrorMessage(""), 3000)
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
   const handleSave = async () => {
     setLoading(true)
+    setSuccessMessage("")
+    setErrorMessage("")
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 500))
-      localStorage.setItem("user", JSON.stringify(formData))
-      setUser(formData)
-      setOriginalData(formData)
-      setIsEditing(false)
-      setSuccessMessage("Profil berhasil diperbarui!")
-      setTimeout(() => setSuccessMessage(""), 3000)
+      const response = await axiosInstance.put("/profile", {
+        nama: formData.nama,
+        no_telepon: formData.no_telepon
+      })
+
+      if (response.data && response.data.success) {
+        setUser(prev => ({ ...prev, nama: formData.nama, no_telepon: formData.no_telepon }))
+        setOriginalData(prev => ({ ...prev, nama: formData.nama, no_telepon: formData.no_telepon }))
+        setIsEditing(false)
+        setSuccessMessage("Profil berhasil diperbarui!")
+        setTimeout(() => setSuccessMessage(""), 3000)
+        await fetchUserData()
+      }
     } catch (error) {
-      setErrorMessage("Gagal memperbarui profil")
+      setErrorMessage(error.response?.data?.message || "Gagal memperbarui profil")
       setTimeout(() => setErrorMessage(""), 3000)
     } finally {
       setLoading(false)
@@ -46,120 +286,382 @@ function ProfileMentor() {
   }
 
   const handleCancel = () => {
-    setFormData(originalData)
+    setFormData({ ...originalData })
     setIsEditing(false)
+    setProfileImage(null)
+    setImagePreview(originalData.foto_profil ? getPhotoUrl(originalData.foto_profil) : null)
   }
 
-  if (!user) {
+  const handleChangePassword = async () => {
+    if (passwordForm.new_password !== passwordForm.new_password_confirmation) {
+      setErrorMessage("Password baru tidak cocok")
+      setTimeout(() => setErrorMessage(""), 3000)
+      return
+    }
+    if (passwordForm.new_password.length < 6) {
+      setErrorMessage("Password minimal 6 karakter")
+      setTimeout(() => setErrorMessage(""), 3000)
+      return
+    }
+
+    setPasswordLoading(true)
+
+    try {
+      const response = await axiosInstance.post("/change-password", {
+        current_password: passwordForm.current_password,
+        new_password: passwordForm.new_password,
+        new_password_confirmation: passwordForm.new_password_confirmation
+      })
+
+      if (response.data && response.data.success) {
+        setSuccessMessage("Password berhasil diubah!")
+        setIsChangingPassword(false)
+        setPasswordForm({
+          current_password: "",
+          new_password: "",
+          new_password_confirmation: ""
+        })
+        setShowCurrentPassword(false)
+        setShowNewPassword(false)
+        setShowConfirmPassword(false)
+        setTimeout(() => setSuccessMessage(""), 3000)
+      }
+    } catch (error) {
+      setErrorMessage(error.response?.data?.message || "Gagal mengubah password")
+      setTimeout(() => setErrorMessage(""), 3000)
+    } finally {
+      setPasswordLoading(false)
+    }
+  }
+
+  const getInitials = (name) => {
+    if (!name) return "M"
+    return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+  }
+
+  if (isLoadingData || !user) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
+      <div className="w-full px-6 pb-6 pt-2 flex items-center justify-center min-h-screen">
+        <div className="relative">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-teal-500"></div>
+          <p className="text-center text-gray-500 mt-4">Memuat data profil...</p>
+        </div>
       </div>
     )
   }
 
-  const userInitial = user.nama ? user.nama.charAt(0).toUpperCase() : "M"
-
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      {successMessage && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-          {successMessage}
-        </div>
-      )}
-      {errorMessage && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {errorMessage}
-        </div>
-      )}
+    <div className="w-full px-6 pb-6 pt-2">
+      <div className="max-w-5xl mx-auto">
+        {/* SUCCESS MESSAGE */}
+        {successMessage && (
+          <div className="mb-4 p-3 bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 rounded-xl flex items-center gap-2 shadow-sm">
+            <CheckCircle size={14} className="text-emerald-500" />
+            <p className="text-emerald-700 text-xs">{successMessage}</p>
+            <button onClick={() => setSuccessMessage("")} className="ml-auto text-emerald-400 hover:text-emerald-600">
+              <X size={12} />
+            </button>
+          </div>
+        )}
 
-      <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-        <div className="h-24 bg-gradient-to-r from-teal-500 to-blue-600"></div>
-        
-        <div className="relative px-6 pb-6">
-          <div className="relative -mt-12 mb-4">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center shadow-lg ring-4 ring-white mx-auto md:mx-0">
-              <span className="text-white text-3xl font-bold">{userInitial}</span>
-            </div>
+        {/* ERROR MESSAGE */}
+        {errorMessage && (
+          <div className="mb-4 p-3 bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 rounded-xl flex items-center gap-2 shadow-sm">
+            <AlertCircle size={14} className="text-red-500" />
+            <p className="text-red-700 text-xs">{errorMessage}</p>
+            <button onClick={() => setErrorMessage("")} className="ml-auto text-red-400 hover:text-red-600">
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
+        {/* Main Profile Card */}
+        <div className="relative bg-white rounded-2xl shadow-lg overflow-hidden">
+          {/* Cover Photo - h-44 (lebih tinggi) */}
+          <div className="relative h-44 bg-gradient-to-r from-teal-600 via-blue-600 to-indigo-600">
+            <div className="absolute inset-0 bg-black/20"></div>
           </div>
 
-          <div className="flex flex-wrap justify-between items-start gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">{user.nama || "Mentor"}</h1>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="px-2 py-0.5 bg-teal-50 text-teal-600 text-xs rounded-full">Mentor</span>
-                <span className="px-2 py-0.5 bg-green-50 text-green-600 text-xs rounded-full">Aktif</span>
+          {/* Profile Info - padding diperbesar */}
+          <div className="relative px-8 pb-8">
+            {/* Avatar positioning - naik ke area gradient */}
+            <div className="relative -mt-24 mb-6">
+              {/* Flex header - lebih sejajar */}
+              <div className="flex flex-col md:flex-row md:items-center gap-6">
+                {/* Avatar - ukuran lebih besar w-28 h-28 */}
+                <div className="relative group">
+                  <div className="relative w-28 h-28 rounded-2xl bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center shadow-xl ring-4 ring-white cursor-pointer overflow-hidden"
+                       onClick={handleImageClick}>
+                    {uploadingImage ? (
+                      <RefreshCw size={24} className="text-white animate-spin" />
+                    ) : (imagePreview || getPhotoUrl(user.foto_profil)) ? (
+                      <img 
+                        src={imagePreview || getPhotoUrl(user.foto_profil)} 
+                        alt="Profile" 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          console.error("Image failed to load:", e.target.src)
+                          e.target.style.display = 'none'
+                          if (e.target.parentElement) {
+                            e.target.parentElement.innerHTML = `<span class="text-white text-3xl font-bold">${getInitials(user.nama)}</span>`
+                          }
+                        }}
+                      />
+                    ) : (
+                      <span className="text-white text-3xl font-bold">{getInitials(user.nama)}</span>
+                    )}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Camera size={20} className="text-white" />
+                    </div>
+                  </div>
+                  <input 
+                    ref={fileInputRef}
+                    type="file" 
+                    accept="image/jpeg,image/png,image/jpg,image/gif,image/webp" 
+                    className="hidden" 
+                    onChange={handleImageChange}
+                  />
+                  {(imagePreview || getPhotoUrl(user.foto_profil)) ? (
+                    <button 
+                      onClick={handleRemovePhoto}
+                      className="absolute -bottom-1 -right-1 bg-red-500 rounded-full p-1.5 shadow-md hover:shadow-lg transition-all"
+                    >
+                      <Trash2 size={14} className="text-white" />
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={handleImageClick}
+                      className="absolute -bottom-1 -right-1 bg-white rounded-full p-1.5 shadow-md hover:shadow-lg transition-all"
+                    >
+                      <Camera size={14} className="text-teal-500" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Nama dan Badge - di area putih/gradient border */}
+                <div className="flex-1">
+                  <div className="flex flex-wrap justify-between items-start gap-3">
+                    <div>
+                      {/* Nama dengan teks putih di area gradient */}
+                      <h1 className="text-3xl font-bold text-white drop-shadow-sm">{user.nama || "Mentor"}</h1>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        {/* Badge Role */}
+                        <div className="flex items-center gap-1 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+                          <Shield size={12} className="text-white" />
+                          <span className="text-xs font-medium text-white">Mentor</span>
+                        </div>
+                        {/* Badge Jabatan - Hanya tampil jika ada */}
+                        {formData.jabatan && formData.jabatan !== "-" && formData.jabatan !== "Mentor" && (
+                          <div className="flex items-center gap-1 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+                            <Briefcase size={12} className="text-white" />
+                            <span className="text-xs font-medium text-white">{formData.jabatan}</span>
+                          </div>
+                        )}
+                        {/* Badge Status */}
+                        <div className="flex items-center gap-1 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></div>
+                          <span className="text-xs font-medium text-white">Aktif</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {!isEditing && !isChangingPassword && (
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => setIsChangingPassword(true)} 
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 backdrop-blur-sm text-white rounded-lg hover:bg-white/30 transition-all text-sm font-medium"
+                        >
+                          <Key size={14} /> Password
+                        </button>
+                        <button 
+                          onClick={() => setIsEditing(true)} 
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-teal-600 rounded-lg hover:bg-gray-100 transition-all shadow-sm text-sm font-medium"
+                        >
+                          <Edit2 size={14} /> Edit
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
-            
-            {!isEditing ? (
-              <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition">
-                <Edit2 size={16} /> Edit Profil
-              </button>
-            ) : (
-              <div className="flex gap-2">
-                <button onClick={handleCancel} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Batal</button>
-                <button onClick={handleSave} disabled={loading} className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition disabled:opacity-50">
-                  {loading ? "Menyimpan..." : "Simpan"}
-                </button>
+
+            {/* Ganti Password Section */}
+            {isChangingPassword && (
+              <div className="mb-5 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                    <Lock size={14} className="text-amber-500" />
+                    Ganti Password
+                  </h3>
+                  <button onClick={() => {
+                    setIsChangingPassword(false)
+                    setShowCurrentPassword(false)
+                    setShowNewPassword(false)
+                    setShowConfirmPassword(false)
+                  }} className="text-gray-400 hover:text-gray-600">
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Password Saat Ini</label>
+                    <div className="relative">
+                      <input 
+                        type={showCurrentPassword ? "text" : "password"} 
+                        name="current_password"
+                        value={passwordForm.current_password}
+                        onChange={handlePasswordChange}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 pr-8"
+                        placeholder="Masukkan password saat ini"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                      >
+                        {showCurrentPassword ? <Eye size={14} /> : <EyeOff size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Password Baru</label>
+                    <div className="relative">
+                      <input 
+                        type={showNewPassword ? "text" : "password"} 
+                        name="new_password"
+                        value={passwordForm.new_password}
+                        onChange={handlePasswordChange}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 pr-8"
+                        placeholder="Minimal 6 karakter"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                      >
+                        {showNewPassword ? <Eye size={14} /> : <EyeOff size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Konfirmasi Password Baru</label>
+                    <div className="relative">
+                      <input 
+                        type={showConfirmPassword ? "text" : "password"} 
+                        name="new_password_confirmation"
+                        value={passwordForm.new_password_confirmation}
+                        onChange={handlePasswordChange}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 pr-8"
+                        placeholder="Ulangi password baru"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                      >
+                        {showConfirmPassword ? <Eye size={14} /> : <EyeOff size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button 
+                      onClick={() => {
+                        setIsChangingPassword(false)
+                        setPasswordForm({ current_password: "", new_password: "", new_password_confirmation: "" })
+                        setShowCurrentPassword(false)
+                        setShowNewPassword(false)
+                        setShowConfirmPassword(false)
+                      }}
+                      className="flex-1 px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all text-sm font-medium"
+                    >
+                      Batal
+                    </button>
+                    <button 
+                      onClick={handleChangePassword}
+                      disabled={passwordLoading}
+                      className="flex-1 px-3 py-2 bg-gradient-to-r from-teal-500 to-blue-600 text-white rounded-lg hover:from-teal-600 hover:to-blue-700 transition-all shadow-sm disabled:opacity-50 text-sm font-medium"
+                    >
+                      {passwordLoading ? <RefreshCw size={14} className="animate-spin mx-auto" /> : "Simpan"}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
-          </div>
-        </div>
 
-        <div className="border-t border-gray-100"></div>
+            {/* Informasi Pribadi */}
+            {!isChangingPassword && (
+              <div className="mt-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1 h-5 rounded-full bg-gradient-to-b from-teal-500 to-blue-500"></div>
+                    <h2 className="text-base font-bold text-gray-800">Informasi Pribadi</h2>
+                  </div>
+                  {isEditing && (
+                    <div className="flex gap-2">
+                      <button onClick={handleCancel} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all text-sm font-medium">
+                        Batal
+                      </button>
+                      <button onClick={handleSave} disabled={loading} className="px-3 py-1.5 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all shadow-sm disabled:opacity-50 text-sm font-medium">
+                        {loading ? <RefreshCw size={12} className="animate-spin" /> : "Simpan"}
+                      </button>
+                    </div>
+                  )}
+                </div>
 
-        <div className="p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Informasi Pribadi</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-500 mb-1">Nama Lengkap</label>
-              {isEditing ? (
-                <input type="text" name="nama" value={formData.nama || ""} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500" />
-              ) : (
-                <p className="text-gray-800">{user.nama || "-"}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm text-gray-500 mb-1">Email</label>
-              {isEditing ? (
-                <input type="email" name="email" value={formData.email || ""} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500" />
-              ) : (
-                <p className="text-gray-800">{user.email || "-"}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm text-gray-500 mb-1">No. Telepon</label>
-              {isEditing ? (
-                <input type="tel" name="no_hp" value={formData.no_hp || ""} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500" />
-              ) : (
-                <p className="text-gray-800">{user.no_hp || "-"}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm text-gray-500 mb-1">Alamat</label>
-              {isEditing ? (
-                <textarea name="alamat" value={formData.alamat || ""} onChange={handleInputChange} rows="2" className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500" />
-              ) : (
-                <p className="text-gray-800">{user.alamat || "-"}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm text-gray-500 mb-1">Bidang Keahlian</label>
-              {isEditing ? (
-                <input type="text" name="keahlian" value={formData.keahlian || ""} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500" />
-              ) : (
-                <p className="text-gray-800">{user.keahlian || "-"}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm text-gray-500 mb-1">Pengalaman (Tahun)</label>
-              {isEditing ? (
-                <input type="number" name="pengalaman" value={formData.pengalaman || ""} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500" />
-              ) : (
-                <p className="text-gray-800">{user.pengalaman || "-"} tahun</p>
-              )}
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <CardField
+                    icon={<User size={12} className="text-teal-500" />}
+                    label="Nama Lengkap"
+                    value={formData.nama}
+                    editable={isEditing}
+                    name="nama"
+                    onChange={handleInputChange}
+                  />
+
+                  <CardField
+                    icon={<Briefcase size={12} className="text-teal-500" />}
+                    label="Jabatan"
+                    value={formData.jabatan}
+                    editable={false}
+                  />
+
+                  <CardField
+                    icon={<Building2 size={12} className="text-teal-500" />}
+                    label="Divisi"
+                    value={formData.divisi}
+                    editable={false}
+                  />
+
+                  <CardField
+                    icon={<Mail size={12} className="text-teal-500" />}
+                    label="Email"
+                    value={user.email}
+                    editable={false}
+                  />
+
+                  <CardField
+                    icon={<Phone size={12} className="text-teal-500" />}
+                    label="No. Telepon"
+                    value={formData.no_telepon}
+                    editable={isEditing}
+                    name="no_telepon"
+                    onChange={handleInputChange}
+                  />
+
+                  <div className="md:col-span-2 bg-gradient-to-br from-emerald-50/50 to-emerald-50/30 rounded-lg p-4 border border-emerald-100">
+                    <label className="block text-xs font-medium text-emerald-600 mb-1 flex items-center gap-1">
+                      <Award size={12} className="text-emerald-500" /> Status Akun
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                      <p className="text-gray-800 font-medium text-sm">Aktif</p>
+                      <span className="text-[10px] text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">Terverifikasi</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

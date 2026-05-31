@@ -1,4 +1,5 @@
 <?php
+// app/Models/Notifikasi.php
 
 namespace App\Models;
 
@@ -7,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class notifikasi extends Model
 {
-     use HasFactory;
+    use HasFactory;
 
     protected $table = 'notifikasis';
     protected $primaryKey = 'id_notifikasi';
@@ -82,6 +83,6 @@ class notifikasi extends Model
      */
     public function getWaktuAttribute()
     {
-        return $this->created_at->diffForHumans();
+        return $this->created_at ? $this->created_at->diffForHumans() : '-';
     }
 }

@@ -151,27 +151,34 @@ function DashboardAdmin() {
     .sort((a, b) => b.peserta - a.peserta)
     .slice(0, 3)
 
-  // Format tanggal
+  // Format tanggal dengan WIB
   const formatDate = (dateString) => {
     if (!dateString) return "Tanggal tidak tersedia"
     try {
+      // Gunakan UTC+7 (WIB)
       const date = new Date(dateString)
       if (isNaN(date.getTime())) return "Tanggal tidak valid"
       
+      // Konversi ke WIB (UTC+7)
+      const wibDate = new Date(date.getTime() + (7 * 60 * 60 * 1000))
+      
       const now = new Date()
-      const diffDays = Math.ceil(Math.abs(now - date) / (1000 * 60 * 60 * 24))
+      const nowWIB = new Date(now.getTime() + (7 * 60 * 60 * 1000))
+      
+      const diffDays = Math.ceil(Math.abs(nowWIB - wibDate) / (1000 * 60 * 60 * 24))
       
       if (diffDays === 0) {
-        return `Hari ini, ${date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}`
+        return `Hari ini, ${wibDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })}`
       } else if (diffDays === 1) {
-        return `Kemarin, ${date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}`
+        return `Kemarin, ${wibDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })}`
       } else if (diffDays < 7) {
         return `${diffDays} hari yang lalu`
       } else {
-        return date.toLocaleDateString("id-ID", {
+        return wibDate.toLocaleDateString("id-ID", {
           day: "numeric",
           month: "long",
-          year: "numeric"
+          year: "numeric",
+          timeZone: "Asia/Jakarta"
         })
       }
     } catch {
@@ -255,12 +262,26 @@ function DashboardAdmin() {
     u.email.toLowerCase().includes(search.toLowerCase())
   )
 
-  // Greeting berdasarkan jam
+  // GREETING FUNCTION - Berdasarkan waktu WIB (UTC+7)
+  // Pembagian waktu yang umum di Indonesia:
+  // 00:00 - 10:59 = Selamat Pagi
+  // 11:00 - 14:59 = Selamat Siang
+  // 15:00 - 17:59 = Selamat Sore
+  // 18:00 - 23:59 = Selamat Malam
   const getCurrentGreeting = () => {
-    const hour = new Date().getHours()
-    if (hour < 12) return "Selamat Pagi"
-    if (hour < 18) return "Selamat Siang"
-    return "Selamat Malam"
+    // Gunakan waktu WIB (UTC+7)
+    const now = new Date()
+    const wibHour = new Date(now.getTime() + (7 * 60 * 60 * 1000)).getUTCHours()
+    
+    if (wibHour >= 0 && wibHour < 11) {
+      return "Selamat Pagi"      // 00:00 - 10:59 WIB
+    } else if (wibHour >= 11 && wibHour < 15) {
+      return "Selamat Siang"      // 11:00 - 14:59 WIB
+    } else if (wibHour >= 15 && wibHour < 18) {
+      return "Selamat Sore"       // 15:00 - 17:59 WIB
+    } else {
+      return "Selamat Malam"      // 18:00 - 23:59 WIB
+    }
   }
 
   // Fungsi navigasi untuk card
@@ -316,26 +337,6 @@ function DashboardAdmin() {
                     Pantau aktivitas dan kelola data sistem
                   </p>
                 </div>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <button
-                onClick={fetchAllData}
-                className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition shadow-sm"
-                title="Refresh data"
-              >
-                <RefreshCw size={16} className={`text-slate-500 ${loading ? 'animate-spin' : ''}`} />
-              </button>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                <input
-                  type="text"
-                  placeholder="Cari pengguna..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 w-64 text-sm text-slate-700 shadow-sm"
-                />
               </div>
             </div>
           </div>

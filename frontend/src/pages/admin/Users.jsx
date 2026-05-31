@@ -1,9 +1,7 @@
+// frontend/src/pages/admin/Users.jsx
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { getPeserta, getMentors, getDivisi } from "../../api/admin/dashboardService";
-import { deletePeserta } from "../../api/admin/pesertaService";
-import { deleteMentor } from "../../api/admin/mentorService";
-import { logActivity } from "../../utils/activityLogger";
 import {
   Users as UsersIcon,
   UserCheck,
@@ -11,15 +9,12 @@ import {
   Search,
   Plus,
   Edit2,
-  Trash2,
   ChevronLeft,
   ChevronRight,
   Shield,
   Sparkles,
   Building2,
   AlertCircle,
-  CheckCircle,
-  AlertTriangle,
   Loader2,
   Calendar
 } from "lucide-react";
@@ -48,16 +43,12 @@ function Users() {
   const [allPeserta, setAllPeserta] = useState([]);
   const [dataLoaded, setDataLoaded] = useState(false);
   
-  const [deleteModal, setDeleteModal] = useState({ open: false, user: null, index: null, loading: false });
-  const [successModal, setSuccessModal] = useState({ open: false, message: "", type: "success" });
-  
   const itemsPerPage = 8;
 
   useEffect(() => {
     localStorage.setItem("users_tab", tab);
   }, [tab]);
 
-  // Tangani state tab dari navigasi (dari AddMentor/AddPeserta)
   useEffect(() => {
     if (location.state?.tab) {
       setTab(location.state.tab);
@@ -405,11 +396,6 @@ function Users() {
     }
   }, [tab, dataLoaded, loadData]);
 
-  const handleSuccessModalClose = () => {
-    setSuccessModal({ open: false, message: "", type: "success" });
-    loadAllData(false).then(() => loadData());
-  };
-
   const filtered = data
     .filter((d) => d.name?.toLowerCase().includes(search.toLowerCase()))
     .filter((d) => (divisiFilter === "all" ? true : d.divisi === divisiFilter))
@@ -430,32 +416,6 @@ function Users() {
   const aktif = filtered.filter((d) => d.status === "aktif").length;
   const non_aktif = filtered.filter((d) => d.status === "non_aktif").length;
 
-  const confirmDelete = async () => {
-  const { user } = deleteModal;
-  if (!user) return;
-  
-  setDeleteModal(prev => ({ ...prev, loading: true }));
-  
-  try {
-    if (tab === "peserta") {
-      // GANTI: api.deletePeserta(user.id) -> deletePeserta(user.id)
-      await deletePeserta(user.id);
-      logActivity("delete", "peserta", user.name);
-    } else {
-      // GANTI: api.deleteMentor(user.id) -> deleteMentor(user.id)
-      await deleteMentor(user.id);
-      logActivity("delete", "mentor", user.name);
-    }
-    await loadAllData(false);
-    await loadData();
-    setDeleteModal({ open: false, user: null, index: null, loading: false });
-    setSuccessModal({ open: true, message: `${user.name} berhasil dihapus.`, type: "success" });
-  } catch (err) {
-    console.error("Error deleting:", err);
-    setDeleteModal(prev => ({ ...prev, loading: false }));
-    setSuccessModal({ open: true, message: err.response?.data?.message || err.message || "Gagal menghapus", type: "error" });
-  }
-};
   const handleAdd = () => {
     navigate(tab === "mentor" ? "/admin/add-mentor" : "/admin/add-peserta");
   };
@@ -480,7 +440,7 @@ function Users() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
           <p className="text-slate-500 text-sm">Memuat data pengguna...</p>
         </div>
       </div>
@@ -523,9 +483,9 @@ function Users() {
           </div>
         </div>
 
-        {/* STATS CARDS */}
+        {/* STATS CARDS - Tanpa animasi hover */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="group relative overflow-hidden bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          <div className="relative overflow-hidden bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 rounded-full -mr-12 -mt-12"></div>
             <div className="relative flex items-center justify-between">
               <div>
@@ -541,7 +501,7 @@ function Users() {
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          <div className="relative overflow-hidden bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full -mr-12 -mt-12"></div>
             <div className="relative flex items-center justify-between">
               <div>
@@ -557,7 +517,7 @@ function Users() {
             </div>
           </div>
 
-          <div className="group relative overflow-hidden bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+          <div className="relative overflow-hidden bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-rose-500/10 to-red-500/10 rounded-full -mr-12 -mt-12"></div>
             <div className="relative flex items-center justify-between">
               <div>
@@ -700,10 +660,11 @@ function Users() {
                         </div>
                       </td>
                       <td className="px-5 py-3 text-sm text-slate-500">{item.email}</td>
+                      
+                      {/* DIVISI - Badge abu-abu clean */}
                       <td className="px-5 py-3">
                         {item.divisi && item.divisi !== "-" ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-full font-medium">
-                            <Building2 size={10} />
+                          <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
                             {item.divisi}
                           </span>
                         ) : (
@@ -711,12 +672,11 @@ function Users() {
                         )}
                       </td>
                       
-                      {/* Kolom Mentor (khusus peserta) */}
+                      {/* MENTOR (khusus peserta) - Badge abu-abu clean */}
                       {tab === "peserta" && (
                         <td className="px-5 py-3">
                           {item.mentor && item.mentor !== "-" ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-purple-50 text-purple-600 rounded-full font-medium">
-                              <UserCheck size={10} />
+                            <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
                               {item.mentor}
                             </span>
                           ) : (
@@ -725,7 +685,7 @@ function Users() {
                         </td>
                       )}
                       
-                      {/* Kolom Periode (khusus peserta) */}
+                      {/* PERIODE (khusus peserta) */}
                       {tab === "peserta" && (
                         <td className="px-5 py-3">
                           {item.tanggalMulai && item.tanggalSelesai ? (
@@ -749,12 +709,11 @@ function Users() {
                         </td>
                       )}
                       
-                      {/* Kolom Jumlah Bimbingan (khusus mentor) */}
+                      {/* JUMLAH BIMBINGAN (khusus mentor) */}
                       {tab === "mentor" && (
                         <td className="px-5 py-3">
                           {item.jumlahBimbingan > 0 ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 rounded-full font-medium">
-                              <UsersIcon size={10} />
+                            <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
                               {item.jumlahBimbingan} Peserta
                             </span>
                           ) : (
@@ -763,35 +722,27 @@ function Users() {
                         </td>
                       )}
                       
+                      {/* STATUS - Tetap berwarna hijau/merah */}
                       <td className="px-5 py-3">
                         {item.status === "aktif" ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 rounded-full">
-                            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
+                          <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">
                             Aktif
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 bg-red-50 text-red-600 rounded-full">
-                            <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+                          <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-medium">
                             Nonaktif
                           </span>
                         )}
                       </td>
                       
                       <td className="px-5 py-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-center">
                           <button
                             onClick={() => handleEdit(i)}
                             className="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
                             title="Edit"
                           >
                             <Edit2 size={14} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteModal({ open: true, user: item, index: i, loading: false })}
-                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
-                            title="Hapus"
-                          >
-                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
@@ -855,96 +806,11 @@ function Users() {
           <div className="flex items-center gap-2">
             <Shield size={14} className="text-blue-500" />
             <p className="text-xs text-blue-700">
-              <strong className="font-semibold">Informasi:</strong> Data pengguna dapat difilter berdasarkan nama, divisi, dan status. Klik ikon untuk mengedit atau menghapus akun.
+              <strong className="font-semibold">Informasi:</strong> Data pengguna dapat difilter berdasarkan nama, divisi, dan status. Klik ikon edit untuk mengubah data akun.
             </p>
           </div>
         </div>
       </div>
-
-      {/* DELETE MODAL */}
-      {deleteModal.open && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setDeleteModal({ open: false, user: null, index: null, loading: false })} />
-      )}
-      {deleteModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-          <div className="w-full max-w-md pointer-events-auto">
-            <div className="relative bg-white rounded-2xl overflow-hidden shadow-2xl">
-              <div className="h-1.5 bg-gradient-to-r from-red-500 via-rose-500 to-orange-500"></div>
-              <div className="pt-6 pb-2 px-6 text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
-                  <AlertTriangle size={32} className="text-red-500" />
-                </div>
-                <h3 className="text-xl font-bold text-slate-800">Hapus Akun?</h3>
-                <p className="text-sm text-slate-500 mt-2">
-                  Apakah Anda yakin ingin menghapus akun <br />
-                  <span className="font-semibold text-slate-700">"{deleteModal.user?.name}"</span>?
-                </p>
-                <p className="text-xs text-red-500 mt-2">Tindakan ini tidak dapat dibatalkan.</p>
-              </div>
-              <div className="p-6 pt-4 flex gap-3">
-                <button
-                  onClick={() => setDeleteModal({ open: false, user: null, index: null, loading: false })}
-                  className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50"
-                  disabled={deleteModal.loading}
-                >
-                  Batal
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  disabled={deleteModal.loading}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-xl text-white font-semibold shadow-md hover:shadow-lg flex items-center justify-center gap-2"
-                >
-                  {deleteModal.loading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={14} />}
-                  Hapus
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SUCCESS MODAL - Hanya untuk pesan dari delete */}
-      {successModal.open && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={handleSuccessModalClose} />
-      )}
-      {successModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-          <div className="w-full max-w-md pointer-events-auto">
-            <div className="relative bg-white rounded-2xl overflow-hidden shadow-2xl">
-              <div className={`h-1.5 bg-gradient-to-r ${
-                successModal.type === "success" 
-                  ? "from-emerald-500 via-teal-500 to-blue-500" 
-                  : "from-red-500 via-rose-500 to-orange-500"
-              }`} />
-              <div className="pt-6 pb-6 px-6 text-center">
-                <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
-                  successModal.type === "success" ? "bg-emerald-100" : "bg-red-100"
-                }`}>
-                  {successModal.type === "success" ? (
-                    <CheckCircle size={32} className="text-emerald-500" />
-                  ) : (
-                    <AlertCircle size={32} className="text-red-500" />
-                  )}
-                </div>
-                <h3 className={`text-xl font-bold ${
-                  successModal.type === "success" ? "text-slate-800" : "text-red-600"
-                }`}>
-                  {successModal.type === "success" ? "Berhasil!" : "Gagal!"}
-                </h3>
-                <p className="text-sm text-slate-500 mt-2">{successModal.message}</p>
-              </div>
-              <div className="px-6 pb-6">
-                <button
-                  onClick={handleSuccessModalClose}
-                  className="w-full px-4 py-2.5 bg-gradient-to-r from-slate-600 to-slate-700 rounded-xl text-white font-semibold shadow-md hover:shadow-lg"
-                >
-                  Tutup
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

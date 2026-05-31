@@ -17,7 +17,7 @@ import AddPeserta from "./pages/admin/AddPeserta";
 import EditPeserta from "./pages/admin/EditPeserta";
 import EditMentor from "./pages/admin/EditMentor";
 import Divisi from "./pages/admin/Divisi";
-import AdminSettings from "./pages/admin/Settings";
+
 
 // ============================================
 // COO PAGES - Created by: COO Developer
@@ -32,7 +32,9 @@ import DetailPesertaCOO from "./pages/coo/DetailPeserta";
 import DetailMentorCOO from "./pages/coo/DetailMentor";
 import ProfileCOO from "./pages/coo/Profile";
 import SettingsCOO from "./pages/coo/Settings";
-import DaftarHasilKuis from "./pages/coo/DaftarHasilKuis"; // ✅ SATU IMPORT SAJA
+import DaftarHasilKuis from "./pages/coo/DaftarHasilKuis";
+import KelolaSertifikat from "./pages/coo/KelolaSertifikat";
+
 
 // QUIZ COO PAGES
 import Quiz from "./pages/coo/Quiz";
@@ -54,14 +56,14 @@ import SettingsAttendance from "./pages/coo/SettingsAttendance";
 import MentorLayout from "./layouts/MentorLayout";
 import DashboardMentor from "./pages/mentor/Dashboard";
 import DaftarPesertaMentor from "./pages/mentor/DaftarPeserta";
-import PresensiMentor from "./pages/mentor/Presensi";
 import PresensiDailyReport from "./pages/mentor/PresensiDailyReport";
 import DaftarMateri from "./pages/mentor/DaftarMateri";
 import AddMateri from "./pages/mentor/AddMateri";
 import DaftarTugasMentor from "./pages/mentor/DaftarTugas";
 import AddTugas from "./pages/mentor/AddTugas";
+import EditTugas from "./pages/mentor/EditTugas";
 import ValidasiTugas from "./pages/mentor/ValidasiTugas";
-import LaporanAkhir from "./pages/mentor/LaporanAkhir";
+import LaporanAkhirMentor from "./pages/mentor/LaporanAkhir";
 import InputNilaiManual from "./pages/mentor/InputNilaiManual";
 import NilaiAkhirMentor from "./pages/mentor/NilaiAkhir";
 import EditMateri from "./pages/mentor/EditMateri";
@@ -84,7 +86,8 @@ import DetailTugas from "./pages/peserta/DetailTugas";
 import NilaiAkhirPeserta from "./pages/peserta/NilaiAkhir";
 import Sertifikat from "./pages/peserta/Sertifikat";
 import ProfilePeserta from "./pages/peserta/ProfilePeserta";
-import DaftarKuisKompetensi from "./pages/peserta/DaftarKuisKompetensi"
+import DaftarKuisKompetensi from "./pages/peserta/DaftarKuisKompetensi";
+import LaporanAkhirPeserta from "./pages/peserta/LaporanAkhir";
 
 // ============================================
 // COMPONENTS
@@ -92,6 +95,29 @@ import DaftarKuisKompetensi from "./pages/peserta/DaftarKuisKompetensi"
 import ProtectedRoute from "./components/ProtectedRoute";
 import useIdleTimeout from "./hooks/useIdleTimeout";
 import IdleWarningModal from "./components/IdleWarningModal";
+
+// ============================================
+// 404 NOT FOUND COMPONENT
+// ============================================
+const NotFound = () => {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
+      <div className="text-center bg-white p-8 rounded-2xl shadow-xl max-w-md mx-4">
+        <div className="w-24 h-24 mx-auto mb-4 bg-gradient-to-br from-red-500 to-rose-500 rounded-2xl flex items-center justify-center shadow-lg">
+          <span className="text-4xl font-bold text-white">404</span>
+        </div>
+        <h1 className="text-2xl font-bold text-slate-800 mb-2">Halaman Tidak Ditemukan</h1>
+        <p className="text-slate-500 mb-6">Maaf, halaman yang Anda cari tidak tersedia.</p>
+        <a 
+          href="/login" 
+          className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold shadow-md hover:shadow-lg transition-all duration-200"
+        >
+          Kembali ke Login
+        </a>
+      </div>
+    </div>
+  );
+};
 
 const IDLE_MINUTES = 120;
 const WARNING_MINUTES = 5;
@@ -204,7 +230,6 @@ function App() {
           <Route path="users" element={<Users />} />
           <Route path="add-mentor" element={<AddMentor />} />
           <Route path="add-peserta" element={<AddPeserta />} />
-          <Route path="settings" element={<AdminSettings />} />
           <Route path="users/edit-peserta/:id" element={<EditPeserta />} />
           <Route path="users/edit-mentor/:id" element={<EditMentor />} />
           <Route path="divisi" element={<Divisi />} />
@@ -229,7 +254,7 @@ function App() {
           <Route path="quiz" element={<Quiz />} />
           <Route path="quiz/:id" element={<QuizDetail />} />
           <Route path="quiz/:id/hasil" element={<DaftarHasilKuis />} />
-          <Route path="daftar-hasil-kuis" element={<DaftarHasilKuis />} /> {/* ✅ ROUTE BARU UNTUK SIDEBAR */}
+          <Route path="daftar-hasil-kuis" element={<DaftarHasilKuis />} /> 
           <Route path="add-quiz" element={<AddQuiz />} />
           <Route path="add-question/:quizId" element={<AddQuestion />} />
           <Route path="edit-quiz/:id" element={<EditQuiz />} />
@@ -237,6 +262,7 @@ function App() {
           <Route path="laporan-presensi" element={<LaporanPresensiCOO />} />
           <Route path="settings-attendance" element={<SettingsAttendance />} />
           <Route path="data-management" element={<DataManagement />} />
+          <Route path="kelola-sertifikat" element={<KelolaSertifikat />} />
           <Route path="peserta/:id/detail" element={<DetailPesertaCOO />} />
           <Route path="mentor/:id/detail" element={<DetailMentorCOO />} />
           <Route path="profile" element={<ProfileCOO />} />
@@ -256,10 +282,13 @@ function App() {
         >
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<DashboardMentor />} />
+          
+          {/* Peserta Routes */}
           <Route path="daftar-peserta" element={<DaftarPesertaMentor />} />
           <Route path="peserta" element={<DaftarPesertaMentor />} />
           <Route path="peserta/:id" element={<DetailPesertaMentor />} />
-          <Route path="presensi" element={<PresensiMentor />} />
+          
+          {/* Presensi Routes */}
           <Route path="presensi-daily-report" element={<PresensiDailyReport />} />
           
           {/* Materi Mentor Routes */}
@@ -268,14 +297,16 @@ function App() {
           <Route path="edit-materi/:id" element={<EditMateri />} />
           <Route path="materi/:id" element={<LihatMateri />} />
           
-          {/* Tugas Mentor Routes */}
+          {/* Tugas Mentor Routes - Support both naming conventions */}
+          <Route path="daftar-tugas" element={<DaftarTugasMentor />} />
           <Route path="tugas" element={<DaftarTugasMentor />} />
           <Route path="add-tugas" element={<AddTugas />} />
+          <Route path="edit-tugas/:id" element={<EditTugas />} />
           <Route path="validasi-tugas" element={<ValidasiTugas />} />
           <Route path="validasi-tugas/:id" element={<ValidasiTugas />} />
           
           {/* Nilai & Laporan Routes */}
-          <Route path="laporan-akhir" element={<LaporanAkhir />} />
+          <Route path="laporan-akhir" element={<LaporanAkhirMentor />} />
           <Route path="input-nilai-manual" element={<InputNilaiManual />} />
           <Route path="penilaian-manual" element={<InputNilaiManual />} />
           <Route path="nilai-akhir" element={<NilaiAkhirMentor />} />
@@ -311,9 +342,10 @@ function App() {
           <Route path="tugas" element={<DaftarTugasPeserta />} />
           <Route path="tugas/:id/kumpul" element={<DetailTugas />} />
           
-          {/* Nilai & Sertifikat Routes */}
+          {/* Nilai, Laporan & Sertifikat Routes */}
+          <Route path="laporan-akhir" element={<LaporanAkhirPeserta />} />
           <Route path="nilai-akhir" element={<NilaiAkhirPeserta />} />
-          <Route path="sertifikat" element={<Sertifikat />} />
+          <Route path="sertifikat" element={<Sertifikat />} />  {/* ✅ SUDAH ADA */}
           
           {/* Profile Route */}
           <Route path="profile" element={<ProfilePeserta />} />
@@ -335,29 +367,6 @@ function App() {
         />
       )}
     </>
-  );
-}
-
-// ============================================
-// NOT FOUND COMPONENT 
-// ============================================
-function NotFound() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50/30">
-      <div className="text-center bg-white p-8 rounded-2xl shadow-xl max-w-md mx-4">
-        <div className="w-24 h-24 mx-auto mb-4 bg-gradient-to-br from-red-500 to-rose-500 rounded-2xl flex items-center justify-center shadow-lg">
-          <span className="text-4xl font-bold text-white">404</span>
-        </div>
-        <h1 className="text-2xl font-bold text-slate-800 mb-2">Halaman Tidak Ditemukan</h1>
-        <p className="text-slate-500 mb-6">Maaf, halaman yang Anda cari tidak tersedia.</p>
-        <a 
-          href="/login" 
-          className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold shadow-md hover:shadow-lg transition-all duration-200"
-        >
-          Kembali ke Login
-        </a>
-      </div>
-    </div>
   );
 }
 

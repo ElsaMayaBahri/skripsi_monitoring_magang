@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\LaporanController;
 use App\Http\Controllers\Api\NotifikasiController;
 use App\Http\Controllers\Api\MateriKompetensiController;
+use App\Http\Controllers\Api\SertifikatController;
 
 /*
 |--------------------------------------------------------------------------
@@ -52,53 +53,129 @@ Route::get('/divisi/aktif', [DivisiController::class, 'getActiveDivisi']);
 
 /*
 |--------------------------------------------------------------------------
-| PUBLIC FILE ACCESS
+| PUBLIC FILE ACCESS - STORAGE FILES (URUTAN PENTING! PREVIEW/DOWNLOAD HARUS DI ATAS)
 |--------------------------------------------------------------------------
 */
 
-Route::get('/materi-file/{filename}', function ($filename, Request $request) {
-    // Daftar path yang akan dicari (prioritas dari spesifik ke umum)
-    $paths = [
-        storage_path('app/public/materi_mentor/documents/' . $filename),
-        storage_path('app/public/materi_mentor/videos/' . $filename),
-        storage_path('app/public/materi_mentor/' . $filename),
-        storage_path('app/public/materi/' . $filename),
-        storage_path('app/public/' . $filename),
-    ];
+// !!! URUTAN PENTING !!!
+// Route preview harus di ATAS route general /storage/{path}
+// Karena Laravel membaca dari atas ke bawah
 
-    $filePath = null;
-    foreach ($paths as $path) {
-        if (file_exists($path)) {
-            $filePath = $path;
-            break;
-        }
+// Route untuk preview file (inline) - HARUS DI ATAS
+Route::get('/storage/preview/{path}', function ($path) {
+    $decodedPath = urldecode($path);
+    $fullPath = storage_path('app/public/' . $decodedPath);
+    
+    if (!file_exists($fullPath)) {
+        abort(404, 'File not found');
     }
+    
+    $extension = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+    
+    // Untuk PDF, tampilkan inline
+    if ($extension === 'pdf') {
+        return response()->file($fullPath, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . basename($fullPath) . '"',
+            'Access-Control-Allow-Origin' => '*',
+        ]);
+    }
+    
+    // Untuk gambar, tampilkan inline
+    if (in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'])) {
+        return response()->file($fullPath, [
+            'Content-Type' => mime_content_type($fullPath),
+            'Access-Control-Allow-Origin' => '*',
+        ]);
+    }
+    
+    // Untuk file lain, force download
+    return response()->download($fullPath, basename($fullPath), [
+        'Access-Control-Allow-Origin' => '*',
+    ]);
+})->where('path', '.*');
 
-    if (!$filePath) {
+// Route untuk download file - HARUS DI ATAS
+Route::get('/storage/download/{path}', function ($path) {
+    $decodedPath = urldecode($path);
+    $fullPath = storage_path('app/public/' . $decodedPath);
+    
+    if (!file_exists($fullPath)) {
+        abort(404, 'File not found');
+    }
+    
+    return response()->download($fullPath, basename($fullPath), [
+        'Access-Control-Allow-Origin' => '*',
+    ]);
+})->where('path', '.*');
+
+// ==================== ROUTE DOWNLOAD LAPORAN AKHIR ====================
+// Route untuk download laporan akhir dari folder laporan_akhir
+Route::get('/laporan/download/{filename}', function ($filename) {
+    // Cari file di folder storage/app/public/laporan_akhir/
+    $path = 'laporan_akhir/' . $filename;
+    $fullPath = storage_path('app/public/' . $path);
+    
+    if (!file_exists($fullPath)) {
         return response()->json([
-            'error' => 'File not found',
-            'file' => $filename,
+            'success' => false,
+            'message' => 'File tidak ditemukan'
         ], 404);
     }
-
-    if ($request->query('download')) {
-        return response()->download($filePath, $filename);
-    }
-
-    // Jika tidak minta download, tampilkan inline
-    $mime = mime_content_type($filePath);
-    $headers = [
-        'Content-Type' => $mime,
+    
+    // Download file menggunakan response()->download() langsung dari path lengkap
+    return response()->download($fullPath, $filename, [
         'Access-Control-Allow-Origin' => '*',
-        'Cache-Control' => 'public, max-age=86400',
-    ];
+        'Content-Type' => 'application/pdf',
+        'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+    ]);
+});
 
-    if ($mime === 'application/pdf') {
-        $headers['Content-Disposition'] = 'inline; filename="' . $filename . '"';
+// Route untuk akses file storage umum - DITARUH PALING BAWAH
+Route::get('/storage/{path}', function ($path) {
+    $decodedPath = urldecode($path);
+    $fullPath = storage_path('app/public/' . $decodedPath);
+    
+    if (!file_exists($fullPath)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'File not found'
+        ], 404);
     }
+    
+    $extension = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+    $mimeTypes = [
+        'pdf' => 'application/pdf',
+        'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
+        'png' => 'image/png', 'gif' => 'image/gif',
+        'webp' => 'image/webp', 'bmp' => 'image/bmp',
+        'doc' => 'application/msword',
+        'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls' => 'application/vnd.ms-excel',
+        'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'ppt' => 'application/vnd.ms-powerpoint',
+        'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'zip' => 'application/zip',
+        'rar' => 'application/x-rar-compressed',
+    ];
+    
+    $mimeType = $mimeTypes[$extension] ?? 'application/octet-stream';
+    
+    return response()->file($fullPath, [
+        'Content-Type' => $mimeType,
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+    ]);
+})->where('path', '.*');
 
-    return response()->file($filePath, $headers);
-})->where('filename', '.*');
+/*
+|--------------------------------------------------------------------------
+| PUBLIC FILE ACCESS - MATERI PREVIEW
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/materi-file/{filename}', [MateriPelatihanController::class, 'previewFile'])
+    ->where('filename', '.*');
 
 /*
 |--------------------------------------------------------------------------
@@ -120,36 +197,45 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/divisi/{id}', [DivisiController::class, 'update']);
     Route::delete('/divisi/{id}', [DivisiController::class, 'destroy']);
 
-    // ==================== MENTOR ROUTES (CRUD - untuk Admin) ====================
+    // ==================== MENTOR ROUTES ====================
     Route::get('/mentors', [MentorController::class, 'index']);
     Route::post('/mentors', [MentorController::class, 'store']);
     Route::put('/mentors/{id}', [MentorController::class, 'update']);
     Route::delete('/mentors/{id}', [MentorController::class, 'destroy']);
     Route::get('/mentor-list', [MentorController::class, 'getMentorList']);
+    
+    // ==================== MENTOR PROFILE ROUTE (HANYA SATU - MENGGUNAKAN CONTROLLER) ====================
+    Route::get('/mentor/profile', [MentorController::class, 'profile']);
 
-    // ==================== PRESENSI ROUTES (untuk COO/Admin) ====================
+    // ==================== PRESENSI ROUTES ====================
     Route::prefix('presensi')->group(function () {
         Route::get('/', [PresensiController::class, 'index']);
         Route::get('/stats', [PresensiController::class, 'getStats']);
         Route::get('/export', [PresensiController::class, 'export']);
+        Route::get('/belum-absen', [PresensiController::class, 'belumAbsen']);
         Route::get('/{id}', [PresensiController::class, 'show']);
     });
 
-    // ==================== PESERTA ROUTES (CRUD - untuk Admin/COO) ====================
+    // ==================== PRESENSI MENTOR ROUTES ====================
+    Route::prefix('mentor/presensi')->group(function () {
+        Route::get('/', [PresensiController::class, 'index']);
+        Route::get('/summary', [PresensiController::class, 'getStats']);
+        Route::get('/export', [PresensiController::class, 'export']);
+        Route::get('/date/{date}', [PresensiController::class, 'getByDate']);
+        Route::get('/peserta/{pesertaId}', [PresensiController::class, 'getByPeserta']);
+        Route::get('/stats', [PresensiController::class, 'getStats']);
+    });
+
+    // ==================== PESERTA ROUTES ====================
     Route::get('/peserta', [PesertaController::class, 'index']);
     Route::post('/peserta', [PesertaController::class, 'store']);
     Route::put('/peserta/{id}', [PesertaController::class, 'update']);
     Route::delete('/peserta/{id}', [PesertaController::class, 'destroy']);
-
-    // ==================== PESERTA PROFILE ROUTES ====================
     Route::get('/peserta/profile', [PesertaController::class, 'getProfile']);
-
-    // ==================== NILAI AKHIR PESERTA ROUTES ====================
     Route::get('/peserta/nilai-akhir', [NilaiController::class, 'getNilaiAkhirPeserta']);
 
     // ==================== PESERTA PRESENSI ROUTES ====================
     Route::prefix('peserta')->group(function () {
-        // Presensi routes
         Route::get('/presensi/today', [\App\Http\Controllers\Api\PresensiController::class, 'getTodayPresensi']);
         Route::get('/presensi', [\App\Http\Controllers\Api\PresensiController::class, 'getByPeserta']);
         Route::post('/presensi/checkin', [\App\Http\Controllers\Api\PresensiController::class, 'checkIn']);
@@ -172,7 +258,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{id}', [HariLiburController::class, 'destroy']);
     });
 
-    // ==================== MATERI PELATIHAN ROUTES (untuk COO/Admin) ====================
+    // ==================== MATERI PELATIHAN ROUTES ====================
     Route::prefix('materi-pelatihan')->group(function () {
         Route::get('/', [MateriPelatihanController::class, 'index']);
         Route::post('/', [MateriPelatihanController::class, 'store']);
@@ -183,8 +269,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}/download', [MateriPelatihanController::class, 'download']);
     });
 
-    // ==================== MATERI MENTOR ROUTES (untuk Mentor) ====================
-    Route::prefix('mentor/materi')->middleware('auth:sanctum')->group(function () {
+    // ==================== MATERI MENTOR ROUTES ====================
+    Route::prefix('mentor/materi')->group(function () {
         Route::get('/', [MateriMentorController::class, 'index']);
         Route::get('/mentor-info', [MateriMentorController::class, 'getMentorInfo']);
         Route::get('/divisi-list', [MateriMentorController::class, 'getDivisiList']);
@@ -228,6 +314,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('mentor/tugas')->group(function () {
         Route::get('/', [TugasController::class, 'index']);
         Route::post('/', [TugasController::class, 'store']);
+        
+        Route::get('/submissions', [TugasController::class, 'getSubmissionByPeserta']);
+        
         Route::get('/{id}', [TugasController::class, 'show']);
         Route::put('/{id}', [TugasController::class, 'update']);
         Route::delete('/{id}', [TugasController::class, 'destroy']);
@@ -242,11 +331,20 @@ Route::middleware('auth:sanctum')->group(function () {
     // ==================== LAPORAN AKHIR MENTOR ROUTES ====================
     Route::prefix('mentor/laporan-akhir')->group(function () {
         Route::get('/', [LaporanAkhirController::class, 'index']);
-        Route::post('/{id}/review', [LaporanAkhirController::class, 'submitReview']);
         Route::get('/export', [LaporanAkhirController::class, 'export']);
+        Route::get('/{id}', [LaporanAkhirController::class, 'show']);
+        Route::post('/{id}/review', [LaporanAkhirController::class, 'submitReview']);
+        Route::get('/{id}/download', [LaporanAkhirController::class, 'download']);
     });
 
-    // ==================== NILAI MENTOR ROUTES (BARU) ====================
+    // ==================== LAPORAN AKHIR PESERTA ROUTES ====================
+    Route::prefix('peserta')->group(function () {
+        Route::get('/laporan-akhir', [LaporanAkhirController::class, 'getPesertaLaporan']);
+        Route::post('/laporan-akhir', [LaporanAkhirController::class, 'storePesertaLaporan']);
+        Route::delete('/laporan-akhir', [LaporanAkhirController::class, 'deletePesertaLaporan']);
+    });
+
+    // ==================== NILAI MENTOR ROUTES ====================
     Route::prefix('mentor/nilai')->group(function () {
         Route::get('/', [NilaiController::class, 'index']);
         Route::post('/', [NilaiController::class, 'store']);
@@ -262,29 +360,59 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ==================== QUIZ ROUTES ====================
     Route::prefix('quiz')->group(function () {
-        Route::get('/', [QuizController::class, 'index']);
         Route::get('/results/all', [QuizController::class, 'getAllResults']);
-        Route::post('/', [QuizController::class, 'store']);
+        Route::get('/results/export', [QuizController::class, 'exportResults']);
+        Route::get('/results/quiz/{quizId}', [QuizController::class, 'getResultsByQuiz']);
+        Route::post('/import', [QuizController::class, 'import']);
+        Route::get('/template', [QuizController::class, 'downloadTemplate']);
+        Route::get('/divisi/{divisi}', [QuizController::class, 'getByDivisi']);
         Route::get('/{id}', [QuizController::class, 'show']);
         Route::put('/{id}', [QuizController::class, 'update']);
         Route::delete('/{id}', [QuizController::class, 'destroy']);
-        Route::get('/divisi/{divisi}', [QuizController::class, 'getByDivisi']);
-        Route::post('/import', [QuizController::class, 'import']);
-        Route::get('/template/download', [QuizController::class, 'downloadTemplate']);
+        Route::get('/', [QuizController::class, 'index']);
+        Route::post('/', [QuizController::class, 'store']);
     });
 
-    // ==================== ROUTES UNTUK MENTOR (PESERTA BIMBINGAN) ====================
+    // ==================== JAWABAN KUIS ROUTES ====================
+    Route::prefix('jawaban-kuis')->group(function () {
+        Route::get('/all', [QuizController::class, 'getAllJawabanKuis']);
+        Route::get('/user/{userId}', [QuizController::class, 'getJawabanKuisByUser']);
+    });
 
-    // Filter options untuk mentor
+    // ==================== SERTIFIKAT ROUTES ====================
+Route::prefix('sertifikat')->group(function () {
+    // ROUTE SPESIFIK HARUS DI ATAS ROUTE DENGAN PARAMETER {id}
+    Route::get('/templates', [SertifikatController::class, 'getTemplates']);
+    Route::post('/templates', [SertifikatController::class, 'storeTemplate']);
+    Route::post('/templates/{id}', [SertifikatController::class, 'updateTemplate']); // UPDATE - PAKAI POST
+    Route::put('/templates/{id}/toggle-status', [SertifikatController::class, 'toggleTemplateStatus']);
+    Route::delete('/templates/{id}', [SertifikatController::class, 'deleteTemplate']);
+    Route::get('/templates/download/{id}', [SertifikatController::class, 'downloadTemplate']);
+    Route::get('/magang/template', [SertifikatController::class, 'getMagangTemplate']);
+    Route::get('/peserta-info', [SertifikatController::class, 'getSertifikatPeserta']);
+    Route::get('/download/{id}', [SertifikatController::class, 'downloadSertifikat']);
+    Route::get('/download-all', [SertifikatController::class, 'downloadAllSertifikat']);
+    Route::get('/force-regenerate/{userId}', [SertifikatController::class, 'forceRegenerate']);
+    Route::get('/check', [SertifikatController::class, 'checkCertificateType']);
+    Route::get('/', [SertifikatController::class, 'getSertifikat']);
+    Route::get('/{id}', [SertifikatController::class, 'getSertifikatById']);
+});
+
+    // Sertifikat untuk peserta (KOMPETENSI)
+    Route::prefix('peserta')->group(function () {
+        Route::get('/sertifikat-kompetensi-info', [SertifikatController::class, 'getSertifikatPeserta']);
+        Route::post('/sertifikat-kompetensi/generate', [SertifikatController::class, 'generateSertifikatPeserta']);
+        Route::get('/sertifikat-kompetensi/download/{id}', [SertifikatController::class, 'downloadSertifikatPeserta']);
+        Route::post('/sertifikat-magang/generate', [SertifikatController::class, 'generateSertifikatMagang']);
+        Route::get('/sertifikat-magang/download/{id}', [SertifikatController::class, 'downloadSertifikatPeserta']);
+    });
+
+    // ==================== ROUTES UNTUK MENTOR ====================
     Route::get('/mentor/filters', [MentorController::class, 'getFilters']);
-
-    // Daftar peserta bimbingan dengan filter
     Route::get('/mentor/peserta-list', [MentorController::class, 'getPesertaList']);
-
-    // Peserta bimbingan mentor (detail)
     Route::get('/mentor/pesertas', [MentorController::class, 'getMyPesertas']);
     Route::get('/mentor/pesertas/{id_peserta}', [MentorController::class, 'getDetailPeserta']);
-
+    
     // ==================== DAILY REPORT ROUTES ====================
     Route::prefix('daily-report')->group(function () {
         Route::get('/', [DailyReportController::class, 'getReports']);
@@ -293,25 +421,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{peserta_id}/feedback', [DailyReportController::class, 'submitFeedback']);
     });
 
-    // ==================== ROUTES DASHBOARD MENTOR ====================
-
+    // ==================== DASHBOARD MENTOR ROUTES ====================
     Route::get('/mentor/dashboard', function (Request $request) {
         $user = $request->user();
-
         if ($user->role !== 'mentor') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
-
         $mentor = \App\Models\Mentor::where('id_user', $user->id_user)->first();
-        $totalMentees = 0;
-
-        if ($mentor) {
-            $totalMentees = \App\Models\Peserta::where('id_mentor', $mentor->id_mentor)->count();
-        }
-
+        $totalMentees = $mentor ? \App\Models\Peserta::where('id_mentor', $mentor->id_mentor)->count() : 0;
         return response()->json([
             'success' => true,
             'stats' => [
@@ -327,67 +444,16 @@ Route::middleware('auth:sanctum')->group(function () {
         ]);
     });
 
-    Route::get('/mentor/notifications', function (Request $request) {
-        $user = $request->user();
+    // ==================== DASHBOARD PESERTA ROUTES ====================
+    Route::get('/peserta/dashboard', [PesertaController::class, 'dashboard']);
 
-        if ($user->role !== 'mentor') {
-            return response()->json([], 403);
-        }
-
+    Route::get('/mentor/notifications', function () {
         return response()->json([]);
     });
 
-    Route::get('/mentor/profile', function (Request $request) {
-        $user = $request->user();
-
-        if ($user->role !== 'mentor') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'id' => $user->id_user,
-                'nama' => $user->nama,
-                'email' => $user->email,
-                'no_telepon' => $user->no_telepon,
-                'foto_profil' => $user->foto_profil,
-                'role' => $user->role,
-                'status_akun' => $user->status_akun
-            ]
-        ]);
-    });
-
-    // ==================== MENTOR PROFILE UPDATE ROUTE ====================
-    Route::put('/mentor/profile', function (Request $request) {
-        $user = $request->user();
-
-        if ($user->role !== 'mentor') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-
-        if ($request->has('nama')) {
-            $user->nama = $request->nama;
-        }
-
-        if ($request->has('no_telepon')) {
-            $user->no_telepon = $request->no_telepon;
-        }
-
-        $user->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Profil berhasil diupdate',
-            'data' => $user
-        ]);
-    });
+    // ==================== PROFILE UPDATE ROUTES ====================
+    Route::put('/mentor/profile', [MentorController::class, 'updateProfile']);
+    
     // ==================== NOTIFIKASI ROUTES ====================
     Route::get('/notifikasi', [NotifikasiController::class, 'index']);
     Route::patch('/notifikasi/read-all', [NotifikasiController::class, 'markAllAsRead']);

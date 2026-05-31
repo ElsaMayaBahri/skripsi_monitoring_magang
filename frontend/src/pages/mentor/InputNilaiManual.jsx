@@ -1,51 +1,19 @@
 // src/pages/mentor/InputNilaiManual.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import {
-  Star,
-  Users,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  Save,
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  Award,
-  TrendingUp,
-  Clock,
-  X,
-  MessageSquare,
-  Sparkles,
-  Edit,
-  Shield,
-  Zap,
-  Filter,
-  UserCheck,
-  Target,
-  Heart,
-  Lightbulb,
-  Users2,
-  Briefcase,
-  Activity,
-  BarChart3,
-  Bug
-} from "lucide-react";
 import { getMentorPesertaList } from "../../api/mentor/pesertaService";
 import { getMentorNilai, saveMentorNilai } from "../../api/mentor/nilaiService";
 
 function InputNilaiManual() {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [peserta, setPeserta] = useState([]);
   const [filteredPeserta, setFilteredPeserta] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterDivisi, setFilterDivisi] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(6);
   const [selectedPeserta, setSelectedPeserta] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [hoveredCard, setHoveredCard] = useState(null);
   const [nilaiForm, setNilaiForm] = useState({
     sikap: 80,
     kualitas_kerja: 80,
@@ -60,17 +28,20 @@ function InputNilaiManual() {
   const [errorMessage, setErrorMessage] = useState("");
   const [debugInfo, setDebugInfo] = useState(null);
 
-  // Fetch peserta from backend
-  const fetchPeserta = async () => {
+  // Fetch peserta from backend - OPTIMIZED with parallel loading
+  const fetchPeserta = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await getMentorPesertaList({});
-      console.log("Peserta Response:", response);
+      // Parallel API calls - lebih cepat!
+      const [pesertaResponse, nilaiResponse] = await Promise.all([
+        getMentorPesertaList({}),
+        getMentorNilai({})
+      ]);
       
-      if (response.success && response.data) {
-        const nilaiResponse = await getMentorNilai({});
-        console.log("Nilai Response:", nilaiResponse);
-        
+      console.log("Peserta Response:", pesertaResponse);
+      console.log("Nilai Response:", nilaiResponse);
+      
+      if (pesertaResponse.success && pesertaResponse.data) {
         const nilaiMap = new Map();
         
         if (nilaiResponse.success && nilaiResponse.data) {
@@ -79,7 +50,8 @@ function InputNilaiManual() {
           });
         }
         
-        const transformedPeserta = response.data.map(p => {
+        // Transform data sekali saja
+        const transformedPeserta = pesertaResponse.data.map(p => {
           const nilaiData = nilaiMap.get(p.id_peserta);
           return {
             id: p.id_peserta,
@@ -97,70 +69,48 @@ function InputNilaiManual() {
             email: p.email || "-"
           };
         });
+        
         setPeserta(transformedPeserta);
         setFilteredPeserta(transformedPeserta);
       } else {
-        console.error("Failed to fetch peserta:", response?.message);
-        useMockData();
+        console.error("Failed to fetch peserta:", pesertaResponse?.message);
       }
     } catch (error) {
       console.error("Error fetching peserta:", error);
-      useMockData();
     } finally {
       setLoading(false);
     }
-  };
-
-  // Mock data for development
-  const useMockData = () => {
-    const mockPeserta = [
-      { id_peserta: 1, nama: "Ahmad Fauzi", divisi: "Frontend Developer", progress: 75, email: "ahmad@example.com" },
-      { id_peserta: 2, nama: "Siti Nurhaliza", divisi: "UI/UX Designer", progress: 80, email: "siti@example.com" },
-      { id_peserta: 3, nama: "Budi Santoso", divisi: "Backend Developer", progress: 90, email: "budi@example.com" },
-      { id_peserta: 4, nama: "Dewi Anggraeni", divisi: "Data Analyst", progress: 60, email: "dewi@example.com" },
-      { id_peserta: 5, nama: "Rizky Pratama", divisi: "DevOps Engineer", progress: 85, email: "rizky@example.com" },
-    ];
-    
-    const transformed = mockPeserta.map(p => ({
-      id: p.id_peserta,
-      nama: p.nama,
-      divisi: p.divisi,
-      sikap: null,
-      kualitas_kerja: null,
-      komunikasi: null,
-      kreativitas: null,
-      kerjasama: null,
-      inisiatif: null,
-      catatan: "",
-      status: "belum_dinilai",
-      progress: p.progress,
-      email: p.email
-    }));
-    
-    setPeserta(transformed);
-    setFilteredPeserta(transformed);
-  };
-
-  useEffect(() => {
-    fetchPeserta();
   }, []);
 
   useEffect(() => {
+    fetchPeserta();
+  }, [fetchPeserta]);
+
+  // OPTIMIZED filtering with useMemo - HAPUS filter divisi
+  const filteredData = useMemo(() => {
     let filtered = [...peserta];
+    
     if (searchTerm) {
       filtered = filtered.filter(p => 
         p.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.divisi.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.email.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    if (filterDivisi !== "all") filtered = filtered.filter(p => p.divisi === filterDivisi);
-    if (filterStatus !== "all") filtered = filtered.filter(p => p.status === filterStatus);
-    setFilteredPeserta(filtered);
-    setCurrentPage(1);
-  }, [searchTerm, filterDivisi, filterStatus, peserta]);
+    
+    if (filterStatus !== "all") {
+      filtered = filtered.filter(p => p.status === filterStatus);
+    }
+    
+    return filtered;
+  }, [searchTerm, filterStatus, peserta]);
 
-  const handleOpenModal = (p) => {
+  // Update filtered peserta when filter changes
+  useEffect(() => {
+    setFilteredPeserta(filteredData);
+    setCurrentPage(1);
+  }, [filteredData]);
+
+  const handleOpenModal = useCallback((p) => {
     setSelectedPeserta(p);
     setNilaiForm({ 
       sikap: p.sikap || 80, 
@@ -174,15 +124,15 @@ function InputNilaiManual() {
     setErrorMessage("");
     setDebugInfo(null);
     setShowModal(true);
-  };
+  }, []);
 
-  const handleNilaiChange = (field, value) => {
+  const handleNilaiChange = useCallback((field, value) => {
     const numValue = parseInt(value) || 0;
     const validValue = Math.min(100, Math.max(0, numValue));
     setNilaiForm(prev => ({ ...prev, [field]: validValue }));
-  };
+  }, []);
 
-  const handleSaveNilai = async () => {
+  const handleSaveNilai = useCallback(async () => {
     if (!selectedPeserta) return;
     
     setSubmitting(true);
@@ -207,7 +157,8 @@ function InputNilaiManual() {
       console.log("Save response:", response);
       
       if (response.success) {
-        const updatedPeserta = peserta.map(p => 
+        // Update lokal state tanpa reload ulang
+        setPeserta(prev => prev.map(p => 
           p.id === selectedPeserta.id ? { 
             ...p, 
             sikap: nilaiForm.sikap, 
@@ -219,9 +170,7 @@ function InputNilaiManual() {
             catatan: nilaiForm.catatan, 
             status: "sudah_dinilai" 
           } : p
-        );
-        setPeserta(updatedPeserta);
-        setFilteredPeserta(updatedPeserta);
+        ));
         setShowModal(false);
         setSuccessMessage(`Nilai untuk ${selectedPeserta.nama} berhasil disimpan`);
         setTimeout(() => setSuccessMessage(""), 3000);
@@ -237,104 +186,48 @@ function InputNilaiManual() {
     } catch (error) {
       console.error("Error saving nilai:", error);
       
-      // Parse error dari backend
       let errorMsg = "Terjadi kesalahan saat menyimpan nilai";
       let debugData = null;
       
       if (error.response) {
-        // Server responded with error status
         const status = error.response.status;
         const data = error.response.data;
         
-        console.log("Error response:", { status, data });
-        
         if (status === 500) {
-          errorMsg = "Server error (500): Gagal menyimpan nilai. Kemungkinan kolom database tidak ditemukan.";
+          errorMsg = "Server error (500): Gagal menyimpan nilai.";
           debugData = {
             type: "server_error",
             status: 500,
             message: data?.message || "Internal Server Error",
-            suggestion: "Periksa apakah kolom 'sikap', 'kualitas_kerja', 'komunikasi', 'kreativitas', 'kerjasama', 'inisiatif', 'catatan_mentor', 'status', 'dinilai_oleh', 'dinilai_pada' sudah ada di tabel nilai_pesertas. Jalankan migration atau tambahkan kolom manual."
+            suggestion: "Periksa kolom database"
           };
         } else if (status === 422) {
           errorMsg = "Validasi gagal: " + (data?.message || "Data tidak valid");
           debugData = {
             type: "validation_error",
             status: 422,
-            errors: data?.errors || {},
-            suggestion: "Periksa kembali nilai yang dimasukkan (rentang 0-100)"
-          };
-        } else if (status === 403) {
-          errorMsg = "Akses ditolak: Anda tidak memiliki izin";
-          debugData = {
-            type: "unauthorized",
-            status: 403,
-            message: data?.message,
-            suggestion: "Pastikan Anda login sebagai mentor"
-          };
-        } else if (status === 404) {
-          errorMsg = "Endpoint tidak ditemukan: " + (data?.message || "");
-          debugData = {
-            type: "not_found",
-            status: 404,
-            message: data?.message,
-            suggestion: "Periksa route API /mentor/nilai"
+            errors: data?.errors || {}
           };
         } else {
           errorMsg = data?.message || `Error ${status}: Gagal menyimpan nilai`;
-          debugData = {
-            type: "api_error",
-            status: status,
-            message: data?.message,
-            data: data
-          };
+          debugData = { type: "api_error", status, message: data?.message };
         }
       } else if (error.request) {
-        // Request made but no response
-        errorMsg = "Tidak ada respons dari server. Periksa koneksi atau server sedang bermasalah.";
-        debugData = {
-          type: "no_response",
-          suggestion: "Pastikan server Laravel berjalan (php artisan serve)"
-        };
+        errorMsg = "Tidak ada respons dari server.";
+        debugData = { type: "no_response", suggestion: "Pastikan server berjalan" };
       } else {
-        // Error in request setup
         errorMsg = error.message || "Terjadi kesalahan";
-        debugData = {
-          type: "request_error",
-          message: error.message
-        };
+        debugData = { type: "request_error", message: error.message };
       }
       
       setErrorMessage(errorMsg);
       setDebugInfo(debugData);
-      
-      // Hanya update UI lokal jika API gagal (mock mode for better UX)
-      if (process.env.NODE_ENV === 'development') {
-        const updatedPeserta = peserta.map(p => 
-          p.id === selectedPeserta.id ? { 
-            ...p, 
-            sikap: nilaiForm.sikap, 
-            kualitas_kerja: nilaiForm.kualitas_kerja,
-            komunikasi: nilaiForm.komunikasi,
-            kreativitas: nilaiForm.kreativitas,
-            kerjasama: nilaiForm.kerjasama,
-            inisiatif: nilaiForm.inisiatif,
-            catatan: nilaiForm.catatan, 
-            status: "sudah_dinilai" 
-          } : p
-        );
-        setPeserta(updatedPeserta);
-        setFilteredPeserta(updatedPeserta);
-        setShowModal(false);
-        setSuccessMessage(`[MOCK] Nilai untuk ${selectedPeserta.nama} berhasil disimpan (simulasi)`);
-        setTimeout(() => setSuccessMessage(""), 3000);
-      }
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [selectedPeserta, nilaiForm]);
 
-  const hitungRataRata = () => {
+  const hitungRataRata = useCallback(() => {
     const values = [
       nilaiForm.sikap,
       nilaiForm.kualitas_kerja,
@@ -344,18 +237,17 @@ function InputNilaiManual() {
       nilaiForm.inisiatif
     ];
     return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
-  };
+  }, [nilaiForm]);
 
-  const getGrade = (nilai) => {
+  const getGrade = useCallback((nilai) => {
     if (nilai >= 85) return { label: "A", color: "text-teal-600", bg: "bg-teal-50", desc: "Sangat Baik" };
     if (nilai >= 75) return { label: "B", color: "text-blue-600", bg: "bg-blue-50", desc: "Baik" };
     if (nilai >= 65) return { label: "C", color: "text-purple-600", bg: "bg-purple-50", desc: "Cukup" };
     if (nilai >= 50) return { label: "D", color: "text-amber-600", bg: "bg-amber-50", desc: "Kurang" };
     return { label: "E", color: "text-slate-500", bg: "bg-slate-100", desc: "Sangat Kurang" };
-  };
+  }, []);
 
-  const divisiList = [...new Set(peserta.map(p => p.divisi).filter(d => d && d !== "-"))];
-
+  // Pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredPeserta.slice(indexOfFirstItem, indexOfLastItem);
@@ -367,21 +259,65 @@ function InputNilaiManual() {
   const rataRataPreview = hitungRataRata();
   const gradePreview = getGrade(rataRataPreview);
 
+  // Loading Skeleton untuk pengalaman lebih cepat
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20 flex items-center justify-center">
-        <div className="relative"><div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-blue-600 rounded-full blur-xl opacity-50 animate-pulse"></div><Loader2 className="w-12 h-12 text-teal-500 animate-spin relative" /></div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20 p-6 lg:p-8">
+        <div className="max-w-[1400px] mx-auto">
+          {/* Header Skeleton */}
+          <div className="mb-8">
+            <div className="h-32 bg-white rounded-2xl shadow-sm animate-pulse"></div>
+          </div>
+          
+          {/* Stats Cards Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="bg-white rounded-xl shadow-sm border border-slate-100 p-5 animate-pulse">
+                <div className="h-12 w-12 bg-slate-200 rounded-xl mb-3"></div>
+                <div className="h-8 bg-slate-200 rounded w-16 mb-2"></div>
+                <div className="h-3 bg-slate-200 rounded w-24"></div>
+              </div>
+            ))}
+          </div>
+          
+          {/* Filter Bar Skeleton */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 mb-6 animate-pulse">
+            <div className="h-10 bg-slate-200 rounded-lg w-full max-w-md"></div>
+          </div>
+          
+          {/* Cards Grid Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="bg-white rounded-xl shadow-sm border border-slate-100 p-5 animate-pulse">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-slate-200 rounded-xl"></div>
+                    <div>
+                      <div className="h-5 bg-slate-200 rounded w-32 mb-2"></div>
+                      <div className="h-3 bg-slate-200 rounded w-24"></div>
+                    </div>
+                  </div>
+                  <div className="h-6 bg-slate-200 rounded w-16"></div>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {[1, 2, 3].map(j => (
+                    <div key={j} className="flex justify-between py-1">
+                      <div className="h-4 bg-slate-200 rounded w-20"></div>
+                      <div className="h-4 bg-slate-200 rounded w-8"></div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 h-10 bg-slate-200 rounded-lg"></div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-teal-100/20">
-      <div className="fixed inset-0 opacity-[0.03] pointer-events-none">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-teal-500 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500 rounded-full blur-3xl"></div>
-      </div>
-      
       <div className="relative p-6 lg:p-8 max-w-[1400px] mx-auto">
         
         {/* Header */}
@@ -389,18 +325,12 @@ function InputNilaiManual() {
           <div className="absolute inset-0 bg-gradient-to-r from-teal-500/10 via-blue-500/10 to-teal-500/10 rounded-2xl"></div>
           <div className="relative px-6 py-5">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-teal-600 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
-                  <Star className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold text-slate-800">Input Nilai Manual</h1>
-                  <p className="text-sm text-slate-500 mt-1">Input nilai sikap dan soft skills peserta magang</p>
-                </div>
+              <div>
+                <h1 className="text-2xl lg:text-3xl font-bold text-slate-800">Input Nilai Manual</h1>
+                <p className="text-sm text-slate-500 mt-1">Input nilai sikap dan soft skills peserta magang</p>
               </div>
               <Link to="/mentor/nilai-akhir">
-                <button className="px-5 py-2.5 bg-gradient-to-r from-teal-600 to-blue-600 rounded-xl text-sm font-medium text-white shadow-md hover:shadow-lg transition-all duration-300 flex items-center gap-2">
-                  <TrendingUp size="14" />
+                <button className="px-5 py-2.5 bg-gradient-to-r from-teal-600 to-blue-600 rounded-xl text-sm font-medium text-white shadow-md hover:shadow-lg transition-all duration-300">
                   Lihat Nilai Akhir
                 </button>
               </Link>
@@ -408,25 +338,21 @@ function InputNilaiManual() {
           </div>
         </div>
 
-        {/* Error Alert dengan Debug Info */}
+        {/* Error Alert */}
         {errorMessage && (
           <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4">
             <div className="flex items-start gap-3">
-              <AlertCircle size="18" className="text-red-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-red-800">{errorMessage}</p>
                 {debugInfo && (
                   <div className="mt-3 p-3 bg-red-100 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Bug size="14" className="text-red-700" />
-                      <p className="text-xs font-semibold text-red-800">Debug Information:</p>
-                    </div>
+                    <p className="text-xs font-semibold text-red-800 mb-2">Debug Information:</p>
                     <pre className="text-xs text-red-700 whitespace-pre-wrap font-mono bg-red-50 p-2 rounded">
                       {JSON.stringify(debugInfo, null, 2)}
                     </pre>
                     {debugInfo.suggestion && (
                       <p className="text-xs text-red-700 mt-2 pt-2 border-t border-red-200">
-                        💡 <span className="font-semibold">Saran:</span> {debugInfo.suggestion}
+                        💡 Saran: {debugInfo.suggestion}
                       </p>
                     )}
                   </div>
@@ -439,49 +365,38 @@ function InputNilaiManual() {
         {/* Success Alert */}
         {successMessage && (
           <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-            <div className="flex items-center gap-3">
-              <CheckCircle size="18" className="text-emerald-600" />
-              <p className="text-sm font-medium text-emerald-800">{successMessage}</p>
-            </div>
+            <p className="text-sm font-medium text-emerald-800">{successMessage}</p>
           </div>
         )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center"><Users size="20" className="text-teal-500" /></div>
-              <span className="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-1 rounded-full">TOTAL</span>
+            <div className="mb-3">
+              <div className="text-3xl font-bold text-slate-800">{peserta.length}</div>
+              <p className="text-xs text-slate-500 mt-1">Peserta Aktif</p>
             </div>
-            <p className="text-3xl font-bold text-slate-800">{peserta.length}</p>
-            <p className="text-xs text-slate-500 mt-1">Peserta Aktif</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center"><CheckCircle size="20" className="text-emerald-500" /></div>
-              <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">SUDAH</span>
+            <div className="mb-3">
+              <div className="text-3xl font-bold text-emerald-600">{sudahDinilai}</div>
+              <p className="text-xs text-slate-500 mt-1">Sudah Dinilai</p>
             </div>
-            <p className="text-3xl font-bold text-emerald-600">{sudahDinilai}</p>
-            <p className="text-xs text-slate-500 mt-1">Sudah Dinilai</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center"><Clock size="20" className="text-blue-500" /></div>
-              <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">BELUM</span>
+            <div className="mb-3">
+              <div className="text-3xl font-bold text-blue-600">{belumDinilai}</div>
+              <p className="text-xs text-slate-500 mt-1">Belum Dinilai</p>
             </div>
-            <p className="text-3xl font-bold text-blue-600">{belumDinilai}</p>
-            <p className="text-xs text-slate-500 mt-1">Belum Dinilai</p>
           </div>
 
           <div className="bg-gradient-to-br from-teal-600 to-blue-600 rounded-xl shadow-md p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center"><BarChart3 size="20" className="text-white" /></div>
-              <span className="text-xs font-semibold text-white bg-white/20 px-2 py-1 rounded-full">PROGRESS</span>
+            <div className="mb-3">
+              <div className="text-3xl font-bold text-white">{peserta.length ? Math.round((sudahDinilai / peserta.length) * 100) : 0}%</div>
+              <p className="text-xs text-white/80 mt-1">Progress Selesai</p>
             </div>
-            <p className="text-3xl font-bold text-white">{peserta.length ? Math.round((sudahDinilai / peserta.length) * 100) : 0}%</p>
-            <p className="text-xs text-white/80 mt-1">Selesai</p>
             <div className="mt-3">
               <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
                 <div className="h-full bg-white rounded-full" style={{ width: `${peserta.length ? (sudahDinilai / peserta.length) * 100 : 0}%` }}></div>
@@ -490,18 +405,19 @@ function InputNilaiManual() {
           </div>
         </div>
 
-        {/* Filter Bar */}
+        {/* Filter Bar - HAPUS filter divisi */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="relative flex-1 max-w-md">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-slate-400" /></div>
-              <input type="text" placeholder="Cari peserta..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400" />
+              <input 
+                type="text" 
+                placeholder="Cari peserta..." 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
+                className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400" 
+              />
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <select value={filterDivisi} onChange={(e) => setFilterDivisi(e.target.value)} className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:border-teal-400 cursor-pointer">
-                <option value="all">Semua Divisi</option>
-                {divisiList.map(div => (<option key={div} value={div}>{div}</option>))}
-              </select>
               <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:border-teal-400 cursor-pointer">
                 <option value="all">Semua Status</option>
                 <option value="sudah_dinilai">Sudah Dinilai</option>
@@ -516,14 +432,14 @@ function InputNilaiManual() {
           <p className="text-sm text-slate-500">Menampilkan <span className="font-semibold text-slate-700">{currentItems.length}</span> dari <span className="font-semibold text-slate-700">{filteredPeserta.length}</span> peserta</p>
         </div>
 
-        {/* Card Grid */}
+        {/* Card Grid - Dengan tinggi seragam dan spacing compact, hanya 3 nilai */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {currentItems.map((p) => (
-            <div key={p.id} className="group bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden transition-all duration-300 hover:shadow-md" onMouseEnter={() => setHoveredCard(p.id)} onMouseLeave={() => setHoveredCard(null)}>
-              <div className="relative p-5">
+            <div key={p.id} className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden transition-all duration-300 hover:shadow-md flex flex-col h-full">
+              <div className="p-5 flex flex-col flex-1">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center shadow-md">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center shadow-md flex-shrink-0">
                       <span className="text-lg font-bold text-white">{p.nama?.charAt(0) || "P"}</span>
                     </div>
                     <div>
@@ -538,18 +454,19 @@ function InputNilaiManual() {
                   )}
                 </div>
                 
-                <div className="mt-4 space-y-2">
-                  <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
-                    <div className="flex items-center gap-2"><Heart size="14" className="text-teal-400" /><span className="text-xs text-slate-600">Sikap</span></div>
-                    {p.sikap ? <span className="text-base font-semibold text-teal-600">{p.sikap}</span> : <span className="text-xs text-slate-400">-</span>}
+                {/* Hanya 3 nilai yang ditampilkan di card */}
+                <div className="mt-4 space-y-2 flex-1">
+                  <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                    <span className="text-xs text-slate-600">Sikap</span>
+                    {p.sikap ? <span className="text-sm font-bold text-teal-600">{p.sikap}</span> : <span className="text-xs text-slate-400">-</span>}
                   </div>
-                  <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
-                    <div className="flex items-center gap-2"><Target size="14" className="text-blue-400" /><span className="text-xs text-slate-600">Kualitas Kerja</span></div>
-                    {p.kualitas_kerja ? <span className="text-base font-semibold text-teal-600">{p.kualitas_kerja}</span> : <span className="text-xs text-slate-400">-</span>}
+                  <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                    <span className="text-xs text-slate-600">Kualitas Kerja</span>
+                    {p.kualitas_kerja ? <span className="text-sm font-bold text-teal-600">{p.kualitas_kerja}</span> : <span className="text-xs text-slate-400">-</span>}
                   </div>
-                  <div className="flex justify-between items-center py-1.5">
-                    <div className="flex items-center gap-2"><MessageSquare size="14" className="text-purple-400" /><span className="text-xs text-slate-600">Komunikasi</span></div>
-                    {p.komunikasi ? <span className="text-base font-semibold text-teal-600">{p.komunikasi}</span> : <span className="text-xs text-slate-400">-</span>}
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-xs text-slate-600">Komunikasi</span>
+                    {p.komunikasi ? <span className="text-sm font-bold text-teal-600">{p.komunikasi}</span> : <span className="text-xs text-slate-400">-</span>}
                   </div>
                 </div>
                 
@@ -564,7 +481,6 @@ function InputNilaiManual() {
         {/* Empty State */}
         {filteredPeserta.length === 0 && !loading && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 py-16 text-center">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto"><Users size="28" className="text-slate-400" /></div>
             <p className="text-slate-600 font-medium mt-4">Tidak ada peserta ditemukan</p>
             <p className="text-sm text-slate-400 mt-1">Coba ubah kata kunci pencarian atau filter</p>
           </div>
@@ -575,20 +491,36 @@ function InputNilaiManual() {
           <div className="flex items-center justify-between mt-8">
             <p className="text-sm text-slate-500">Halaman {currentPage} dari {totalPages}</p>
             <div className="flex items-center gap-2">
-              <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40"><ChevronLeft size="16" /></button>
+              <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                Sebelumnya
+              </button>
               <div className="flex gap-1.5">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum; if (totalPages <= 5) pageNum = i + 1; else if (currentPage <= 3) pageNum = i + 1; else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i; else pageNum = currentPage - 2 + i;
-                  return (<button key={pageNum} onClick={() => setCurrentPage(pageNum)} className={`w-8 h-8 rounded-lg text-sm font-medium transition-all ${currentPage === pageNum ? "bg-gradient-to-r from-teal-600 to-blue-600 text-white shadow-sm" : "border border-slate-200 text-slate-600 hover:bg-slate-50"}`}>{pageNum}</button>);
+                  let pageNum; 
+                  if (totalPages <= 5) pageNum = i + 1; 
+                  else if (currentPage <= 3) pageNum = i + 1; 
+                  else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i; 
+                  else pageNum = currentPage - 2 + i;
+                  return (
+                    <button 
+                      key={pageNum} 
+                      onClick={() => setCurrentPage(pageNum)} 
+                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-all ${currentPage === pageNum ? "bg-gradient-to-r from-teal-600 to-blue-600 text-white shadow-sm" : "border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
                 })}
               </div>
-              <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40"><ChevronRight size="16" /></button>
+              <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                Selanjutnya
+              </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Modal Input Nilai */}
+      {/* Modal Input Nilai - Menampilkan semua 6 komponen nilai */}
       {showModal && selectedPeserta && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
@@ -599,7 +531,7 @@ function InputNilaiManual() {
                   <p className="text-sm text-slate-500 mt-1">{selectedPeserta.nama} • {selectedPeserta.divisi}</p>
                 </div>
                 <button onClick={() => setShowModal(false)} className="p-2 rounded-lg hover:bg-slate-100 transition-all">
-                  <X size="20" className="text-slate-500" />
+                  ✕
                 </button>
               </div>
             </div>
@@ -619,50 +551,88 @@ function InputNilaiManual() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+              {/* Semua 6 komponen nilai di modal */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Heart size="16" className="text-teal-400" /> Sikap</label>
-                  <input type="number" value={nilaiForm.sikap} onChange={(e) => handleNilaiChange("sikap", e.target.value)} min="0" max="100" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" />
+                  <label className="text-sm font-medium text-slate-700">Sikap</label>
+                  <input 
+                    type="number" 
+                    value={nilaiForm.sikap} 
+                    onChange={(e) => handleNilaiChange("sikap", e.target.value)} 
+                    min="0" 
+                    max="100" 
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" 
+                  />
                   <p className="text-[10px] text-slate-400">Disiplin, tanggung jawab, etika kerja</p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Target size="16" className="text-blue-400" /> Kualitas Kerja</label>
-                  <input type="number" value={nilaiForm.kualitas_kerja} onChange={(e) => handleNilaiChange("kualitas_kerja", e.target.value)} min="0" max="100" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" />
+                  <label className="text-sm font-medium text-slate-700">Kualitas Kerja</label>
+                  <input 
+                    type="number" 
+                    value={nilaiForm.kualitas_kerja} 
+                    onChange={(e) => handleNilaiChange("kualitas_kerja", e.target.value)} 
+                    min="0" 
+                    max="100" 
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" 
+                  />
                   <p className="text-[10px] text-slate-400">Ketelitian, hasil kerja, problem solving</p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><MessageSquare size="16" className="text-purple-400" /> Komunikasi</label>
-                  <input type="number" value={nilaiForm.komunikasi} onChange={(e) => handleNilaiChange("komunikasi", e.target.value)} min="0" max="100" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" />
+                  <label className="text-sm font-medium text-slate-700">Komunikasi</label>
+                  <input 
+                    type="number" 
+                    value={nilaiForm.komunikasi} 
+                    onChange={(e) => handleNilaiChange("komunikasi", e.target.value)} 
+                    min="0" 
+                    max="100" 
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" 
+                  />
                   <p className="text-[10px] text-slate-400">Penyampaian ide, pelaporan</p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Lightbulb size="16" className="text-amber-400" /> Kreativitas</label>
-                  <input type="number" value={nilaiForm.kreativitas} onChange={(e) => handleNilaiChange("kreativitas", e.target.value)} min="0" max="100" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" />
+                  <label className="text-sm font-medium text-slate-700">Kreativitas</label>
+                  <input 
+                    type="number" 
+                    value={nilaiForm.kreativitas} 
+                    onChange={(e) => handleNilaiChange("kreativitas", e.target.value)} 
+                    min="0" 
+                    max="100" 
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" 
+                  />
                   <p className="text-[10px] text-slate-400">Inovasi, ide baru</p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Users2 size="16" className="text-slate-400" /> Kerjasama Tim</label>
-                  <input type="number" value={nilaiForm.kerjasama} onChange={(e) => handleNilaiChange("kerjasama", e.target.value)} min="0" max="100" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" />
+                  <label className="text-sm font-medium text-slate-700">Kerjasama Tim</label>
+                  <input 
+                    type="number" 
+                    value={nilaiForm.kerjasama} 
+                    onChange={(e) => handleNilaiChange("kerjasama", e.target.value)} 
+                    min="0" 
+                    max="100" 
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" 
+                  />
                   <p className="text-[10px] text-slate-400">Kolaborasi, koordinasi</p>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><Zap size="16" className="text-blue-400" /> Inisiatif</label>
-                  <input type="number" value={nilaiForm.inisiatif} onChange={(e) => handleNilaiChange("inisiatif", e.target.value)} min="0" max="100" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" />
+                  <label className="text-sm font-medium text-slate-700">Inisiatif</label>
+                  <input 
+                    type="number" 
+                    value={nilaiForm.inisiatif} 
+                    onChange={(e) => handleNilaiChange("inisiatif", e.target.value)} 
+                    min="0" 
+                    max="100" 
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-teal-400" 
+                  />
                   <p className="text-[10px] text-slate-400">Proaktif, kemauan belajar</p>
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700 flex items-center gap-2"><MessageSquare size="16" className="text-slate-400" /> Catatan / Feedback</label>
-                <textarea value={nilaiForm.catatan} onChange={(e) => setNilaiForm(prev => ({ ...prev, catatan: e.target.value }))} rows="3" placeholder="Berikan catatan atau feedback untuk peserta..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400 resize-none" />
-                <p className="text-xs text-slate-400">Catatan akan terlihat oleh peserta sebagai feedback</p>
               </div>
             </div>
             
             <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="px-5 py-2.5 border border-slate-200 rounded-lg text-slate-600 font-medium hover:bg-white transition-all">Batal</button>
-              <button onClick={handleSaveNilai} disabled={submitting} className="px-5 py-2.5 bg-gradient-to-r from-teal-600 to-blue-600 rounded-lg text-white font-medium shadow-sm hover:shadow-md transition-all disabled:opacity-50 flex items-center gap-2">
-                {submitting ? <Loader2 size="16" className="animate-spin" /> : <Save size="16" />}
+              <button onClick={() => setShowModal(false)} className="px-5 py-2.5 border border-slate-200 rounded-lg text-slate-600 font-medium hover:bg-white transition-all">
+                Batal
+              </button>
+              <button onClick={handleSaveNilai} disabled={submitting} className="px-5 py-2.5 bg-gradient-to-r from-teal-600 to-blue-600 rounded-lg text-white font-medium shadow-sm hover:shadow-md transition-all disabled:opacity-50">
                 {submitting ? "Menyimpan..." : "Simpan Nilai"}
               </button>
             </div>
