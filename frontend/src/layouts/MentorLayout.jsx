@@ -2,6 +2,7 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { useNotifikasi } from "../context/NotifikasiContext"
+import { logout } from "../api/auth/authService"  // ← Pastikan path ini benar
 import {
   LayoutDashboard,
   User,
@@ -173,15 +174,25 @@ function MentorLayout() {
     setProfileOpen(false)
   }
 
-  const handleConfirmLogout = () => {
-    localStorage.removeItem("token")
-    localStorage.removeItem("role")
-    localStorage.removeItem("user")
-    localStorage.removeItem("rememberedEmail")
-    setShowLogoutModal(false)
-    navigate("/login")
-  }
-
+ 
+const handleConfirmLogout = async () => {
+    try {
+        await logout()  // ← TAMBAHKAN INI
+        
+        localStorage.removeItem("token")
+        localStorage.removeItem("role")
+        localStorage.removeItem("user")
+        localStorage.removeItem("rememberedEmail")
+        setShowLogoutModal(false)
+        navigate("/login", { replace: true })
+    } catch (error) {
+        console.error("Logout error:", error)
+        // Tetap logout lokal meski API gagal
+        localStorage.clear()
+        setShowLogoutModal(false)
+        navigate("/login", { replace: true })
+    }
+}
   const handleCancelLogout = () => {
     setShowLogoutModal(false)
   }

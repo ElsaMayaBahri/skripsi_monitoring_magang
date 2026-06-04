@@ -2,7 +2,7 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
 import logo from "../assets/logo.png"
-
+import { logout } from "../api/auth/authService" 
 import {
   LayoutDashboard,
   Users,
@@ -137,15 +137,24 @@ function AdminLayout() {
     setProfileOpen(false)
   }
 
-  const handleLogoutConfirm = () => {
+  const handleLogoutConfirm = async () => {  // TAMBAHKAN async
+  try {
+    await logout()  // TAMBAHKAN INI - PANGGIL API LOGOUT
+    
     localStorage.removeItem("token")
     localStorage.removeItem("user")
     localStorage.removeItem("role")
     localStorage.removeItem("rememberedEmail")
     setLogoutConfirmOpen(false)
-    navigate("/login")
+    navigate("/login", { replace: true })  // TAMBAHKAN { replace: true }
+  } catch (error) {
+    console.error("Logout error:", error)
+    // Tetap logout lokal meski API gagal
+    localStorage.clear()
+    setLogoutConfirmOpen(false)
+    navigate("/login", { replace: true })
   }
-
+}
   const handleLogoutCancel = () => {
     setLogoutConfirmOpen(false)
   }

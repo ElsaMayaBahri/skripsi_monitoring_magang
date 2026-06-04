@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
 import logo from "../assets/logo.png"
 import { useNotifikasi } from "../context/NotifikasiContext"
+import { logout } from "../api/auth/authService"  // ← Pastikan path ini benar
 
 import {
   LayoutDashboard,
@@ -188,11 +189,21 @@ function CooLayout() {
     setProfileOpen(false)
   }
 
-  const handleConfirmLogout = () => {
-    setShowLogoutModal(false)
-    localStorage.clear()
-    navigate("/login")
-  }
+ 
+const handleConfirmLogout = async () => {
+    try {
+        await logout()  // ← TAMBAHKAN INI
+        
+        setShowLogoutModal(false)
+        localStorage.clear()
+        navigate("/login", { replace: true })
+    } catch (error) {
+        console.error("Logout error:", error)
+        localStorage.clear()
+        setShowLogoutModal(false)
+        navigate("/login", { replace: true })
+    }
+}
 
   const handleCancelLogout = () => {
     setShowLogoutModal(false)

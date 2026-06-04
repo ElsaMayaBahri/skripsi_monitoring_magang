@@ -112,9 +112,10 @@ function MentorDashboard() {
     behind: 0
   });
 
-  // Fungsi untuk mendapatkan waktu WIB
+  // Fungsi untuk mendapatkan waktu WIB (UTC+7)
   const getWIBTime = () => {
     const now = new Date();
+    // WIB = UTC+7
     const wibTime = new Date(now.getTime() + (7 * 60 * 60 * 1000));
     return wibTime;
   };
@@ -258,11 +259,24 @@ function MentorDashboard() {
     }
   };
 
+  // Perbaikan fungsi greeting berdasarkan waktu Indonesia (WIB)
   const getCurrentGreeting = () => {
     const hour = wibTime.getHours();
-    if (hour < 12) return "Selamat Pagi";
-    if (hour < 18) return "Selamat Siang";
-    return "Selamat Malam";
+    // Pembagian waktu Indonesia:
+    // 00:00 - 10:00 = Selamat Pagi
+    // 10:00 - 15:00 = Selamat Siang  
+    // 15:00 - 18:00 = Selamat Sore
+    // 18:00 - 24:00 = Selamat Malam
+    
+    if (hour >= 0 && hour < 10) {
+      return "Selamat Pagi";
+    } else if (hour >= 10 && hour < 15) {
+      return "Selamat Siang";
+    } else if (hour >= 15 && hour < 18) {
+      return "Selamat Sore";
+    } else {
+      return "Selamat Malam";
+    }
   };
 
   const formatDate = () => {

@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
 import logo from "../assets/logo.png"
 import { useNotifikasi } from "../context/NotifikasiContext"
-
+import { logout } from "../api/auth/authService"
 import {
   LayoutDashboard,
   BookOpen,
@@ -227,11 +227,21 @@ function PesertaLayout() {
     setProfileOpen(false)
   }
 
-  const handleLogoutConfirm = () => {
-    localStorage.clear()
-    setLogoutConfirmOpen(false)
-    navigate("/login")
-  }
+ 
+const handleLogoutConfirm = async () => {
+    try {
+        await logout()  // ← TAMBAHKAN INI
+        
+        localStorage.clear()
+        setLogoutConfirmOpen(false)
+        navigate("/login", { replace: true })
+    } catch (error) {
+        console.error("Logout error:", error)
+        localStorage.clear()
+        setLogoutConfirmOpen(false)
+        navigate("/login", { replace: true })
+    }
+}
 
   const handleLogoutCancel = () => {
     setLogoutConfirmOpen(false)
