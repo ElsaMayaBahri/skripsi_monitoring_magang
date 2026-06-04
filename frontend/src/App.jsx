@@ -6,6 +6,7 @@ import { NotifikasiProvider } from "./context/NotifikasiContext";
 // AUTH PAGES
 // ============================================
 import Login from "./pages/auth/Login";
+import ResetPassword from "./pages/auth/ResetPassword"; // ✅ TAMBAHKAN INI
 
 // ============================================
 // ADMIN PAGES - Created by: Admin Developer
@@ -192,6 +193,7 @@ function App() {
       <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} /> {/* ✅ TAMBAHKAN INI */}
 
         {/* Root Redirect based on role */}
         <Route
@@ -240,15 +242,15 @@ function App() {
         {/* COO ROUTES - Created by: COO Developer */}
         {/* ============================================ */}
         <Route
-  path="/coo"
-  element={
-    <ProtectedRoute allowedRoles={["coo"]}>
-      <NotifikasiProvider>
-        <CooLayout />
-      </NotifikasiProvider>
-    </ProtectedRoute>
-  }
->
+          path="/coo"
+          element={
+            <ProtectedRoute allowedRoles={["coo"]}>
+              <NotifikasiProvider>
+                <CooLayout />
+              </NotifikasiProvider>
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<DashboardCOO />} />
           <Route path="materi" element={<MateriCOO />} />
@@ -348,7 +350,7 @@ function App() {
           {/* Nilai, Laporan & Sertifikat Routes */}
           <Route path="laporan-akhir" element={<LaporanAkhirPeserta />} />
           <Route path="nilai-akhir" element={<NilaiAkhirPeserta />} />
-          <Route path="sertifikat" element={<Sertifikat />} />  {/* ✅ SUDAH ADA */}
+          <Route path="sertifikat" element={<Sertifikat />} />
           
           {/* Profile Route */}
           <Route path="profile" element={<ProfilePeserta />} />

@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import axios from "axios"
+import { login, forgotPassword } from "../../api/auth/authService"
 import logo from "../../assets/logo.png"
 
+// Buat axios instance untuk keperluan interceptor (tetap dipertahankan)
+import axios from "axios"
 const API_URL = "http://localhost:8000/api"
 
 const axiosInstance = axios.create({
@@ -32,13 +34,19 @@ function Login() {
   const [activeDemo, setActiveDemo] = useState(null)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
+  // STATE UNTUK FORGOT PASSWORD
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState("")
+  const [resetLoading, setResetLoading] = useState(false)
+  const [resetSuccess, setResetSuccess] = useState("")
+  const [resetError, setResetError] = useState("")
+
   // HANYA CEK TOKEN, JANGAN LANGSUNG REDIRECT
   useEffect(() => {
     const token = localStorage.getItem("token")
     const role = localStorage.getItem("role")
     
     if (token && role) {
-      // Redirect setelah komponen mount, tapi dengan delay kecil
       setTimeout(() => {
         if (role === "admin") {
           navigate("/admin/dashboard", { replace: true })
@@ -61,7 +69,6 @@ function Login() {
     setIsCheckingAuth(false)
   }, [navigate])
 
-  // Jika sedang mengecek auth, tampilkan loading
   if (isCheckingAuth) {
     return (
       <div style={{ 
@@ -91,32 +98,26 @@ function Login() {
     setError("")
 
     try {
-      const response = await axiosInstance.post("/login", {
-        email: email.trim(),
-        password,
-      })
+      const response = await login(email.trim(), password)
 
-      console.log("LOGIN RESPONSE:", response.data)
+      console.log("LOGIN RESPONSE:", response)
 
-      const { success, token, user, message } = response.data
-
-      if (!success) {
-        throw new Error(message || "Login gagal")
+      if (!response.success) {
+        throw new Error(response.message || "Login gagal")
       }
 
-      if (!token) {
+      if (!response.token) {
         throw new Error("Token tidak ditemukan dari backend")
       }
 
-      if (!user) {
+      if (!response.user) {
         throw new Error("Data user tidak ditemukan dari backend")
       }
 
-      const role = user.role
+      const role = response.user.role || response.role
 
-      // Simpan data kredensial baru
-      localStorage.setItem("token", token)
-      localStorage.setItem("user", JSON.stringify(user))
+      localStorage.setItem("token", response.token)
+      localStorage.setItem("user", JSON.stringify(response.user))
       localStorage.setItem("role", role)
 
       if (rememberMe) {
@@ -125,10 +126,9 @@ function Login() {
         localStorage.removeItem("rememberedEmail")
       }
 
-      axiosInstance.defaults.headers.Authorization = `Bearer ${token}`
-      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
+      axiosInstance.defaults.headers.Authorization = `Bearer ${response.token}`
+      axios.defaults.headers.common["Authorization"] = `Bearer ${response.token}`
 
-      // Redirect berdasarkan role
       if (role === "admin") {
         navigate("/admin/dashboard", { replace: true })
       } else if (role === "coo") {
@@ -143,37 +143,49 @@ function Login() {
 
     } catch (err) {
       console.error("LOGIN ERROR:", err)
-
-      if (err.response) {
-        const status = err.response.status
-        const responseData = err.response.data
-        
-        // Handle response error dari backend
-        if (responseData?.message) {
-          setError(responseData.message)
-        } else if (status === 401) {
-          setError("Email atau password salah")
-        } else if (status === 403) {
-          setError("Akun tidak aktif. Silakan hubungi administrator.")
-        } else if (status === 422) {
-          const errors = responseData?.errors
-          if (errors) {
-            const firstError = Object.values(errors)[0]
-            setError(Array.isArray(firstError) ? firstError[0] : firstError)
-          } else {
-            setError(responseData?.message || "Validasi gagal")
-          }
-        } else {
-          setError(responseData?.message || "Login gagal")
-        }
-      } else if (err.request) {
-        setError("Tidak bisa connect ke server. Pastikan backend berjalan.")
-      } else {
-        setError("Terjadi kesalahan: " + err.message)
-      }
+      setError(err.message || "Login gagal")
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail.trim()) {
+      setResetError("Email harus diisi")
+      return
+    }
+
+    setResetLoading(true)
+    setResetError("")
+    setResetSuccess("")
+
+    try {
+      const result = await forgotPassword(forgotEmail.trim())
+      
+      if (result.success) {
+        setResetSuccess(result.message || "Link reset password telah dikirim ke email Anda!")
+        setTimeout(() => {
+          setShowForgotPassword(false)
+          setForgotEmail("")
+          setResetSuccess("")
+          setResetError("")
+        }, 2000)
+      } else {
+        setResetError(result.message || "Gagal mengirim link reset password")
+      }
+    } catch (err) {
+      console.error("FORGOT PASSWORD ERROR:", err)
+      setResetError(err.message)
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
+  // Preview Reset Password - navigasi ke halaman reset password
+  const handlePreviewResetPassword = () => {
+    // Buat email dummy jika belum ada
+    const demoEmail = forgotEmail || "user@example.com"
+    navigate(`/reset-password?token=preview123&email=${encodeURIComponent(demoEmail)}`)
   }
 
   const handleKeyPress = (e) => {
@@ -197,14 +209,16 @@ function Login() {
   }
 
   // SVG Icons
-  const EyeIcon = () => (
+  // Eye Open = password terlihat (tanpa garis coret)
+  const EyeOpenIcon = () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
       <circle cx="12" cy="12" r="3"/>
     </svg>
   )
 
-  const EyeOffIcon = () => (
+  // Eye Closed = password tersembunyi/hash (dengan garis coret)
+  const EyeClosedIcon = () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
       <line x1="1" y1="1" x2="23" y2="23"/>
@@ -640,8 +654,9 @@ function Login() {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 style={styles.passwordToggle}
+                title={showPassword ? "Sembunyikan password" : "Tampilkan password"}
               >
-                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                {showPassword ? <EyeOpenIcon /> : <EyeClosedIcon />}
               </button>
             </div>
           </div>
@@ -656,7 +671,12 @@ function Login() {
               />
               Ingat saya
             </label>
-            <button style={styles.forgotLink}>Lupa sandi?</button>
+            <button 
+              style={styles.forgotLink}
+              onClick={() => setShowForgotPassword(true)}
+            >
+              Lupa sandi?
+            </button>
           </div>
 
           <button
@@ -687,9 +707,126 @@ function Login() {
 
           <div style={styles.helpText}>
             Butuh bantuan? <span style={styles.helpLink}>Hubungi Administrator</span>
+            {' '} atau {' '}
+            <span 
+              style={{...styles.helpLink, color: "#f59e0b", cursor: "pointer"}}
+              onClick={handlePreviewResetPassword}
+            >
+              Preview Reset Password
+            </span>
           </div>
         </div>
       </div>
+
+      {/* MODAL FORGOT PASSWORD */}
+      {showForgotPassword && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }} onClick={() => setShowForgotPassword(false)}>
+          <div style={{
+            backgroundColor: "white",
+            borderRadius: "24px",
+            padding: "32px",
+            width: "90%",
+            maxWidth: "400px",
+            position: "relative"
+          }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: "24px", fontWeight: "700", marginBottom: "8px" }}>Lupa Password?</h3>
+            <p style={{ color: "#64748b", fontSize: "13px", marginBottom: "24px" }}>
+              Masukkan email Anda, kami akan mengirimkan link untuk reset password
+            </p>
+
+            {resetSuccess && (
+              <div style={{
+                marginBottom: "20px",
+                padding: "12px",
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                borderRadius: "12px",
+                color: "#166534",
+                fontSize: "13px"
+              }}>
+                {resetSuccess}
+              </div>
+            )}
+
+            {resetError && (
+              <div style={{
+                marginBottom: "20px",
+                padding: "12px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: "12px",
+                color: "#dc2626",
+                fontSize: "13px"
+              }}>
+                {resetError}
+              </div>
+            )}
+
+            <div style={{ marginBottom: "20px" }}>
+              <label style={styles.label}>Alamat Email</label>
+              <input
+                type="email"
+                placeholder="nama@perusahaan.com"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !resetLoading) {
+                    handleForgotPassword()
+                  }
+                }}
+                style={styles.input(false)}
+              />
+            </div>
+
+            <button
+              onClick={handleForgotPassword}
+              disabled={resetLoading}
+              style={{
+                width: "100%",
+                padding: "14px",
+                background: "linear-gradient(135deg, #00897b, #00acc1)",
+                border: "none",
+                borderRadius: "14px",
+                color: "white",
+                fontSize: "14px",
+                fontWeight: "600",
+                cursor: "pointer",
+                marginBottom: "12px"
+              }}
+            >
+              {resetLoading ? "Mengirim..." : "Kirim Link Reset Password"}
+            </button>
+
+            <button
+              onClick={() => setShowForgotPassword(false)}
+              style={{
+                width: "100%",
+                padding: "14px",
+                background: "white",
+                border: "1.5px solid #e2e8f0",
+                borderRadius: "14px",
+                color: "#64748b",
+                fontSize: "14px",
+                fontWeight: "500",
+                cursor: "pointer"
+              }}
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

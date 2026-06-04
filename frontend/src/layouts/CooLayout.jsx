@@ -50,7 +50,7 @@ function CooLayout() {
   const [quizOpen, setQuizOpen] = useState(false)
   const [presensiOpen, setPresensiOpen] = useState(false)
   const [pengaturanOpen, setPengaturanOpen] = useState(false)
-  const [sertifikatOpen, setSertifikatOpen] = useState(false)
+  // const [sertifikatOpen, setSertifikatOpen] = useState(false) ← DIHAPUS karena tidak perlu dropdown
   const [notifOpen, setNotifOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
@@ -452,44 +452,21 @@ const handleConfirmLogout = async () => {
               )}
             </li>
 
-            {/* SERTIFIKAT MENU */}
+            {/* SERTIFIKAT MENU - LANGSUNG TANPA DROPDOWN (DIPERBAIKI) */}
             <li>
-              <div 
-                onClick={() => !isCollapsed && setSertifikatOpen(!sertifikatOpen)}
-                className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+              <Link to="/coo/kelola-sertifikat" onClick={onMenuClick}>
+                <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
                   isActive("/coo/kelola-sertifikat")
                     ? "bg-gradient-to-r from-teal-500 to-blue-600 text-white shadow-md shadow-teal-500/25"
                     : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                <div className="flex items-center gap-3">
+                }`}>
                   <Award size={18} />
-                  {!isCollapsed && <span className="font-medium">Sertifikat</span>}
+                  {!isCollapsed && <span className="font-medium">Kelola Sertifikat</span>}
+                  {isActive("/coo/kelola-sertifikat") && !isCollapsed && (
+                    <div className="ml-auto w-1.5 h-5 bg-white rounded-full"></div>
+                  )}
                 </div>
-                {!isCollapsed && (
-                  <button onClick={(e) => { e.stopPropagation(); setSertifikatOpen(!sertifikatOpen); }} className="p-0.5">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                      className={`transition-transform duration-200 ${sertifikatOpen ? "rotate-180" : ""}`}>
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-
-              {!isCollapsed && sertifikatOpen && (
-                <div className="ml-7 mt-2 space-y-1">
-                  <Link to="/coo/kelola-sertifikat" onClick={onMenuClick}>
-                    <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer ${
-                      location.pathname === "/coo/kelola-sertifikat"
-                        ? "bg-teal-50 text-teal-600 font-medium"
-                        : "text-gray-500 hover:bg-gray-100"
-                    }`}>
-                      <Award size={14} />
-                      <span>Kelola Sertifikat</span>
-                    </div>
-                  </Link>
-                </div>
-              )}
+              </Link>
             </li>
 
             {/* PENGATURAN MENU */}
