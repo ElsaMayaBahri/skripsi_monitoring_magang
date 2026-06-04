@@ -49,6 +49,8 @@ function Presensi() {
   const [error, setError] = useState(null)
   const [divisiList, setDivisiList] = useState([])
   const dropdownRef = useRef(null)
+  
+  // STATS UNTUK DATA YANG DIFILTER (bukan semua data)
   const [stats, setStats] = useState({
     total: 0,
     hadir: 0,
@@ -178,6 +180,7 @@ function Presensi() {
     if (status === "hadir") return "hadir"
     if (status === "terlambat") return "terlambat"
     if (status === "izin") return "izin"
+    if (status === "sakit") return "izin" // treat sakit as izin for counting
     return "tidak_hadir"
   }
 
@@ -203,6 +206,32 @@ function Presensi() {
 
   const getNamaPeserta = useCallback((item) => {
     return item.peserta?.nama || item.nama || "-"
+  }, [])
+
+  // Fungsi untuk menghitung statistik dari data yang difilter
+  const calculateStatsFromData = useCallback((data) => {
+    const total = data.length
+    let hadir = 0
+    let terlambat = 0
+    let izin = 0
+    let tidakHadir = 0
+    
+    for (let i = 0; i < data.length; i++) {
+      const status = getNormalizedStatus(data[i])
+      if (status === "hadir") {
+        hadir++
+      } else if (status === "terlambat") {
+        terlambat++
+      } else if (status === "izin") {
+        izin++
+      } else {
+        tidakHadir++
+      }
+    }
+    
+    const persenKehadiran = total > 0 ? Math.round(((hadir + terlambat) / total) * 100) : 0
+    
+    setStats({ total, hadir, terlambat, izin, tidakHadir, persenKehadiran })
   }, [])
 
   // Load presensi data - TANPA PARAMS DIVISI KE BACKEND
@@ -255,7 +284,6 @@ function Presensi() {
       }
       
       setPresensiData(processedList)
-      calculateStats(processedList)
       setLoadingProgress(100)
     } catch (err) {
       console.error("Error fetching presensi:", err)
@@ -281,31 +309,6 @@ function Presensi() {
     }
   }
 
-  const calculateStats = (data) => {
-    const total = data.length
-    let hadir = 0
-    let terlambat = 0
-    let izin = 0
-    let tidakHadir = 0
-    
-    for (let i = 0; i < data.length; i++) {
-      const status = getNormalizedStatus(data[i])
-      if (status === "hadir") {
-        hadir++
-      } else if (status === "terlambat") {
-        terlambat++
-      } else if (status === "izin") {
-        izin++
-      } else {
-        tidakHadir++
-      }
-    }
-    
-    const persenKehadiran = total > 0 ? Math.round(((hadir + terlambat) / total) * 100) : 0
-    
-    setStats({ total, hadir, terlambat, izin, tidakHadir, persenKehadiran })
-  }
-
   const resetFilters = () => {
     setSearchTerm("")
     setSelectedDivisi("all")
@@ -322,7 +325,7 @@ function Presensi() {
     fetchPresensi()
   }, [startDate, endDate]) // HANYA startDate dan endDate, TIDAK selectedDivisi
 
-  // Filter dan sorting data - FILTER DIVISI DI FRONTEND (SAMA KAYAK LAPORAN)
+  // Filter, sorting, DAN hitung statistik dari data yang sudah difilter
   useEffect(() => {
     const processData = () => {
       let filtered = [...presensiData]
@@ -335,7 +338,7 @@ function Presensi() {
         )
       }
       
-      // ========== FILTER DIVISI DI FRONTEND (PERSIS KAYAK LAPORAN) ==========
+      // ========== FILTER DIVISI DI FRONTEND ==========
       if (selectedDivisi !== "all") {
         filtered = filtered.filter((item) => {
           const rawDivisi = item.peserta?.divisi || item.divisi || "-"
@@ -363,12 +366,16 @@ function Presensi() {
       filtered.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal))
       
       setFilteredData(filtered)
+      
+      // HITUNG STATISTIK DARI DATA YANG SUDAH DIFILTER
+      calculateStatsFromData(filtered)
+      
       setCurrentPage(1)
     }
     
     const timeoutId = setTimeout(processData, 0)
     return () => clearTimeout(timeoutId)
-  }, [searchTerm, presensiData, selectedDivisi, selectedStatus, getNamaPeserta])
+  }, [searchTerm, presensiData, selectedDivisi, selectedStatus, getNamaPeserta, calculateStatsFromData])
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -513,7 +520,7 @@ function Presensi() {
               <th style="border: 1px solid #ddd; padding: 8px;">Check-Out</th>
               <th style="border: 1px solid #ddd; padding: 8px;">Status</th>
               <th style="border: 1px solid #ddd; padding: 8px;">Telat</th>
-            </tr>
+             </tr>
           </thead>
           <tbody>
             ${filteredData.slice(0, 1000).map((item, idx) => {
@@ -528,7 +535,7 @@ function Presensi() {
                   <td style="border: 1px solid #ddd; padding: 8px;">${formatTimeOnly(item.check_in)}</td>
                   <td style="border: 1px solid #ddd; padding: 8px;">${formatTimeOnly(item.check_out)}</td>
                   <td style="border: 1px solid #ddd; padding: 8px;">${item.status || item.status_kehadiran || '-'}</td>
-                  <td style="border: 1px solid #ddd; padding: 8px;">${item.keterlambatan || 0} menit}</td>
+                  <td style="border: 1px solid #ddd; padding: 8px;">${item.keterlambatan || 0} menit</td>
                 </tr>
               `
             }).join('')}
@@ -622,8 +629,8 @@ function Presensi() {
                   <p className="text-xs text-slate-500 flex items-center gap-1.5">
                     <span className="w-1 h-1 bg-emerald-500 rounded-full"></span>
                     Monitor kehadiran peserta magang secara real-time
-                    {presensiData.length > 0 && (
-                      <span className="ml-2 text-blue-500">• {presensiData.length.toLocaleString()} total data</span>
+                    {filteredData.length > 0 && (
+                      <span className="ml-2 text-blue-500">• {filteredData.length.toLocaleString()} data ditampilkan</span>
                     )}
                   </p>
                 </div>
@@ -652,9 +659,9 @@ function Presensi() {
           </div>
         </div>
 
-        {/* STATS CARDS */}
+        {/* STATS CARDS - Menampilkan statistik dari data yang sudah difilter */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition">
             <div className="flex items-center justify-between mb-2">
               <div className="w-9 h-9 bg-blue-100 rounded-xl flex items-center justify-center"><Users size={16} className="text-blue-600" /></div>
               <span className="text-2xl font-bold text-slate-800">{stats.total.toLocaleString()}</span>
@@ -662,41 +669,41 @@ function Presensi() {
             <p className="text-xs text-slate-500">Total Presensi</p>
             <div className="mt-2 h-1 w-8 bg-blue-500 rounded-full"></div>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition">
             <div className="flex items-center justify-between mb-2">
               <div className="w-9 h-9 bg-emerald-100 rounded-xl flex items-center justify-center"><CheckCircle size={16} className="text-emerald-600" /></div>
-              <span className="text-2xl font-bold text-slate-800">{stats.hadir.toLocaleString()}</span>
+              <span className="text-2xl font-bold text-emerald-600">{stats.hadir.toLocaleString()}</span>
             </div>
             <p className="text-xs text-slate-500">Hadir</p>
             <div className="mt-2 h-1 w-8 bg-emerald-500 rounded-full"></div>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition">
             <div className="flex items-center justify-between mb-2">
               <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center"><AlertCircle size={16} className="text-amber-600" /></div>
-              <span className="text-2xl font-bold text-slate-800">{stats.terlambat.toLocaleString()}</span>
+              <span className="text-2xl font-bold text-amber-600">{stats.terlambat.toLocaleString()}</span>
             </div>
             <p className="text-xs text-slate-500">Terlambat</p>
             <div className="mt-2 h-1 w-8 bg-amber-500 rounded-full"></div>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition">
             <div className="flex items-center justify-between mb-2">
-              <div className="w-9 h-9 bg-blue-100 rounded-xl flex items-center justify-center"><ClockIcon size={16} className="text-blue-600" /></div>
-              <span className="text-2xl font-bold text-slate-800">{stats.izin.toLocaleString()}</span>
+              <div className="w-9 h-9 bg-sky-100 rounded-xl flex items-center justify-center"><ClockIcon size={16} className="text-sky-600" /></div>
+              <span className="text-2xl font-bold text-sky-600">{stats.izin.toLocaleString()}</span>
             </div>
-            <p className="text-xs text-slate-500">Izin</p>
-            <div className="mt-2 h-1 w-8 bg-blue-500 rounded-full"></div>
+            <p className="text-xs text-slate-500">Izin/Sakit</p>
+            <div className="mt-2 h-1 w-8 bg-sky-500 rounded-full"></div>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition">
             <div className="flex items-center justify-between mb-2">
               <div className="w-9 h-9 bg-purple-100 rounded-xl flex items-center justify-center"><BarChart3 size={16} className="text-purple-600" /></div>
-              <span className="text-2xl font-bold text-slate-800">{stats.persenKehadiran}%</span>
+              <span className="text-2xl font-bold text-purple-600">{stats.persenKehadiran}%</span>
             </div>
             <p className="text-xs text-slate-500">Kehadiran</p>
             <div className="mt-2 h-1 w-8 bg-purple-500 rounded-full"></div>
           </div>
         </div>
 
-        {/* FILTERS */}
+        {/* FILTERS - same as before */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
@@ -742,7 +749,7 @@ function Presensi() {
 
             {(searchTerm || selectedDivisi !== "all" || selectedStatus !== "all" || startDate || endDate) && (
               <div className="flex items-end">
-                <button onClick={resetFilters} className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700 transition">
+                <button onClick={resetFilters} className="px-3 py-2 text-sm text-blue-600 hover:text-blue-700 font-medium transition">
                   Reset Filter
                 </button>
               </div>
@@ -785,7 +792,7 @@ function Presensi() {
           </div>
         )}
 
-        {/* TABLE */}
+        {/* TABLE - same as before */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -827,29 +834,29 @@ function Presensi() {
                           </div>
                           <span className="font-medium text-slate-800 text-sm">{getNamaPeserta(item)}</span>
                         </div>
-                      </td>
+                       </td>
                       <td className="px-5 py-3">
                         <span className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-full font-medium">
                           {getDivisiPesertaString(item)}
                         </span>
-                      </td>
+                       </td>
                       <td className="px-5 py-3 text-sm text-slate-600">
                         {formatDateOnly(item.tanggal)}
-                      </td>
+                       </td>
                       <td className="px-5 py-3">
                         <span className="text-sm text-slate-600">{formatTimeOnly(item.check_in)}</span>
-                      </td>
+                       </td>
                       <td className="px-5 py-3">
                         <span className="text-sm text-slate-600">{formatTimeOnly(item.check_out)}</span>
-                      </td>
+                       </td>
                       <td className="px-5 py-3">
                         {getStatusBadge(item.status || item.status_kehadiran)}
-                      </td>
+                       </td>
                       <td className="px-5 py-3 text-center">
                         <button onClick={() => handleViewDetail(item)} className="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition">
                           <Eye size={14} />
                         </button>
-                      </td>
+                       </td>
                     </tr>
                   ))
                 )}
@@ -889,7 +896,7 @@ function Presensi() {
           )}
         </div>
 
-        {/* MODAL DETAIL PRESENSI */}
+        {/* MODAL DETAIL PRESENSI - same as before */}
         {isModalOpen && selectedPresensi && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl max-w-md w-full max-h-[85vh] overflow-y-auto shadow-xl">
@@ -917,6 +924,31 @@ function Presensi() {
                     <p className="text-xs text-slate-500">{getDivisiPesertaString(selectedPresensi)}</p>
                   </div>
                 </div>
+                
+                {/* FOTO CHECK-IN */}
+                {selectedPresensi.foto_checkin && (
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-[10px] font-medium text-slate-500 mb-2">Foto Check-In</p>
+                    <div className="relative group">
+                      <img 
+                        src={selectedPresensi.foto_checkin} 
+                        alt="Foto Check-in"
+                        className="w-full h-48 object-cover rounded-lg cursor-pointer hover:opacity-90 transition"
+                        onClick={() => window.open(selectedPresensi.foto_checkin, '_blank')}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%23999" stroke-width="2"%3E%3Crect x="2" y="2" width="20" height="20" rx="2.18"%3E%3C/rect%3E%3Cpath d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"%3E%3C/path%3E%3C/svg%3E';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition rounded-lg flex items-center justify-center">
+                        <span className="text-white text-xs font-medium bg-black/70 px-3 py-1.5 rounded-full">
+                          Klik untuk memperbesar
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-blue-50 rounded-lg p-3 text-center">
                     <ClockIcon size={14} className="text-blue-500 mx-auto mb-1" />
@@ -939,15 +971,46 @@ function Presensi() {
                     <p className="text-sm font-medium text-slate-700">{selectedPresensi.keterlambatan || 0} menit</p>
                   </div>
                 </div>
+                
+                {selectedPresensi.jenis_kehadiran && (
+                  <div className="bg-slate-50 rounded-lg p-2">
+                    <p className="text-[10px] text-slate-500">Jenis Kehadiran</p>
+                    <p className="text-sm font-medium text-slate-700">
+                      {selectedPresensi.jenis_kehadiran === 'wfo' && 'WFO (Work From Office)'}
+                      {selectedPresensi.jenis_kehadiran === 'wfh' && 'WFH (Work From Home)'}
+                      {selectedPresensi.jenis_kehadiran === 'izin' && 'Izin'}
+                      {selectedPresensi.jenis_kehadiran === 'sakit' && 'Sakit'}
+                      {!selectedPresensi.jenis_kehadiran && '-'}
+                    </p>
+                  </div>
+                )}
+                
+                {selectedPresensi.alasan_izin && (
+                  <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
+                    <p className="text-[10px] font-medium text-amber-600 mb-1 flex items-center gap-1">
+                      <AlertCircle size={12} />
+                      Alasan Izin/Sakit
+                    </p>
+                    <p className="text-sm text-slate-700">{selectedPresensi.alasan_izin}</p>
+                  </div>
+                )}
+                
+                {selectedPresensi.lokasi && (
+                  <div className="bg-slate-50 rounded-lg p-2">
+                    <p className="text-[10px] text-slate-500">Lokasi Check-In</p>
+                    <p className="text-xs text-slate-600 break-words">{selectedPresensi.lokasi}</p>
+                  </div>
+                )}
+                
                 {selectedPresensi.daily_report && (
                   <div className="bg-slate-50 rounded-lg p-3">
                     <p className="text-[10px] font-medium text-slate-500 mb-1">Daily Report</p>
-                    <p className="text-sm text-slate-700">{selectedPresensi.daily_report}</p>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{selectedPresensi.daily_report}</p>
                   </div>
                 )}
               </div>
-              <div className="px-5 py-3 border-t border-slate-100 bg-slate-50">
-                <button onClick={() => setIsModalOpen(false)} className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-sm font-medium transition">
+              <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex gap-2">
+                <button onClick={() => setIsModalOpen(false)} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-sm font-medium transition">
                   Tutup
                 </button>
               </div>

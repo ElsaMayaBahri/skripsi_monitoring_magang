@@ -378,26 +378,26 @@ const Dashboard = () => {
       <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
         
         {/* Header Section */}
-        <div className="mb-8">
-          <div className="flex items-center gap-4">
-            <div className="relative p-3 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl shadow-lg">
-              <Sparkles className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl lg:text-4xl font-bold tracking-tight">
-                <span className="bg-gradient-to-r from-slate-800 via-indigo-800 to-purple-800 bg-clip-text text-transparent">
-                  {getCurrentGreeting()}, COO
-                </span>
-              </h1>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-                <span className="text-xs text-slate-500">Live Monitoring</span>
-                <span className="text-slate-300">•</span>
-                <span className="text-xs text-slate-500">Ecosystem Real-time</span>
-              </div>
-            </div>
-          </div>
-        </div>
+       <div className="mb-8">
+  <div className="flex items-center gap-4">
+    <div className="relative p-3 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl shadow-lg">
+      <Sparkles className="w-7 h-7 text-white" />
+    </div>
+    <div>
+      <h1 className="text-3xl lg:text-4xl font-bold tracking-tight">
+        <span className="bg-gradient-to-r from-slate-800 via-indigo-800 to-purple-800 bg-clip-text text-transparent">
+          {getCurrentGreeting()}, COO
+        </span>
+      </h1>
+      <div className="flex items-center gap-2 mt-1">
+        <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+        <span className="text-xs text-slate-500">Live Monitoring</span>
+        <span className="text-slate-300">•</span>
+        <span className="text-xs text-slate-500">Ecosystem Real-time</span>
+      </div>
+    </div>
+  </div>
+</div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

@@ -1283,75 +1283,106 @@ class QuizController extends Controller
     }
 
     public function submitKuisPeserta(Request $request, int $id)
-    {
-        try {
-            $user = $request->user();
-            $userId = $user->id_user ?? $user->id;
+{
+    try {
+        $user = $request->user();
+        $userId = $user->id_user ?? $user->id;
 
-            $kuis = Kuis::findOrFail($id);
+        $kuis = Kuis::findOrFail($id);
 
-            $jawaban = $request->jawaban ?? [];
+        $jawaban = $request->jawaban ?? [];
 
-            $questions = $kuis->questions ?? [];
-            if (is_string($questions)) {
-                $questions = json_decode($questions, true) ?? [];
-            }
+        $questions = $kuis->questions ?? [];
+        if (is_string($questions)) {
+            $questions = json_decode($questions, true) ?? [];
+        }
 
-            $benar = 0;
-            $total = count($questions);
+        $benar = 0;
+        $total = count($questions);
 
-            foreach ($questions as $index => $q) {
-                $qId = (string)($q['id'] ?? ($index + 1));
-                $correct = $q['correct'] ?? null;
+        foreach ($questions as $index => $q) {
+            $qId = (string)($q['id'] ?? ($index + 1));
+            $correct = $q['correct'] ?? null;
 
-                if (isset($jawaban[$qId]) && $correct !== null) {
-                    if ((int) $jawaban[$qId] === (int) $correct) {
-                        $benar++;
-                    }
+            if (isset($jawaban[$qId]) && $correct !== null) {
+                if ((int) $jawaban[$qId] === (int) $correct) {
+                    $benar++;
                 }
             }
-
-            $skor = $total > 0 ? round(($benar / $total) * 100, 2) : 0;
-            $passing = $kuis->passing ?? 75;
-            $lulus = $skor >= $passing;
-
-            $lastAttempt = DB::table('jawaban_kuis')
-                ->where('id_user', $userId)
-                ->where('id_kuis', $id)
-                ->max('attempt');
-
-            $attempt = ($lastAttempt ?? 0) + 1;
-
-            DB::table('jawaban_kuis')->insert([
-                'id_soal' => null,
-                'id_user' => $userId,
-                'id_kuis' => $id,
-                'jawaban' => json_encode($jawaban),
-                'skor' => $skor,
-                'attempt' => $attempt,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => $lulus ? 'Selamat! Anda lulus!' : 'Belum lulus, silakan ulangi kuis.',
-                'data' => [
-                    'skor' => $skor,
-                    'benar' => $benar,
-                    'salah' => $total - $benar,
-                    'total' => $total,
-                    'lulus' => $lulus,
-                    'passing_score' => $passing,
-                    'attempt' => $attempt,
-                ]
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error submitKuisPeserta: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal submit kuis: ' . $e->getMessage()
-            ], 500);
         }
+
+        $skor = $total > 0 ? round(($benar / $total) * 100, 2) : 0;
+        $passing = $kuis->passing ?? 75;
+        $lulus = $skor >= $passing;
+
+        $lastAttempt = DB::table('jawaban_kuis')
+            ->where('id_user', $userId)
+            ->where('id_kuis', $id)
+            ->max('attempt');
+
+        $attempt = ($lastAttempt ?? 0) + 1;
+
+        DB::table('jawaban_kuis')->insert([
+            'id_soal'    => null,
+            'id_user'    => $userId,
+            'id_kuis'    => $id,
+            'jawaban'    => json_encode($jawaban),
+            'skor'       => $skor,
+            'attempt'    => $attempt,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // =====================================================
+        // KIRIM NOTIFIKASI KE SEMUA USER COO
+        // =====================================================
+        try {
+            $namaPeserta = $user->nama ?? $user->name ?? 'Peserta';
+            $judulKuis   = $kuis->judul_kuis ?? 'Kuis Kompetensi';
+            $statusLulus = $lulus ? 'LULUS' : 'TIDAK LULUS';
+            
+            $judul = "Kuis Kompetensi Selesai";
+            $pesan = "Peserta {$namaPeserta} telah menyelesaikan kuis \"{$judulKuis}\" "
+                   . "dengan skor {$skor} ({$statusLulus}).";
+
+            $coo = \App\Models\User::where('role', 'coo')->first();
+
+            if ($coo) {
+                \App\Http\Controllers\Api\NotifikasiController::kirim(
+                    $coo->id_user,
+                    $judul,
+                    $pesan
+                );
+                Log::info("Notifikasi kuis terkirim ke COO untuk peserta: {$namaPeserta}");
+            } else {
+                Log::warning("User COO tidak ditemukan, notifikasi tidak terkirim.");
+            }
+
+        } catch (\Exception $notifException) {
+            Log::error('Gagal kirim notifikasi kuis: ' . $notifException->getMessage());
+        }
+        // =====================================================
+
+        return response()->json([
+            'success' => true,
+            'message' => $lulus ? 'Selamat! Anda lulus!' : 'Belum lulus, silakan ulangi kuis.',
+            'data'    => [
+                'skor'         => $skor,
+                'benar'        => $benar,
+                'salah'        => $total - $benar,
+                'total'        => $total,
+                'lulus'        => $lulus,
+                'passing_score' => $passing,
+                'attempt'      => $attempt,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error submitKuisPeserta: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Gagal submit kuis: ' . $e->getMessage()
+        ], 500);
     }
+}
 }
