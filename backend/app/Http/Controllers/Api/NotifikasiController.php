@@ -1,22 +1,26 @@
 <?php
-// app/Http/Controllers/Api/NotifikasiController.php
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\notifikasi;
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Models\Notifikasi;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class NotifikasiController extends Controller
 {
-    // Ambil semua notifikasi milik user yang login
-    public function index()
+    /**
+     * GET /api/notifikasi
+     * Ambil semua notifikasi milik user yang sedang login
+     */
+    public function index(Request $request)
     {
         try {
-            $notifikasi = notifikasi::untukUser(Auth::id())
+            $user = $request->user();
+
+            $notifikasi = Notifikasi::where('id_user', $user->id_user)
                 ->orderBy('created_at', 'desc')
+                ->limit(50)
                 ->get()
                 ->map(function ($item) {
                     return [
@@ -24,96 +28,154 @@ class NotifikasiController extends Controller
                         'judul'         => $item->judul,
                         'pesan'         => $item->pesan,
                         'status_baca'   => (bool) $item->status_baca,
-                        'waktu'         => $item->waktu,
-                        'created_at'    => $item->created_at->toDateTimeString(),
+                        'waktu'         => $item->created_at
+                            ? $item->created_at->diffForHumans()
+                            : '-',
+                        'created_at'    => $item->created_at,
                     ];
                 });
 
+            $unreadCount = Notifikasi::where('id_user', $user->id_user)
+                ->where('status_baca', false)
+                ->count();
+
             return response()->json([
-                'success' => true,
-                'data'    => $notifikasi,
-                'unread'  => $notifikasi->where('status_baca', false)->count(),
+                'success'      => true,
+                'data'         => $notifikasi,
+                'unread_count' => $unreadCount,
             ]);
         } catch (\Exception $e) {
+            Log::error('Error index notifikasi: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal mengambil notifikasi: ' . $e->getMessage()
+                'message' => 'Gagal mengambil notifikasi: ' . $e->getMessage(),
             ], 500);
         }
     }
 
-    // Tandai satu notifikasi sebagai sudah dibaca
-    public function markAsRead($id)
+    /**
+     * PATCH /api/notifikasi/{id}/read
+     * Tandai satu notifikasi sebagai sudah dibaca
+     */
+    public function markAsRead(Request $request, $id)
     {
         try {
-            $notifikasi = notifikasi::where('id_notifikasi', $id)
-                ->where('id_user', Auth::id())
-                ->firstOrFail();
+            $user = $request->user();
 
-            $notifikasi->tandaiDibaca();
+            $notifikasi = Notifikasi::where('id_notifikasi', $id)
+                ->where('id_user', $user->id_user)
+                ->first();
+
+            if (!$notifikasi) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Notifikasi tidak ditemukan',
+                ], 404);
+            }
+
+            $notifikasi->update(['status_baca' => true]);
 
             return response()->json([
-                'success' => true, 
-                'message' => 'Notifikasi ditandai sudah dibaca'
+                'success' => true,
+                'message' => 'Notifikasi ditandai sudah dibaca',
             ]);
         } catch (\Exception $e) {
+            Log::error('Error markAsRead notifikasi: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Notifikasi tidak ditemukan'
-            ], 404);
+                'message' => 'Gagal menandai notifikasi: ' . $e->getMessage(),
+            ], 500);
         }
     }
 
-    // Tandai semua notifikasi user sebagai sudah dibaca
-    public function markAllAsRead()
+    /**
+     * PATCH /api/notifikasi/read-all
+     * Tandai semua notifikasi milik user sebagai sudah dibaca
+     */
+    public function markAllAsRead(Request $request)
     {
         try {
-            notifikasi::untukUser(Auth::id())
-                ->belumDibaca()
+            $user = $request->user();
+
+            Notifikasi::where('id_user', $user->id_user)
+                ->where('status_baca', false)
                 ->update(['status_baca' => true]);
 
             return response()->json([
-                'success' => true, 
-                'message' => 'Semua notifikasi ditandai sudah dibaca'
+                'success' => true,
+                'message' => 'Semua notifikasi ditandai sudah dibaca',
             ]);
         } catch (\Exception $e) {
+            Log::error('Error markAllAsRead notifikasi: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal menandai semua notifikasi: ' . $e->getMessage()
+                'message' => 'Gagal menandai semua notifikasi: ' . $e->getMessage(),
             ], 500);
         }
     }
 
-    // Hapus satu notifikasi
-    public function destroy($id)
+    /**
+     * DELETE /api/notifikasi/{id}
+     * Hapus satu notifikasi
+     */
+    public function destroy(Request $request, $id)
     {
         try {
-            $notifikasi = notifikasi::where('id_notifikasi', $id)
-                ->where('id_user', Auth::id())
-                ->firstOrFail();
+            $user = $request->user();
+
+            $notifikasi = Notifikasi::where('id_notifikasi', $id)
+                ->where('id_user', $user->id_user)
+                ->first();
+
+            if (!$notifikasi) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Notifikasi tidak ditemukan',
+                ], 404);
+            }
 
             $notifikasi->delete();
 
             return response()->json([
-                'success' => true, 
-                'message' => 'Notifikasi dihapus'
+                'success' => true,
+                'message' => 'Notifikasi berhasil dihapus',
             ]);
         } catch (\Exception $e) {
+            Log::error('Error destroy notifikasi: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Notifikasi tidak ditemukan'
-            ], 404);
+                'message' => 'Gagal menghapus notifikasi: ' . $e->getMessage(),
+            ], 500);
         }
     }
 
-    // Helper statis untuk membuat notifikasi (dipakai di service/controller lain)
-    public static function kirim(int $idUser, string $judul, string $pesan): notifikasi
+    /**
+     * Static helper — dipanggil dari controller lain untuk mengirim notifikasi.
+     *
+     * Contoh pemakaian:
+     *   NotifikasiController::kirim($userId, 'Judul', 'Pesan notifikasi');
+     *
+     * @param  int|string  $idUser
+     * @param  string      $judul
+     * @param  string      $pesan
+     * @return \App\Models\Notifikasi|null
+     */
+    public static function kirim($idUser, string $judul, string $pesan): ?Notifikasi
     {
-        return notifikasi::create([
-            'id_user'     => $idUser,
-            'judul'       => $judul,
-            'pesan'       => $pesan,
-            'status_baca' => false,
-        ]);
+        try {
+            $notifikasi = Notifikasi::create([
+                'id_user'     => $idUser,
+                'judul'       => $judul,
+                'pesan'       => $pesan,
+                'status_baca' => false,
+            ]);
+
+            Log::info("Notifikasi terkirim ke user {$idUser}: {$judul}");
+
+            return $notifikasi;
+        } catch (\Exception $e) {
+            Log::error('Gagal mengirim notifikasi: ' . $e->getMessage());
+            return null;
+        }
     }
 }

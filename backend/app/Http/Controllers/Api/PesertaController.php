@@ -45,7 +45,7 @@ class PesertaController extends Controller
                 ->where('tugas.id_divisi', $peserta->id_divisi)
                 ->leftJoin('pengumpulan_tugas', function ($join) use ($peserta) {
                     $join->on('tugas.id_tugas', '=', 'pengumpulan_tugas.id_tugas')
-                         ->where('pengumpulan_tugas.id_peserta', $peserta->id_peserta);
+                        ->where('pengumpulan_tugas.id_peserta', $peserta->id_peserta);
                 })
                 ->select(
                     'tugas.id_tugas',
@@ -72,21 +72,21 @@ class PesertaController extends Controller
             // Perbaikan: menggunakan kolom 'divisi' (string) bukan 'id_divisi'
             $semuaKuis = Kuis::where('divisi', $namaDivisi)->get();
             $totalKuis = $semuaKuis->count();
-            
+
             $kuisSelesai = 0;
             $totalNilaiKuis = 0;
-            
+
             foreach ($semuaKuis as $kuis) {
                 $jawaban = JawabanKuis::where('id_user', $user->id_user)
                     ->where('id_kuis', $kuis->id_kuis)
                     ->first();
-                
+
                 if ($jawaban && $jawaban->skor !== null) {
                     $kuisSelesai++;
                     $totalNilaiKuis += $jawaban->skor;
                 }
             }
-            
+
             $progressKuis = $totalKuis > 0 ? round(($kuisSelesai / $totalKuis) * 100) : 0;
             $rataNilaiKuis = $kuisSelesai > 0 ? round($totalNilaiKuis / $kuisSelesai, 2) : 0;
 
@@ -94,7 +94,7 @@ class PesertaController extends Controller
             // MATERI PELATIHAN - FILTER BERDASARKAN NAMA DIVISI
             // ======================
             $totalMateri = MateriPelatihan::where('divisi', $namaDivisi)->count();
-            
+
             // Progress materi (sementara 0 karena tabel progress_materi belum ada)
             $materiSelesai = 0;
             $progressMateri = $totalMateri > 0 ? round(($materiSelesai / $totalMateri) * 100) : 0;
@@ -104,10 +104,10 @@ class PesertaController extends Controller
             // 🔥 PERBAIKAN: Hanya tampilkan tugas yang BELUM DIKUMPULKAN atau REVISI
             // ======================
             $today = Carbon::today();
-            
+
             // Tambahkan debug log
             Log::info('TUGAS DASHBOARD BEFORE FILTER:', $tugas->toArray());
-            
+
             $upcomingDeadlines = $tugas
                 ->filter(function ($item) use ($today) {
                     // 🔥 PERBAIKAN: Hanya tampilkan tugas yang masih perlu dikerjakan
@@ -122,12 +122,12 @@ class PesertaController extends Controller
                         'review',
                         'selesai'
                     ];
-                    
+
                     // Jika status sudah termasuk yang sudah dikerjakan, skip
                     if (in_array($item->status_pengumpulan, $statusSudahDikerjakan)) {
                         return false;
                     }
-                    
+
                     // Cek deadline
                     $deadline = Carbon::parse($item->deadline);
                     return $deadline->gte($today);
@@ -190,28 +190,28 @@ class PesertaController extends Controller
     {
         try {
             $user = $request->user();
-            
+
             $peserta = Peserta::with(['divisi', 'mentor.user'])
                 ->where('id_user', $user->id_user)
                 ->first();
-            
+
             if (!$peserta) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Data peserta tidak ditemukan'
                 ], 404);
             }
-            
+
             $namaDivisi = $peserta->divisi->nama_divisi ?? '';
-            
+
             // Hitung statistik
             $totalTugasSelesai = DB::table('pengumpulan_tugas')
                 ->where('id_peserta', $peserta->id_peserta)
                 ->where('status', 'selesai')
                 ->count();
-            
+
             $totalMateri = MateriPelatihan::where('divisi', $namaDivisi)->count();
-            
+
             $semuaKuis = Kuis::where('divisi', $namaDivisi)->get();
             $kuisSelesai = 0;
             foreach ($semuaKuis as $kuis) {
@@ -222,7 +222,7 @@ class PesertaController extends Controller
                     $kuisSelesai++;
                 }
             }
-            
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -260,14 +260,14 @@ class PesertaController extends Controller
     {
         try {
             $user = $request->user();
-            
+
             $validated = $request->validate([
                 'nama' => 'sometimes|string|max:255',
                 'no_telepon' => 'nullable|string|max:15',
                 'asal_kampus' => 'nullable|string|max:255',
                 'prodi' => 'nullable|string|max:255',
             ]);
-            
+
             if ($request->has('nama')) {
                 $user->nama = $request->nama;
             }
@@ -275,7 +275,7 @@ class PesertaController extends Controller
                 $user->no_telepon = $request->no_telepon;
             }
             $user->save();
-            
+
             $peserta = Peserta::where('id_user', $user->id_user)->first();
             if ($peserta) {
                 if ($request->has('asal_kampus')) {
@@ -286,7 +286,7 @@ class PesertaController extends Controller
                 }
                 $peserta->save();
             }
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Profil berhasil diperbarui',
@@ -321,7 +321,7 @@ class PesertaController extends Controller
     {
         try {
             $peserta = Peserta::with(['user', 'mentor.user', 'divisi'])->get();
-            
+
             $formattedPeserta = $peserta->map(function ($item) {
                 return [
                     'id_peserta' => $item->id_peserta,
@@ -341,7 +341,7 @@ class PesertaController extends Controller
                     'mentor' => $item->mentor ? ($item->mentor->user->nama ?? $item->mentor->nama ?? null) : null,
                 ];
             });
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $formattedPeserta
@@ -371,12 +371,12 @@ class PesertaController extends Controller
                 'prodi' => 'nullable|string|max:255',
                 'id_divisi' => 'nullable|exists:divisis,id_divisi',
                 'id_mentor' => 'nullable|exists:mentors,id_mentor',
-                'tanggal_mulai' => 'required|date', 
-                'tanggal_selesai' => 'nullable|date',
+                'tanggal_mulai' => 'required|date',
+                'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai', // wajib & harus >= tanggal_mulai
             ]);
 
             DB::beginTransaction();
-            
+
             $user = User::create([
                 'nama' => $validated['nama'],
                 'email' => $validated['email'],
@@ -398,9 +398,9 @@ class PesertaController extends Controller
             ]);
 
             DB::commit();
-            
+
             $peserta->load(['user', 'mentor.user', 'divisi']);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Peserta berhasil ditambahkan',
@@ -422,7 +422,6 @@ class PesertaController extends Controller
                     'mentor' => $peserta->mentor ? ($peserta->mentor->user->nama ?? $peserta->mentor->nama ?? null) : null,
                 ]
             ], 201);
-            
         } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
@@ -449,14 +448,14 @@ class PesertaController extends Controller
             $peserta = Peserta::with(['user', 'mentor.user', 'divisi'])
                 ->where('id_peserta', $id)
                 ->first();
-            
+
             if (!$peserta) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Peserta tidak ditemukan'
                 ], 404);
             }
-            
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -494,14 +493,14 @@ class PesertaController extends Controller
     {
         try {
             $peserta = Peserta::with('user')->where('id_peserta', $id)->first();
-            
+
             if (!$peserta) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Peserta tidak ditemukan'
                 ], 404);
             }
-            
+
             $rules = [
                 'nama' => 'sometimes|string|max:255',
                 'email' => 'sometimes|email|unique:users,email,' . ($peserta->id_user ?? 'NULL') . ',id_user',
@@ -515,23 +514,23 @@ class PesertaController extends Controller
                 'tanggal_mulai' => 'sometimes|date',
                 'tanggal_selesai' => 'nullable|date',
             ];
-            
+
             $request->validate($rules);
-            
+
             DB::beginTransaction();
-            
+
             if ($peserta->user) {
                 $userData = [];
                 if ($request->has('nama')) $userData['nama'] = $request->nama;
                 if ($request->has('email')) $userData['email'] = $request->email;
                 if ($request->has('no_telepon')) $userData['no_telepon'] = $request->no_telepon;
                 if ($request->has('status_akun')) $userData['status_akun'] = $request->status_akun;
-                
+
                 if (!empty($userData)) {
                     $peserta->user->update($userData);
                 }
             }
-            
+
             $pesertaData = [];
             if ($request->has('asal_kampus')) $pesertaData['asal_kampus'] = $request->asal_kampus;
             if ($request->has('prodi')) $pesertaData['prodi'] = $request->prodi;
@@ -542,17 +541,17 @@ class PesertaController extends Controller
             if ($request->has('tanggal_selesai')) {
                 $pesertaData['tanggal_selesai'] = $request->tanggal_selesai;
             }
-            
+
             if (!empty($pesertaData)) {
                 $peserta->update($pesertaData);
             }
-            
+
             DB::commit();
-            
+
             $updatedPeserta = Peserta::with(['user', 'mentor.user', 'divisi'])
                 ->where('id_peserta', $id)
                 ->first();
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Peserta berhasil diupdate',
@@ -574,7 +573,6 @@ class PesertaController extends Controller
                     'mentor' => $updatedPeserta->mentor ? ($updatedPeserta->mentor->user->nama ?? $updatedPeserta->mentor->nama ?? null) : null,
                 ]
             ]);
-            
         } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
@@ -599,33 +597,32 @@ class PesertaController extends Controller
     {
         try {
             $peserta = Peserta::where('id_peserta', $id)->first();
-            
+
             if (!$peserta) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Peserta tidak ditemukan'
                 ], 404);
             }
-            
+
             DB::beginTransaction();
-            
+
             $userId = $peserta->id_user;
             $peserta->delete();
-            
+
             if ($userId) {
                 $user = User::where('id_user', $userId)->first();
                 if ($user) {
                     $user->delete();
                 }
             }
-            
+
             DB::commit();
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Peserta berhasil dihapus'
             ]);
-            
         } catch (\Exception $e) {
             DB::rollback();
             Log::error('Destroy Error: ' . $e->getMessage());

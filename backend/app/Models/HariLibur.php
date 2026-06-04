@@ -9,15 +9,21 @@ class HariLibur extends Model
 {
     use HasFactory;
 
-    protected $table = 'hari_liburs';
-    protected $primaryKey = 'id';
-    
-    protected $fillable = [
-        'tanggal',
-        'keterangan'
-    ];
-    
+    protected $fillable = ['tanggal', 'keterangan', 'jenis'];
     protected $casts = [
         'tanggal' => 'date',
+        'jenis'   => 'string',
     ];
+
+    // Scope untuk libur nasional
+    public function scopeNasional($query)
+    {
+        return $query->where('jenis', 'nasional');
+    }
+
+    // Scope untuk libur perusahaan
+    public function scopePerusahaan($query)
+    {
+        return $query->where('jenis', 'perusahaan');
+    }
 }

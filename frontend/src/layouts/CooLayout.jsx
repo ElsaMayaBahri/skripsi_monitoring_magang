@@ -30,7 +30,8 @@ import {
   Users,
   BarChart3,
   AlertCircle,
-  Award
+  Award,
+  CheckCheck,
 } from "lucide-react"
 
 function CooLayout() {
@@ -58,7 +59,7 @@ function CooLayout() {
   const [quizCount, setQuizCount] = useState(0)
   
   // 🔥 🔥 🔥 PAKAI NOTIFIKASI DARI CONTEXT
-  const { notifikasi: notifications, unreadCount } = useNotifikasi()
+  const { notifikasi: notifications, unreadCount, markAsRead, markAllAsRead, hapus } = useNotifikasi()
 
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}")
   const userInitial = currentUser.nama
@@ -702,40 +703,104 @@ const handleConfirmLogout = async () => {
                   </button>
 
                   {notifOpen && (
-                    <div 
-                      id="notif-dropdown-coo"
-                      className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
-                      style={{ zIndex: 99999 }}
-                    >
-                      <div className="px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-teal-50/50 to-blue-50/50">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <h3 className="font-bold text-gray-800">Notifikasi</h3>
-                            <p className="text-xs text-gray-500 mt-0.5">Update terbaru</p>
-                          </div>
-                          <button onClick={() => setNotifOpen(false)} className="text-gray-400 hover:text-gray-600">
-                            <X size={16} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="max-h-80 overflow-y-auto">
-                        {notifications.length === 0 ? (
-                          <div className="p-8 text-center">
-                            <Bell size={32} className="text-gray-300 mx-auto mb-2" />
-                            <p className="text-gray-500 text-sm">Belum ada notifikasi</p>
-                          </div>
-                        ) : (
-                          notifications.map((notif, idx) => (
-                            <div key={idx} className="px-5 py-3 border-b border-gray-100 hover:bg-gray-50 transition cursor-pointer">
-                              <p className="text-sm font-medium text-gray-800">{notif.judul || notif.title || "Notifikasi"}</p>
-                              <p className="text-xs text-gray-500 mt-1">{notif.pesan || notif.message}</p>
-                              <p className="text-xs text-gray-400 mt-2">{notif.created_at || "Baru saja"}</p>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
+  <div
+    id="notif-dropdown-coo"
+    className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
+    style={{ zIndex: 99999 }}
+  >
+    {/* Header */}
+    <div className="px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-teal-50/50 to-blue-50/50">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="font-bold text-gray-800">Notifikasi</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {unreadCount > 0 ? `${unreadCount} belum dibaca` : "Update terbaru"}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {unreadCount > 0 && (
+            <button
+              onClick={markAllAsRead}
+              title="Tandai semua dibaca"
+              className="text-xs text-teal-600 hover:text-teal-700 font-medium flex items-center gap-1"
+            >
+              <CheckCheck size={13} />
+              <span className="hidden sm:inline">Semua dibaca</span>
+            </button>
+          )}
+          <button
+            onClick={() => setNotifOpen(false)}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {/* List */}
+    <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+      {notifications.length === 0 ? (
+        <div className="p-8 text-center">
+          <Bell size={32} className="text-gray-300 mx-auto mb-2" />
+          <p className="text-gray-500 text-sm">Belum ada notifikasi</p>
+        </div>
+      ) : (
+        notifications.map((notif) => (
+          <div
+            key={notif.id_notifikasi}
+            className={`px-4 py-3 flex gap-3 hover:bg-gray-50 transition group ${
+              !notif.status_baca ? "bg-teal-50/40" : ""
+            }`}
+          >
+            {/* Dot status */}
+            <div className="mt-1.5 shrink-0">
+              <div className={`w-2 h-2 rounded-full ${
+                notif.status_baca ? "bg-gray-200" : "bg-teal-500"
+              }`} />
+            </div>
+
+            {/* Konten - klik untuk tandai dibaca */}
+            <div
+              className="flex-1 min-w-0 cursor-pointer"
+              onClick={() => !notif.status_baca && markAsRead(notif.id_notifikasi)}
+            >
+              <p className={`text-sm font-semibold truncate ${
+                notif.status_baca ? "text-gray-600" : "text-gray-800"
+              }`}>
+                {notif.judul}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">
+                {notif.pesan}
+              </p>
+              <p className="text-[10px] text-gray-400 mt-1">
+                {notif.waktu || notif.created_at || "Baru saja"}
+              </p>
+            </div>
+
+            {/* Tombol hapus */}
+            <button
+              onClick={() => hapus(notif.id_notifikasi)}
+              title="Hapus"
+              className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-red-50 text-red-400 transition-all shrink-0 self-start mt-0.5"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        ))
+      )}
+    </div>
+
+    {/* Footer */}
+    {notifications.length > 0 && (
+      <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/50 text-center">
+        <span className="text-[10px] text-gray-400">
+          {notifications.length} notifikasi tersimpan
+        </span>
+      </div>
+    )}
+  </div>
+)}
                 </div>
 
                 {/* Profile Dropdown */}

@@ -7,10 +7,12 @@ use App\Models\Presensi;
 use App\Models\JamKerja;
 use App\Models\Peserta;
 use App\Models\User;
+use App\Models\HariLibur;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
+use Carbon\Carbon;
 
 class PresensiController extends Controller
 {
@@ -18,7 +20,6 @@ class PresensiController extends Controller
 
     /**
      * Hitung keterlambatan dalam menit.
-     * $checkIn bertipe string "HH:MM:SS" (bukan datetime).
      */
     private function calculateLateness(?string $checkIn = null, ?string $jamMasuk = '08:00:00'): int
     {
@@ -26,36 +27,28 @@ class PresensiController extends Controller
             return 0;
         }
 
-        $checkIn = substr($checkIn, 0, 5);
+        $checkIn  = substr($checkIn, 0, 5);
         $jamMasuk = substr($jamMasuk ?: '08:00:00', 0, 5);
 
-        [$checkInHour, $checkInMinute] = array_map('intval', explode(':', $checkIn));
+        [$checkInHour,  $checkInMinute]  = array_map('intval', explode(':', $checkIn));
         [$jamMasukHour, $jamMasukMinute] = array_map('intval', explode(':', $jamMasuk));
 
-        $checkInMinutes = ($checkInHour * 60) + $checkInMinute;
+        $checkInMinutes  = ($checkInHour  * 60) + $checkInMinute;
         $jamMasukMinutes = ($jamMasukHour * 60) + $jamMasukMinute;
 
-        if ($checkInMinutes <= $jamMasukMinutes) {
-            return 0;
-        }
-
-        return $checkInMinutes - $jamMasukMinutes;
+        return max(0, $checkInMinutes - $jamMasukMinutes);
     }
 
     private function getFotoCheckinUrl(?string $path): ?string
     {
-        if (!$path) {
-            return null;
-        }
+        if (!$path) return null;
 
         $path = trim($path);
 
-        // Jika sudah URL lengkap
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
             return $path;
         }
 
-        // Normalisasi jika data lama tersimpan sebagai /storage/...
         $path = ltrim($path, '/');
 
         if (str_starts_with($path, 'storage/')) {
@@ -66,72 +59,50 @@ class PresensiController extends Controller
             $path = substr($path, strlen('public/'));
         }
 
+        if (empty($path)) return null;
+
+        Log::info('Generated foto URL: ' . url('/storage/' . $path));
         return url('/storage/' . $path);
     }
 
     private function parseBatasTerlambat($value): int
     {
-        if ($value === null || $value === '') {
-            return 15;
-        }
+        if ($value === null || $value === '') return 15;
 
-        // Jika isinya angka biasa, contoh: 30
-        if (is_numeric($value)) {
-            return (int) $value;
-        }
+        if (is_numeric($value)) return (int) $value;
 
-        // Jika isinya format waktu, contoh: 00:30:00
         if (is_string($value) && str_contains($value, ':')) {
             $parts = explode(':', $value);
-
-            $jam = (int) ($parts[0] ?? 0);
-            $menit = (int) ($parts[1] ?? 0);
-
-            return ($jam * 60) + $menit;
+            return ((int)($parts[0] ?? 0) * 60) + (int)($parts[1] ?? 0);
         }
 
         return 15;
     }
 
-    /**
-     * Tentukan status kehadiran berdasarkan status database, jenis kehadiran, dan keterlambatan.
-     */
     private function resolveStatus(
         ?string $statusDatabase,
         string $jenisKehadiran,
         int $keterlambatan,
         int $batasTerlambat = 15
-    ): string
-    {
-        // Prioritas ambil dari database
+    ): string {
         if (!empty($statusDatabase)) {
             return match(strtolower($statusDatabase)) {
-                'hadir' => 'Hadir',
-                'terlambat' => 'Terlambat',
-                'izin' => 'Izin',
-                'sakit' => 'Sakit',
-                'alpha', 'tidak_hadir', 'tidak hadir' => 'Tidak Hadir',
-                default => ucfirst($statusDatabase)
+                'hadir'                         => 'Hadir',
+                'terlambat'                     => 'Terlambat',
+                'izin'                          => 'Izin',
+                'sakit'                         => 'Sakit',
+                'alpha', 'tidak_hadir',
+                'tidak hadir'                   => 'Tidak Hadir',
+                default                         => ucfirst($statusDatabase)
             };
         }
 
-        // Fallback otomatis
-        if ($jenisKehadiran === 'izin') {
-            return 'Izin';
-        }
+        if ($jenisKehadiran === 'izin')  return 'Izin';
+        if ($jenisKehadiran === 'sakit') return 'Sakit';
 
-        if ($jenisKehadiran === 'sakit') {
-            return 'Sakit';
-        }
-
-        return $keterlambatan > $batasTerlambat
-            ? 'Terlambat'
-            : 'Hadir';
+        return $keterlambatan > $batasTerlambat ? 'Terlambat' : 'Hadir';
     }
 
-    /**
-     * Format satu record presensi untuk response.
-     */
     private function formatRecord(Presensi $item): array
     {
         $peserta = $item->peserta;
@@ -151,10 +122,10 @@ class PresensiController extends Controller
         );
 
         return [
-            'id'           => $item->id_presensi,
-            'peserta'      => [
-                'id'   => $peserta?->id_peserta,
-                'nama' => $user?->nama ?? $peserta?->nama ?? '-',
+            'id'      => $item->id_presensi,
+            'peserta' => [
+                'id'     => $peserta?->id_peserta,
+                'nama'   => $user?->nama ?? $peserta?->nama ?? '-',
                 'divisi' => [
                     'id_divisi'   => $peserta?->divisi?->id_divisi,
                     'nama_divisi' => $peserta?->divisi?->nama_divisi ?? '-',
@@ -171,34 +142,82 @@ class PresensiController extends Controller
             'check_in'         => $item->check_in,
             'check_out'        => $item->check_out,
             'status'           => $status,
+            'status_kehadiran' => $item->status_kehadiran,
             'jenis_kehadiran'  => $item->jenis_kehadiran ?? 'wfo',
+            'alasan_izin'      => $item->alasan_izin ?? null,
             'keterlambatan'    => $keterlambatan,
             'lokasi'           => $item->lokasi,
             'lokasi_koordinat' => $item->lokasi_koordinat,
             'daily_report'     => $item->daily_report,
-            'foto_checkin' => $this->getFotoCheckinUrl($item->foto_checkin),
+            'foto_checkin'     => $this->getFotoCheckinUrl($item->foto_checkin),
+            'foto_checkin_raw' => $item->foto_checkin,
         ];
+    }
+
+    // ==================== HELPER HARI LIBUR (BARU) ====================
+
+    /**
+     * Cek apakah tanggal tertentu adalah hari Minggu atau hari libur.
+     */
+    private function isHariLibur(Carbon $tanggal): bool
+    {
+        if ($tanggal->isSunday()) {
+            return true;
+        }
+
+        return HariLibur::where('tanggal', $tanggal->format('Y-m-d'))->exists();
+    }
+
+    /**
+     * Ambil keterangan hari libur (untuk pesan error).
+     */
+    private function getKeteranganLibur(Carbon $tanggal): string
+    {
+        if ($tanggal->isSunday()) {
+            return 'Hari Minggu';
+        }
+
+        return HariLibur::where('tanggal', $tanggal->format('Y-m-d'))
+            ->value('keterangan') ?? 'Hari Libur';
+    }
+
+    /**
+     * Hitung total hari kerja efektif antara dua tanggal
+     * (exclude Minggu dan semua hari libur).
+     */
+    private function hitungHariKerjaEfektif(Carbon $mulai, Carbon $selesai): int
+    {
+        // Ambil semua tanggal libur dalam rentang sekaligus (efisien, 1 query)
+        $hariLiburList = HariLibur::whereBetween('tanggal', [
+            $mulai->format('Y-m-d'),
+            $selesai->format('Y-m-d'),
+        ])->pluck('tanggal')
+          ->map(fn($t) => Carbon::parse($t)->format('Y-m-d'))
+          ->toArray();
+
+        $total   = 0;
+        $current = $mulai->copy();
+
+        while ($current->lte($selesai)) {
+            if (!$current->isSunday() && !in_array($current->format('Y-m-d'), $hariLiburList)) {
+                $total++;
+            }
+            $current->addDay();
+        }
+
+        return $total;
     }
 
     // ==================== ADMIN / COO ====================
 
-    /**
-     * Daftar semua presensi (untuk admin/COO).
-     */
     public function index(Request $request)
     {
         try {
-            $query = Presensi::with([
-                'peserta.user',
-                'peserta.divisi'
-            ]);
+            $query = Presensi::with(['peserta.user', 'peserta.divisi']);
 
-            // ========== PERBAIKAN: Tambahkan filter single date ==========
             if ($request->filled('tanggal')) {
                 $query->whereDate('tanggal', $request->tanggal);
             }
-            // ============================================================
-
             if ($request->filled('start_date')) {
                 $query->whereDate('tanggal', '>=', $request->start_date);
             }
@@ -231,16 +250,10 @@ class PresensiController extends Controller
         }
     }
 
-    /**
-     * Detail satu record presensi.
-     */
     public function show($id)
     {
         try {
-            $item = Presensi::with([
-                'peserta.user',
-                'peserta.divisi'
-            ])->findOrFail($id);
+            $item = Presensi::with(['peserta.user', 'peserta.divisi'])->findOrFail($id);
 
             return response()->json([
                 'success' => true,
@@ -255,20 +268,14 @@ class PresensiController extends Controller
         }
     }
 
-    /**
-     * Statistik ringkas presensi.
-     */
     public function getStats(Request $request)
     {
         try {
             $query = Presensi::query();
 
-            // ========== PERBAIKAN: Tambahkan filter single date ==========
             if ($request->filled('tanggal')) {
                 $query->whereDate('tanggal', $request->tanggal);
             }
-            // ============================================================
-
             if ($request->filled('start_date')) {
                 $query->whereDate('tanggal', '>=', $request->start_date);
             }
@@ -300,23 +307,14 @@ class PresensiController extends Controller
         }
     }
 
-    /**
-     * Export data presensi.
-     */
     public function export(Request $request)
     {
         try {
-            $query = Presensi::with([
-                'peserta.user',
-                'peserta.divisi'
-            ]);
+            $query = Presensi::with(['peserta.user', 'peserta.divisi']);
 
-            // ========== PERBAIKAN: Tambahkan filter single date ==========
             if ($request->filled('tanggal')) {
                 $query->whereDate('tanggal', $request->tanggal);
             }
-            // ============================================================
-
             if ($request->filled('start_date')) {
                 $query->whereDate('tanggal', '>=', $request->start_date);
             }
@@ -357,47 +355,66 @@ class PresensiController extends Controller
     }
 
     /**
-     * Daftar peserta yang belum absen hari ini - FIXED VERSION
+     * Daftar peserta yang belum absen hari ini.
+     * PERUBAHAN: Jika hari ini adalah hari libur, kembalikan list kosong
+     * karena tidak ada yang perlu absen.
      */
     public function belumAbsen(Request $request)
     {
         try {
-            $today = now('Asia/Jakarta')->toDateString();
+            $today    = now('Asia/Jakarta')->toDateString();
+            $todayCarbon = Carbon::parse($today);
 
-            // Ambil id_peserta yang SUDAH presensi hari ini
+            // ===== PERUBAHAN: Cek hari libur =====
+            if ($this->isHariLibur($todayCarbon)) {
+                $keterangan = $this->getKeteranganLibur($todayCarbon);
+                return response()->json([
+                    'success' => true,
+                    'data'    => [],
+                    'is_hari_libur' => true,
+                    'keterangan_libur' => $keterangan,
+                    'stats'   => [
+                        'total_peserta'       => 0,
+                        'total_sudah_absen'   => 0,
+                        'total_belum_absen'   => 0,
+                        'persentase_kehadiran' => 100, // 100% karena hari libur
+                    ],
+                    'message' => "Hari ini adalah {$keterangan}. Tidak ada presensi.",
+                ]);
+            }
+            // =====================================
+
             $sudahAbsen = Presensi::whereDate('tanggal', $today)
                 ->pluck('id_peserta')
                 ->toArray();
 
-            // Query untuk peserta yang BELUM absen
-            // Gunakan relasi user dan divisi untuk mendapatkan nama
             $belumAbsen = Peserta::with(['user', 'divisi'])
                 ->whereNotIn('id_peserta', $sudahAbsen)
                 ->get()
                 ->map(function ($peserta) {
                     return [
-                        'id_peserta' => $peserta->id_peserta,
-                        'nama' => $peserta->user?->nama ?? $peserta->user?->name ?? '-',
-                        'divisi' => $peserta->divisi?->nama_divisi ?? $peserta->divisi ?? '-',
-                        'email' => $peserta->user?->email ?? '-',
+                        'id_peserta'  => $peserta->id_peserta,
+                        'nama'        => $peserta->user?->nama ?? $peserta->user?->name ?? '-',
+                        'divisi'      => $peserta->divisi?->nama_divisi ?? $peserta->divisi ?? '-',
+                        'email'       => $peserta->user?->email ?? '-',
                         'foto_profil' => $peserta->user?->foto_profil ?? null,
                     ];
                 });
 
-            // Statistik
-            $totalPeserta = Peserta::count();
-            $totalSudahAbsen = count($sudahAbsen);
-            $totalBelumAbsen = $belumAbsen->count();
+            $totalPeserta      = Peserta::count();
+            $totalSudahAbsen   = count($sudahAbsen);
+            $totalBelumAbsen   = $belumAbsen->count();
 
             return response()->json([
-                'success' => true,
-                'data' => $belumAbsen,
-                'stats' => [
-                    'total_peserta' => $totalPeserta,
-                    'total_sudah_absen' => $totalSudahAbsen,
-                    'total_belum_absen' => $totalBelumAbsen,
-                    'persentase_kehadiran' => $totalPeserta > 0 
-                        ? round(($totalSudahAbsen / $totalPeserta) * 100) 
+                'success'       => true,
+                'data'          => $belumAbsen,
+                'is_hari_libur' => false,
+                'stats'         => [
+                    'total_peserta'        => $totalPeserta,
+                    'total_sudah_absen'    => $totalSudahAbsen,
+                    'total_belum_absen'    => $totalBelumAbsen,
+                    'persentase_kehadiran' => $totalPeserta > 0
+                        ? round(($totalSudahAbsen / $totalPeserta) * 100)
                         : 0,
                 ],
             ]);
@@ -406,16 +423,13 @@ class PresensiController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal mengambil data peserta yang belum absen: ' . $e->getMessage(),
-                'data' => [],
+                'data'    => [],
             ], 500);
         }
     }
 
     // ==================== PESERTA ====================
 
-    /**
-     * Riwayat presensi untuk peserta yang sedang login.
-     */
     public function getByPeserta(Request $request)
     {
         try {
@@ -465,13 +479,9 @@ class PresensiController extends Controller
                     ];
                 });
 
-            return response()->json([
-                'success' => true,
-                'data' => $data
-            ]);
+            return response()->json(['success' => true, 'data' => $data]);
         } catch (\Exception $e) {
             Log::error('PresensiController@getByPeserta: ' . $e->getMessage());
-
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -479,9 +489,6 @@ class PresensiController extends Controller
         }
     }
 
-    /**
-     * Status presensi hari ini untuk peserta yang sedang login.
-     */
     public function getTodayPresensi(Request $request)
     {
         try {
@@ -494,7 +501,7 @@ class PresensiController extends Controller
                 ], 404);
             }
 
-            $today = now('Asia/Jakarta')->toDateString();
+            $today    = now('Asia/Jakarta')->toDateString();
             $presensi = Presensi::where('id_peserta', $pesertaId)
                 ->whereDate('tanggal', $today)
                 ->first();
@@ -512,7 +519,7 @@ class PresensiController extends Controller
                         : $presensi->tanggal,
                     'check_in'         => $presensi->check_in,
                     'check_out'        => $presensi->check_out,
-                    'foto_checkin' => $this->getFotoCheckinUrl($presensi->foto_checkin),
+                    'foto_checkin'     => $this->getFotoCheckinUrl($presensi->foto_checkin),
                     'lokasi'           => $presensi->lokasi,
                     'status_kehadiran' => $presensi->status_kehadiran,
                     'jenis_kehadiran'  => $presensi->jenis_kehadiran ?? 'wfo',
@@ -527,13 +534,7 @@ class PresensiController extends Controller
 
     /**
      * Check-in peserta.
-     *
-     * Body (multipart/form-data):
-     *   - foto            : file gambar (wajib)
-     *   - lokasi          : string alamat (wajib)
-     *   - lokasi_koordinat: "lat,lng" (opsional)
-     *   - jenis_kehadiran : wfo|wfh|izin|sakit (default: wfo)
-     *   - alasan_izin     : string (wajib jika jenis_kehadiran=izin)
+     * PERUBAHAN: Tolak check-in jika hari ini adalah hari libur atau Minggu.
      */
     public function checkIn(Request $request)
     {
@@ -547,8 +548,21 @@ class PresensiController extends Controller
                 ], 404);
             }
 
+            $today       = now('Asia/Jakarta')->toDateString();
+            $todayCarbon = Carbon::parse($today);
+
+            // ===== PERUBAHAN: Tolak check-in di hari libur =====
+            if ($this->isHariLibur($todayCarbon)) {
+                $keterangan = $this->getKeteranganLibur($todayCarbon);
+                return response()->json([
+                    'success'       => false,
+                    'is_hari_libur' => true,
+                    'message'       => "Hari ini adalah {$keterangan}. Tidak perlu melakukan absensi.",
+                ], 422);
+            }
+            // ===================================================
+
             // Cegah double check-in
-            $today = now('Asia/Jakarta')->toDateString();
             $existing = Presensi::where('id_peserta', $pesertaId)
                 ->whereDate('tanggal', $today)
                 ->first();
@@ -560,9 +574,8 @@ class PresensiController extends Controller
                 ], 400);
             }
 
-            // Validasi input
             $request->validate([
-                'foto'             => 'required|image|max:5120', // maks 5 MB
+                'foto'             => 'required|image|max:5120',
                 'lokasi'           => 'required|string|max:500',
                 'jenis_kehadiran'  => 'nullable|in:wfo,wfh,izin,sakit',
                 'alasan_izin'      => 'nullable|string|max:1000',
@@ -572,7 +585,6 @@ class PresensiController extends Controller
             $jenisKehadiran = $request->input('jenis_kehadiran', 'wfo');
             $alasanIzin     = $request->input('alasan_izin');
 
-            // Validasi alasan izin
             if ($jenisKehadiran === 'izin' && empty(trim($alasanIzin ?? ''))) {
                 return response()->json([
                     'success' => false,
@@ -580,11 +592,8 @@ class PresensiController extends Controller
                 ], 422);
             }
 
-            // Hitung waktu & keterlambatan
-            // PENTING: simpan hanya jam (H:i:s), bukan datetime lengkap
             $checkInTime = now('Asia/Jakarta')->format('H:i:s');
 
-            // Ambil jam kerja dari DB (jika ada), fallback ke default
             $jamKerja   = JamKerja::first();
             $jamMasuk   = $jamKerja?->jam_masuk ?? '08:00:00';
             $batasMenit = $this->parseBatasTerlambat($jamKerja?->batas_terlambat ?? 15);
@@ -592,22 +601,18 @@ class PresensiController extends Controller
             $keterlambatan   = $this->calculateLateness($checkInTime, $jamMasuk);
             $statusKehadiran = $this->resolveStatus(null, $jenisKehadiran, $keterlambatan, $batasMenit);
 
-            // Upload foto
             $fotoPath = null;
             if ($request->hasFile('foto') && $request->file('foto')->isValid()) {
                 $file     = $request->file('foto');
                 $filename = 'presensi_' . $pesertaId . '_' . $today . '_' . time()
                     . '.' . $file->getClientOriginalExtension();
-
-                // Simpan ke storage/app/public/presensi/foto/
                 $fotoPath = $file->storeAs('presensi/foto', $filename, 'public');
             }
 
-            // Simpan ke database
             $presensi = Presensi::create([
                 'id_peserta'       => $pesertaId,
                 'tanggal'          => $today,
-                'check_in'         => $checkInTime,   // string "HH:MM:SS"
+                'check_in'         => $checkInTime,
                 'foto_checkin'     => $fotoPath,
                 'lokasi'           => $request->input('lokasi'),
                 'lokasi_koordinat' => $request->input('lokasi_koordinat'),
@@ -620,15 +625,15 @@ class PresensiController extends Controller
                 'success' => true,
                 'message' => 'Check-in berhasil',
                 'data'    => [
-                    'id'               => $presensi->id_presensi,
-                    'check_in'         => $presensi->check_in,
-                    'status'           => $presensi->status_kehadiran,
-                    'jenis_kehadiran'  => $presensi->jenis_kehadiran,
-                    'keterlambatan'    => $keterlambatan,
-                    'batas_terlambat'  => $batasMenit,
-                    'jam_masuk'        => $jamMasuk,
-                    'is_late'          => $keterlambatan > $batasMenit,
-                    'foto_checkin'     => $this->getFotoCheckinUrl($fotoPath),
+                    'id'              => $presensi->id_presensi,
+                    'check_in'        => $presensi->check_in,
+                    'status'          => $presensi->status_kehadiran,
+                    'jenis_kehadiran' => $presensi->jenis_kehadiran,
+                    'keterlambatan'   => $keterlambatan,
+                    'batas_terlambat' => $batasMenit,
+                    'jam_masuk'       => $jamMasuk,
+                    'is_late'         => $keterlambatan > $batasMenit,
+                    'foto_checkin'    => $this->getFotoCheckinUrl($fotoPath),
                 ],
             ], 201);
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -646,12 +651,6 @@ class PresensiController extends Controller
         }
     }
 
-    /**
-     * Check-out peserta.
-     *
-     * Body (JSON atau form):
-     *   - daily_report: string JSON berisi aktivitas, kendala, rencana
-     */
     public function checkOut(Request $request)
     {
         try {
@@ -664,7 +663,7 @@ class PresensiController extends Controller
                 ], 404);
             }
 
-            $today = now('Asia/Jakarta')->toDateString();
+            $today    = now('Asia/Jakarta')->toDateString();
             $presensi = Presensi::where('id_peserta', $pesertaId)
                 ->whereDate('tanggal', $today)
                 ->first();
@@ -683,7 +682,6 @@ class PresensiController extends Controller
                 ], 400);
             }
 
-            // Validasi daily report wajib ada isinya
             $dailyReport = $request->input('daily_report');
             if (!$dailyReport) {
                 return response()->json([
@@ -692,7 +690,6 @@ class PresensiController extends Controller
                 ], 422);
             }
 
-            // Jika dikirim sebagai string JSON, parse dulu untuk validasi
             if (is_string($dailyReport)) {
                 $parsed = json_decode($dailyReport, true);
                 if (json_last_error() === JSON_ERROR_NONE) {
@@ -705,8 +702,7 @@ class PresensiController extends Controller
                 }
             }
 
-            // Simpan check_out sebagai string "HH:MM:SS"
-            $checkOutTime = now('Asia/Jakarta')->format('H:i:s');
+            $checkOutTime           = now('Asia/Jakarta')->format('H:i:s');
             $presensi->check_out    = $checkOutTime;
             $presensi->daily_report = $dailyReport;
             $presensi->save();
@@ -741,38 +737,30 @@ class PresensiController extends Controller
         if (strtolower($user->role) !== 'peserta') {
             Log::warning('Presensi gagal: role bukan peserta', [
                 'id_user' => $user->id_user ?? null,
-                'role' => $user->role ?? null,
+                'role'    => $user->role ?? null,
             ]);
             return null;
         }
 
-        // Cara utama: ambil dari kolom users.id_peserta
         if (!empty($user->id_peserta)) {
             $peserta = Peserta::where('id_peserta', $user->id_peserta)->first();
-
-            if ($peserta) {
-                return (int) $peserta->id_peserta;
-            }
+            if ($peserta) return (int) $peserta->id_peserta;
 
             Log::warning('Presensi gagal: users.id_peserta ada, tetapi tidak ditemukan di tabel pesertas', [
-                'id_user' => $user->id_user ?? null,
+                'id_user'    => $user->id_user ?? null,
                 'id_peserta' => $user->id_peserta,
             ]);
         }
 
-        // Fallback jika tabel pesertas punya kolom id_user
         if (Schema::hasColumn('pesertas', 'id_user')) {
             $peserta = Peserta::where('id_user', $user->id_user)->first();
-
-            if ($peserta) {
-                return (int) $peserta->id_peserta;
-            }
+            if ($peserta) return (int) $peserta->id_peserta;
         }
 
         Log::warning('Presensi gagal: data peserta tidak ditemukan untuk user login', [
-            'id_user' => $user->id_user ?? null,
-            'email' => $user->email ?? null,
-            'role' => $user->role ?? null,
+            'id_user'    => $user->id_user ?? null,
+            'email'      => $user->email ?? null,
+            'role'       => $user->role ?? null,
             'id_peserta' => $user->id_peserta ?? null,
         ]);
 

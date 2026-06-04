@@ -96,7 +96,7 @@ class AuthController extends Controller
             $user->alamat = $request->alamat;
         }
 
-        // 🔥 PERBAIKAN: Handle file upload with debug
+        // PERBAIKAN: Handle file upload with debug
         if ($request->hasFile('foto_profil')) {
             $file = $request->file('foto_profil');
             

@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
+import { NotifikasiProvider } from "./context/NotifikasiContext";
 
 // ============================================
 // AUTH PAGES
@@ -239,13 +240,15 @@ function App() {
         {/* COO ROUTES - Created by: COO Developer */}
         {/* ============================================ */}
         <Route
-          path="/coo"
-          element={
-            <ProtectedRoute allowedRoles={["coo"]}>
-              <CooLayout />
-            </ProtectedRoute>
-          }
-        >
+  path="/coo"
+  element={
+    <ProtectedRoute allowedRoles={["coo"]}>
+      <NotifikasiProvider>
+        <CooLayout />
+      </NotifikasiProvider>
+    </ProtectedRoute>
+  }
+>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<DashboardCOO />} />
           <Route path="materi" element={<MateriCOO />} />
