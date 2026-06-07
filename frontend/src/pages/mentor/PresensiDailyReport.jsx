@@ -6,6 +6,7 @@ import {
   Calendar,
   Clock,
   MapPin,
+  Camera,
   ArrowLeft,
   Download,
   ChevronLeft,
@@ -170,7 +171,8 @@ function PresensiDailyReport() {
           check_out: item.check_out || "-",
           lokasi: item.lokasi || "-",
           tanggal: item.tanggal || selectedDate,
-          feedback: item.feedback || null
+          feedback: item.feedback || null,
+          foto_checkin: item.foto_checkin || null,
         }));
         
         setAllPresensi(transformedData);
@@ -620,6 +622,7 @@ function PresensiDailyReport() {
           </div>
           
           <div className="p-6 space-y-5">
+            {/* Info Peserta */}
             <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
               <div className="w-16 h-16 bg-gradient-to-br from-teal-500 to-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-2xl shadow-md">
                 {report.peserta_nama?.charAt(0) || "P"}
@@ -630,6 +633,7 @@ function PresensiDailyReport() {
               </div>
             </div>
             
+            {/* Status Kehadiran */}
             <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
               <span className="text-sm text-slate-600">Status Kehadiran</span>
               <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${kehadiran.bg} ${kehadiran.text} border ${kehadiran.border}`}>
@@ -638,6 +642,7 @@ function PresensiDailyReport() {
               </div>
             </div>
             
+            {/* Check In & Check Out */}
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <div className="flex items-center gap-2 mb-2">
@@ -654,7 +659,49 @@ function PresensiDailyReport() {
                 <p className="text-lg font-bold text-slate-800">{formatDateTime(report.check_out) || "-"}</p>
               </div>
             </div>
+
+            {/* ✅ FOTO CHECK-IN — ditaruh di sini, setelah jam, sebelum lokasi */}
+            {report.foto_checkin ? (
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <Camera size={14} className="text-slate-600" />
+                  <span className="text-xs font-medium text-slate-600">Foto Check-In</span>
+                </div>
+                <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                  <img
+                    src={report.foto_checkin}
+                    alt={`Foto check-in ${report.peserta_nama}`}
+                    className="w-full max-h-64 object-cover"
+                    onError={(e) => {
+                      e.target.style.display = "none";
+                      e.target.nextSibling.style.display = "flex";
+                    }}
+                  />
+                  <div
+                    style={{ display: "none" }}
+                    className="flex items-center justify-center h-32 text-slate-400 text-sm gap-2"
+                  >
+                    <AlertCircle size={16} />
+                    <span>Foto tidak dapat dimuat</span>
+                  </div>
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent px-3 py-2">
+                    <p className="text-white text-[10px] font-medium">
+                      {report.peserta_nama} • {formatDateTime(report.check_in)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 border-dashed">
+                <div className="flex items-center gap-2 mb-1">
+                  <Camera size={14} className="text-slate-400" />
+                  <span className="text-xs font-medium text-slate-400">Foto Check-In</span>
+                </div>
+                <p className="text-xs text-slate-400 italic">Tidak ada foto</p>
+              </div>
+            )}
             
+            {/* Lokasi */}
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
               <div className="flex items-center gap-2 mb-2">
                 <MapPin size={14} className="text-slate-600" />
@@ -663,6 +710,7 @@ function PresensiDailyReport() {
               <p className="text-sm text-slate-700">{report.lokasi || "-"}</p>
             </div>
             
+            {/* Aktivitas */}
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
               <div className="flex items-center gap-2 mb-3">
                 <Target size={14} className="text-slate-600" />
@@ -1093,12 +1141,21 @@ function PresensiDailyReport() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        {item.aktivitas && item.aktivitas !== "-" ? (
-                          <p className="text-xs text-slate-600 max-w-[200px] truncate font-medium">{item.aktivitas}</p>
-                        ) : (
-                          <span className="text-xs text-slate-400 italic flex items-center gap-1.5"><AlertCircle size="10" />Belum mengisi</span>
-                        )}
-                      </td>
+  <div className="flex flex-col gap-1">
+    {item.aktivitas && item.aktivitas !== "-" ? (
+      <p className="text-xs text-slate-600 max-w-[200px] truncate font-medium">{item.aktivitas}</p>
+    ) : (
+      <span className="text-xs text-slate-400 italic flex items-center gap-1.5">
+        <AlertCircle size="10" />Belum mengisi
+      </span>
+    )}
+    {item.foto_checkin && (
+      <span className="inline-flex items-center gap-1 text-[10px] text-teal-600 font-medium">
+        <Camera size="10" />Ada foto
+      </span>
+    )}
+  </div>
+</td>
                       <td className="px-6 py-4 text-center">
                         <button 
                           onClick={(e) => { 
