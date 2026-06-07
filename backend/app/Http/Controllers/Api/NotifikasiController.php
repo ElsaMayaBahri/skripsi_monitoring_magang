@@ -3,15 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\NotifikasiMail;
 use App\Models\Notifikasi;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class NotifikasiController extends Controller
 {
     /**
      * GET /api/notifikasi
-     * Ambil semua notifikasi milik user yang sedang login
      */
     public function index(Request $request)
     {
@@ -55,7 +57,6 @@ class NotifikasiController extends Controller
 
     /**
      * PATCH /api/notifikasi/{id}/read
-     * Tandai satu notifikasi sebagai sudah dibaca
      */
     public function markAsRead(Request $request, $id)
     {
@@ -90,7 +91,6 @@ class NotifikasiController extends Controller
 
     /**
      * PATCH /api/notifikasi/read-all
-     * Tandai semua notifikasi milik user sebagai sudah dibaca
      */
     public function markAllAsRead(Request $request)
     {
@@ -116,7 +116,6 @@ class NotifikasiController extends Controller
 
     /**
      * DELETE /api/notifikasi/{id}
-     * Hapus satu notifikasi
      */
     public function destroy(Request $request, $id)
     {
@@ -150,19 +149,15 @@ class NotifikasiController extends Controller
     }
 
     /**
-     * Static helper — dipanggil dari controller lain untuk mengirim notifikasi.
+     * Static helper — simpan notifikasi ke DB sekaligus kirim email ke Gmail user.
      *
      * Contoh pemakaian:
      *   NotifikasiController::kirim($userId, 'Judul', 'Pesan notifikasi');
-     *
-     * @param  int|string  $idUser
-     * @param  string      $judul
-     * @param  string      $pesan
-     * @return \App\Models\Notifikasi|null
      */
     public static function kirim($idUser, string $judul, string $pesan): ?Notifikasi
     {
         try {
+            // 1. Simpan ke database
             $notifikasi = Notifikasi::create([
                 'id_user'     => $idUser,
                 'judul'       => $judul,
@@ -170,11 +165,43 @@ class NotifikasiController extends Controller
                 'status_baca' => false,
             ]);
 
-            Log::info("Notifikasi terkirim ke user {$idUser}: {$judul}");
+            Log::info("Notifikasi DB tersimpan - user: {$idUser}, judul: {$judul}");
+
+            // 2. Cari user
+            $user = User::find($idUser);
+
+            if (!$user) {
+                Log::warning("User dengan id {$idUser} tidak ditemukan, skip kirim email.");
+                return $notifikasi;
+            }
+
+            if (empty($user->email)) {
+                Log::warning("User {$idUser} tidak memiliki email, skip kirim email.");
+                return $notifikasi;
+            }
+
+            // 3. Ambil nama — coba beberapa kemungkinan nama kolom
+            $namaUser = $user->nama
+                ?? $user->name
+                ?? $user->nama_lengkap
+                ?? 'Pengguna';
+
+            Log::info("Mencoba kirim email ke: {$user->email}");
+
+            // 4. Kirim email
+            Mail::to($user->email)
+                ->send(new NotifikasiMail($namaUser, $judul, $pesan));
+
+            Log::info("Email berhasil terkirim ke {$user->email}");
 
             return $notifikasi;
+        } catch (\Symfony\Component\Mailer\Exception\TransportException $e) {
+            // Error koneksi SMTP
+            Log::error("SMTP Transport Error: " . $e->getMessage());
+            return null;
         } catch (\Exception $e) {
-            Log::error('Gagal mengirim notifikasi: ' . $e->getMessage());
+            Log::error("Gagal mengirim notifikasi: " . $e->getMessage());
+            Log::error("Stack trace: " . $e->getTraceAsString());
             return null;
         }
     }

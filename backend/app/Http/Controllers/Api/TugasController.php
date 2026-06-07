@@ -9,6 +9,7 @@ use App\Models\Peserta;
 use App\Models\PengumpulanTugas;
 use App\Models\Notifikasi;
 use Illuminate\Http\Request;
+use App\Http\Controllers\Api\NotifikasiController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -286,11 +287,11 @@ class TugasController extends Controller
             $filePaths = [];
             if ($request->hasFile('file_tugas')) {
                 $files = $request->file('file_tugas');
-                
+
                 if (!is_array($files)) {
                     $files = [$files];
                 }
-                
+
                 foreach ($files as $file) {
                     if ($file && $file->isValid()) {
                         $filename = time() . '_' . uniqid() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
@@ -307,7 +308,7 @@ class TugasController extends Controller
                 if (!is_array($linkList)) {
                     $linkList = [$request->file_links];
                 }
-                $linkList = array_filter($linkList, function($link) {
+                $linkList = array_filter($linkList, function ($link) {
                     return !empty(trim($link));
                 });
             }
@@ -352,12 +353,11 @@ class TugasController extends Controller
                     ->first();
 
                 if ($peserta && $peserta->user) {
-                    Notifikasi::create([
-                        'id_user' => $peserta->user->id_user,
-                        'judul' => '📋 Tugas Baru',
-                        'pesan' => "Mentor {$user->nama} telah memberikan tugas baru: \"{$tugas->judul_tugas}\". Deadline: " . date('d/m/Y', strtotime($tugas->deadline)),
-                        'status_baca' => false,
-                    ]);
+                    NotifikasiController::kirim(
+                        $peserta->user->id_user,
+                        '📋 Tugas Baru',
+                        "Mentor {$user->nama} telah memberikan tugas baru: \"{$tugas->judul_tugas}\". Deadline: " . date('d/m/Y', strtotime($tugas->deadline))
+                    );
                 }
             }
 
@@ -477,7 +477,7 @@ class TugasController extends Controller
                 if (!is_array($files)) {
                     $files = [$files];
                 }
-                
+
                 foreach ($files as $file) {
                     if ($file && $file->isValid()) {
                         $filename = time() . '_' . uniqid() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
@@ -689,16 +689,15 @@ class TugasController extends Controller
             foreach ($pesertaReminder as $idUser => $data) {
                 $daftarTugas = implode(', ', $data['tugas']);
                 $jumlahTugas = count($data['tugas']);
-                
+
                 $pesan = "Halo {$data['nama']}, Anda belum mengumpulkan {$jumlahTugas} tugas: {$daftarTugas}. Segera selesaikan tugas Anda!";
-                
-                Notifikasi::create([
-                    'id_user' => $idUser,
-                    'judul' => '📋 Pengingat Tugas',
-                    'pesan' => $pesan,
-                    'status_baca' => false,
-                ]);
-                
+
+                NotifikasiController::kirim(
+                    $idUser,
+                    '📋 Pengingat Tugas',
+                    $pesan
+                );
+
                 $notifikasiTerkirim++;
             }
 
@@ -776,7 +775,7 @@ class TugasController extends Controller
 
             $transformedSubmissions = $submissions->map(function ($item) {
                 $isSubmitted = !is_null($item->tanggal_kumpul);
-                
+
                 return [
                     'id_pengumpulan' => $item->id_pengumpulan,
                     'id_peserta' => $item->id_peserta,
@@ -831,7 +830,7 @@ class TugasController extends Controller
             }
 
             $pesertaId = $request->query('id_peserta');
-            
+
             if (!$pesertaId) {
                 return response()->json([
                     'success' => false,
@@ -978,11 +977,11 @@ class TugasController extends Controller
             } elseif (in_array($statusBaru, ['selesai', 'dinilai'])) {
                 // Mentor mengubah status menjadi selesai/dinilai tanpa mengisi nilai
                 // Hitung nilai otomatis berdasarkan tanggal_kumpul vs deadline
-                
+
                 if ($submission->tanggal_kumpul && $submission->tugas && $submission->tugas->deadline) {
                     $tanggalKumpul = strtotime($submission->tanggal_kumpul);
                     $deadline = strtotime($submission->tugas->deadline);
-                    
+
                     if ($tanggalKumpul > $deadline) {
                         $updateData['nilai'] = 50; // Terlambat
                         Log::info("Update Submission: Nilai otomatis 50 (terlambat) untuk submission {$submissionId}");
@@ -1004,22 +1003,20 @@ class TugasController extends Controller
 
             if ($idUserPeserta) {
                 if ($statusBaru === 'revisi' && $statusLama !== 'revisi') {
-                    Notifikasi::create([
-                        'id_user' => $idUserPeserta,
-                        'judul' => '🔄 Tugas Perlu Revisi',
-                        'pesan' => "Tugas \"{$judulTugas}\" perlu direvisi. Catatan: " . ($request->catatan_mentor ?? 'Silakan periksa kembali tugas Anda'),
-                        'status_baca' => false,
-                    ]);
+                    NotifikasiController::kirim(
+                        $idUserPeserta,
+                        '🔄 Tugas Perlu Revisi',
+                        "Tugas \"{$judulTugas}\" perlu direvisi. Catatan: " . ($request->catatan_mentor ?? 'Silakan periksa kembali tugas Anda')
+                    );
                 }
 
                 if (in_array($statusBaru, ['selesai', 'dinilai']) && !in_array($statusLama, ['selesai', 'dinilai'])) {
                     $nilaiText = isset($updateData['nilai']) ? " Nilai: {$updateData['nilai']}" : "";
-                    Notifikasi::create([
-                        'id_user' => $idUserPeserta,
-                        'judul' => '✅ Tugas Telah Dinilai',
-                        'pesan' => "Tugas \"{$judulTugas}\" telah dinilai oleh mentor." . $nilaiText,
-                        'status_baca' => false,
-                    ]);
+                    NotifikasiController::kirim(
+                        $idUserPeserta,
+                        '✅ Tugas Telah Dinilai',
+                        "Tugas \"{$judulTugas}\" telah dinilai oleh mentor." . $nilaiText
+                    );
                 }
             }
 
@@ -1097,7 +1094,7 @@ class TugasController extends Controller
                     // Ambil status dari database (tabel pengumpulan_tugas)
                     $statusFromDb = $item->status;
                     $finalStatus = $statusFromDb;
-                    
+
                     // Hanya status 'belum_dikumpulkan' yang bisa berubah menjadi 'terlambat' jika melewati deadline
                     if ($statusFromDb === 'belum_dikumpulkan') {
                         if ($item->tugas && $item->tugas->deadline) {
@@ -1195,7 +1192,7 @@ class TugasController extends Controller
             // 🔥 PERBAIKAN UTAMA untuk detail 🔥
             $statusFromDb = $pengumpulan->status;
             $finalStatus = $statusFromDb;
-            
+
             // Hanya 'belum_dikumpulkan' yang bisa berubah jadi 'terlambat'
             if ($statusFromDb === 'belum_dikumpulkan') {
                 if ($pengumpulan->tugas && $pengumpulan->tugas->deadline) {
@@ -1265,7 +1262,7 @@ class TugasController extends Controller
 
             $sekarang  = now();
             $deadline  = $pengumpulan->tugas->deadline;
-            
+
             // ✅ Tentukan status berdasarkan apakah ini revisi atau bukan
             if ($statusSebelumnya === 'revisi') {
                 // Jika sebelumnya revisi, status menjadi 'dikumpulkan_revisi' (menunggu review ulang)
@@ -1305,19 +1302,17 @@ class TugasController extends Controller
             $mentor = Mentor::with('user')->where('id_mentor', $peserta->id_mentor)->first();
             if ($mentor && $mentor->user) {
                 $statusText = $statusOtomatis === 'terlambat' ? '(Terlambat)' : '(Tepat waktu)';
-                $isRevisiSubmission = $statusSebelumnya === 'revisi';
-                $revisiText = $isRevisiSubmission ? ' (Revisi)' : '';
-                
-                Notifikasi::create([
-                    'id_user'     => $mentor->user->id_user,
-                    'judul'       => '📝 Tugas Dikumpulkan',
-                    'pesan'       => "Peserta {$user->nama} telah mengumpulkan tugas \"{$pengumpulan->tugas->judul_tugas}\" {$statusText}{$revisiText}",
-                    'status_baca' => false,
-                ]);
+                $revisiText = $statusSebelumnya === 'revisi' ? ' (Revisi)' : '';
+
+                NotifikasiController::kirim(
+                    $mentor->user->id_user,
+                    '📝 Tugas Dikumpulkan',
+                    "Peserta {$user->nama} telah mengumpulkan tugas \"{$pengumpulan->tugas->judul_tugas}\" {$statusText}{$revisiText}"
+                );
             }
 
-            $message = $statusSebelumnya === 'revisi' 
-                ? 'Revisi tugas berhasil dikirim' 
+            $message = $statusSebelumnya === 'revisi'
+                ? 'Revisi tugas berhasil dikirim'
                 : 'Tugas berhasil dikumpulkan';
 
             return response()->json([

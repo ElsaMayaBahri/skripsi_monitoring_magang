@@ -45,6 +45,9 @@ Route::get('/sanctum/csrf-cookie', function () {
 
 Route::post('/login', [AuthController::class, 'login']);
 
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+
 // Endpoint untuk mendapatkan daftar divisi (bisa diakses publik)
 Route::get('/divisi-list', [MentorController::class, 'getDivisiList']);
 
@@ -477,6 +480,51 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/notifikasi/read-all', [NotifikasiController::class, 'markAllAsRead']);
     Route::patch('/notifikasi/{id}/read', [NotifikasiController::class, 'markAsRead']);
     Route::delete('/notifikasi/{id}', [NotifikasiController::class, 'destroy']);
+});
+
+// TEST ENDPOINT — Endpoint ini PUBLIC untuk test (hapus setelah berhasil)
+Route::get('/test-notifikasi-email', function () {
+    $hasil = \App\Http\Controllers\Api\NotifikasiController::kirim(
+        18,                          // ganti dengan id_user yang ada di DB kamu
+        'Test Notifikasi Email',
+        'Ini adalah test notifikasi yang dikirim ke Gmail dari sistem magang.'
+    );
+
+    return response()->json([
+        'success' => $hasil !== null,
+        'message' => $hasil ? 'Notifikasi berhasil dikirim ke DB dan Gmail' : 'Gagal',
+    ]);
+});
+
+Route::get('/test-mail-config', function () {
+    try {
+        $config = [
+            'mailer'     => config('mail.default'),
+            'host'       => config('mail.mailers.smtp.host'),
+            'port'       => config('mail.mailers.smtp.port'),
+            'encryption' => config('mail.mailers.smtp.encryption'),
+            'username'   => config('mail.mailers.smtp.username'),
+            'from'       => config('mail.from'),
+        ];
+
+        // Test kirim ke alamat yang sama
+        \Illuminate\Support\Facades\Mail::raw('Test email dari sistem magang.', function ($msg) {
+            $msg->to(config('mail.from.address'))
+                ->subject('Test SMTP Config');
+        });
+
+        return response()->json([
+            'success' => true,
+            'config'  => $config,
+            'message' => 'Email test berhasil dikirim'
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error'   => $e->getMessage(),
+            'trace'   => $e->getTraceAsString()
+        ], 500);
+    }
 });
 
 // ==================== FALLBACK ROUTE ====================
